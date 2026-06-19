@@ -236,6 +236,20 @@ Inputs:
 `.github/workflows/governance.yml` that runs reconcile (dry-run on PRs, apply on
 main) on a schedule, pinned to a warden Action SHA.
 
+## Releasing
+
+`just release [patch|minor|major]` bumps `package.json`, commits `vX.Y.Z`, tags,
+and pushes — which triggers `.github/workflows/publish.yml` (test gate → `npm
+publish --provenance`).
+
+npm auth is one of two modes (the workflow supports both):
+
+- **OIDC trusted publishing** (preferred, no secret) — requires a one-time
+  trusted-publisher record on npm for `github-warden` ← `intentius/github-warden`
+  `publish.yml`. Works only after the package's first publish exists.
+- **`NPM_TOKEN` secret** (fallback) — set a repo/org `NPM_TOKEN` secret for the
+  first publish; drop it once trusted publishing is configured.
+
 ## Architecture
 
 The provider-agnostic reconcile core (change-set model, generic collection diff,
