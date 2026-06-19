@@ -21,6 +21,7 @@ import { secretsVariablesCycle } from "../cycles/secrets-variables.js";
 import { dependencyHygieneCycle } from "../cycles/dependency-hygiene.js";
 import { repoBaselineCycle } from "../cycles/repo-baseline.js";
 import { tokenGovernanceCycle } from "../cycles/token-governance.js";
+import { tokenApprovalCycle } from "../cycles/token-approval.js";
 
 /**
  * Registry of all available governance cycles, keyed by the name accepted by
@@ -42,4 +43,5 @@ export const CYCLE_REGISTRY: Record<string, Cycle> = {
   [dependencyHygieneCycle.name]: dependencyHygieneCycle,
   [repoBaselineCycle.name]: repoBaselineCycle,
   [tokenGovernanceCycle.name]: tokenGovernanceCycle,
+  [tokenApprovalCycle.name]: tokenApprovalCycle,
 };

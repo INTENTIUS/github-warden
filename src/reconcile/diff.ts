@@ -29,6 +29,7 @@ import type {
   DependabotConfig,
   RepoBaselineConfig,
   TokenPolicyConfig,
+  TokenApprovalPolicy,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -255,6 +256,17 @@ export interface LiveOrgState {
   secrets?: LiveSecret[];
   variables?: LiveVariable[];
   tokenGrants?: LiveTokenGrant[];
+  tokenRequests?: LiveTokenRequest[];
+}
+
+/** Live snapshot of a pending fine-grained PAT request. */
+export interface LiveTokenRequest {
+  /** Request id (used to approve/deny). */
+  id: number;
+  /** Login of the requester. */
+  ownerLogin?: string;
+  /** Flattened permission scope names the request asks for. */
+  permissions: string[];
 }
 
 /** Live snapshot of a fine-grained PAT grant on the org (timestamps in epoch ms). */
@@ -283,6 +295,7 @@ const RESOURCE_TYPE_ORDER = [
   "org-secret",
   "org-variable",
   "token-grant",
+  "token-request",
   "repo-baseline",
   "team",
   "team-member",
@@ -324,6 +337,7 @@ export function diff(
   diffVariables("", "org-variable", desired.variables, live.variables ?? [], opts, entries);
   diffRepoBaselines(desired.repoBaselines, live.repos ?? {}, entries);
   diffTokenGrants(desired.tokenPolicy, live.tokenGrants ?? [], opts, entries);
+  diffTokenRequests(desired.tokenApproval, live.tokenRequests ?? [], entries);
   diffTeams(desired.teams, live.teams ?? {}, opts, entries);
   diffMembers(desired.members, live.members ?? [], opts, entries);
   diffRepos(desired.repos, live.repos ?? {}, opts, entries);
@@ -1008,6 +1022,51 @@ function diffTokenGrants(
       before: grant,
       after: { revoke: true, reason, ownerLogin: grant.ownerLogin },
       fields: [{ field: "access", before: "granted", after: `revoked (${reason})` }],
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Token approval
+// ---------------------------------------------------------------------------
+
+/**
+ * Decide a single pending PAT request against the approval policy. Returns
+ * "approve" (all requested permissions are allowed), "deny" (not approvable and
+ * the policy auto-denies), or null (leave pending for a human). Pure.
+ */
+export function evaluateTokenRequest(
+  request: LiveTokenRequest,
+  policy: TokenApprovalPolicy,
+): "approve" | "deny" | null {
+  const allowed = new Set(policy.allowedPermissions ?? []);
+  const approvable = request.permissions.every((p) => allowed.has(p));
+  if (approvable) return "approve";
+  return policy.default === "deny" ? "deny" : null;
+}
+
+/**
+ * Diff pending PAT requests against the approval policy. Each auto-decided
+ * request is emitted as a "token-request" UPDATE carrying the decision; requests
+ * left for manual review produce no entry.
+ */
+function diffTokenRequests(
+  policy: TokenApprovalPolicy | undefined,
+  requests: LiveTokenRequest[],
+  out: ChangeSetEntry[],
+): void {
+  if (policy === undefined) return;
+
+  for (const request of requests) {
+    const decision = evaluateTokenRequest(request, policy);
+    if (!decision) continue;
+    out.push({
+      kind: "update",
+      resourceType: "token-request",
+      key: String(request.id),
+      before: request,
+      after: { decision, ownerLogin: request.ownerLogin },
+      fields: [{ field: "decision", before: "pending", after: decision }],
     });
   }
 }
