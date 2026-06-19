@@ -82,7 +82,9 @@ const PER_PAGE = 100;
  * `/repos/{o}/{r}/rulesets`): list (paginated) then GET each ruleset's detail
  * so `rules`/`conditions`/`bypassActors` are populated for diffing. Charges the
  * budget per request and stops when exhausted. A 404 (rulesets unsupported /
- * repo missing) yields an empty list.
+ * repo missing) or 403 (the App lacks permission for this rulesets scope — e.g.
+ * org rulesets) yields an empty list rather than aborting the cycle, so an
+ * inaccessible org-rulesets read never blocks repo-rulesets reconciliation.
  */
 export async function fetchRulesets(
   client: AppClient,
@@ -102,7 +104,9 @@ export async function fetchRulesets(
         `${basePath}?per_page=${PER_PAGE}&page=${page}`,
       );
     } catch (err) {
-      if (err instanceof Error && err.message.includes("404")) return [];
+      if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+        return [];
+      }
       throw err;
     }
     if (!Array.isArray(batch) || batch.length === 0) break;
