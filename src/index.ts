@@ -73,6 +73,8 @@ export { runReconcile, BudgetExhaustedError } from "./reconcile/runner.js";
 export { branchProtectionCycle, fetchLiveForOrg } from "./cycles/branch-protection.js";
 export { orgSettingsCycle, buildOrgPatchBody } from "./cycles/org-settings.js";
 export type { OrgSettingsScope } from "./cycles/org-settings.js";
+export { repoSettingsCycle, buildRepoPatchBody, fetchLiveRepoSettings } from "./cycles/repo-settings.js";
+export type { RepoSettingsScope } from "./cycles/repo-settings.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";
