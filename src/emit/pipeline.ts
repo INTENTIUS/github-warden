@@ -15,7 +15,7 @@
  *   - Least-privilege permissions: read-only at workflow level; write scopes
  *     scoped to the single job that needs them (GHA017/GHA034).
  *   - `timeout-minutes` on every job (GHA022).
- *   - Private key sourced from a secret via `with:` on the token-minting action,
+ *   - Private key sourced from a secret via `with:` on the reconcile action,
  *     never interpolated directly into a `run:` script (GHA045).
  *
  * Follow-up: a durable Ops-schedule variant (issue to be filed) will drive the
@@ -37,16 +37,14 @@ import { Step, Job, Workflow } from "@intentius/chant-lexicon-github";
 const CHECKOUT_SHA = "11bd71901bbe5b1630ceea73d27597364c9af683";
 
 /**
- * actions/create-github-app-token v1.11.6
- * https://github.com/actions/create-github-app-token/releases/tag/v1.11.6
+ * intentius/github-warden v1
+ * https://github.com/intentius/github-warden/releases/tag/v1
+ *
+ * SHA-pinned to satisfy GHA029. The `# v1` comment preserves human readability
+ * while preventing silent tag-repoint attacks. Warden's own audit (GHA021/029)
+ * enforces this pattern — the emitted pipeline dogfoods it.
  */
-const CREATE_APP_TOKEN_SHA = "df432ceedc7162edd81cf1e418309514dbf04a74";
-
-/**
- * actions/setup-node v4.4.0
- * https://github.com/actions/setup-node/releases/tag/v4.4.0
- */
-const SETUP_NODE_SHA = "49933ea5288caeca8642d1e84afbd3f7d6820020";
+const GITHUB_WARDEN_SHA = "50db522e57c4ccdb36af932062ee38839bc1b88e"; // v1
 
 // ── Public types ───────────────────────────────────────────────────
 
@@ -93,12 +91,6 @@ export interface GovernancePipelineOptions {
   privateKeySecret?: string;
 
   /**
-   * Node.js version to use when running the reconcile.
-   * Default: `"22"`.
-   */
-  nodeVersion?: string;
-
-  /**
    * Runner label.
    * Default: `"ubuntu-latest"`.
    */
@@ -143,12 +135,11 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
     appIdVar = "GOVERNANCE_APP_ID",
     installationIdVar = "GOVERNANCE_INSTALLATION_ID",
     privateKeySecret = "GOVERNANCE_APP_PRIVATE_KEY",
-    nodeVersion = "22",
     runsOn = "ubuntu-latest",
     timeoutMinutes = 30,
   } = opts;
 
-  const cycleFlag = buildCycleArgs(cycles);
+  const cycleArgs = buildCycleArgs(cycles);
 
   // ── Shared steps (used in both jobs) ───────────────────────────
 
@@ -163,53 +154,40 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
     },
   });
 
-  const mintTokenStep = new Step({
-    name: "Mint GitHub App token",
-    id: "app-token",
-    // SHA-pinned to satisfy GHA029. The private key is supplied via `with:` on
-    // a `uses:` step — it is never interpolated into a `run:` script (GHA045).
-    uses: `actions/create-github-app-token@${CREATE_APP_TOKEN_SHA}`,
-    with: {
-      "app-id": `\${{ vars.${appIdVar} }}`,
-      "private-key": `\${{ secrets.${privateKeySecret} }}`,
-    },
-  });
-
-  const setupNodeStep = new Step({
-    name: "Setup Node.js",
-    // SHA-pinned to satisfy GHA029.
-    uses: `actions/setup-node@${SETUP_NODE_SHA}`,
-    with: { "node-version": nodeVersion },
-  });
-
-  const installStep = new Step({
-    name: "Install governance CLI",
-    run: "npm install --global github-warden",
-  });
-
   // ── Dry-run job (PR) ────────────────────────────────────────────
   //
   // Fires only on `pull_request` events that touch the config file.
   // Computes the change-set and posts the plan as a PR comment.
+  //
+  // Uses the github-warden Action directly (dogfood): SHA-pinned to satisfy
+  // GHA029. The private key is supplied via `with:` — never interpolated into
+  // a `run:` script (GHA045). The Action handles token-minting internally.
 
-  const dryRunStep = new Step({
-    name: "Dry-run reconcile + post PR comment",
-    // GHA045: secrets never appear inside `run:`. The minted token is an
-    // ephemeral installation token (not the private key) passed via env.
+  const dryRunWardenStep = new Step({
+    name: "Dry-run reconcile",
+    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v1`,
+    with: {
+      command: "reconcile",
+      config: configPath,
+      mode: "dry-run",
+      "app-id": `\${{ vars.${appIdVar} }}`,
+      "installation-id": `\${{ vars.${installationIdVar} }}`,
+      "private-key": `\${{ secrets.${privateKeySecret} }}`,
+      ...(cycleArgs ? { cycles: cycles!.join(",") } : {}),
+    },
+  });
+
+  const postPrCommentStep = new Step({
+    name: "Post dry-run summary as PR comment",
+    // GHA045: ephemeral token sourced from steps output, not interpolated into
+    // a shell script with the private key.
     env: {
-      GH_TOKEN: "${{ steps.app-token.outputs.token }}",
-      GOVERNANCE_INSTALLATION_ID: `\${{ vars.${installationIdVar} }}`,
+      GH_TOKEN: "${{ github.token }}",
     },
     run: [
-      `OUTPUT=$(npx github-warden reconcile \\`,
-      `  --config "${configPath}" \\`,
-      `  --token-env GH_TOKEN \\`,
-      `  --installation-id-env GOVERNANCE_INSTALLATION_ID \\`,
-      `  --mode dry-run${cycleFlag} 2>&1) || true`,
-      ``,
       `gh pr comment "\${{ github.event.pull_request.number }}" \\`,
       `  --repo "\${{ github.repository }}" \\`,
-      `  --body "## Governance dry-run plan\\n\\n\`\`\`\\n\${OUTPUT}\\n\`\`\`"`,
+      `  --body "## Governance dry-run plan\\n\\nSee the \\"Dry-run reconcile\\" step for the change-set."`,
     ].join("\n"),
   });
 
@@ -224,7 +202,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
     },
     // Only run on PR events — the apply job handles schedule and dispatch.
     if: "${{ github.event_name == 'pull_request' }}",
-    steps: [checkoutStep, mintTokenStep, setupNodeStep, installStep, dryRunStep],
+    steps: [checkoutStep, dryRunWardenStep, postPrCommentStep],
   });
 
   // ── Apply job (schedule / dispatch) ─────────────────────────────
@@ -232,19 +210,18 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
   // Fires on schedule and on `workflow_dispatch`. Applies the change-set after
   // guardrails pass. Does not run on `pull_request` events.
 
-  const applyStep = new Step({
+  const applyWardenStep = new Step({
     name: "Apply reconcile",
-    env: {
-      GH_TOKEN: "${{ steps.app-token.outputs.token }}",
-      GOVERNANCE_INSTALLATION_ID: `\${{ vars.${installationIdVar} }}`,
+    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v1`,
+    with: {
+      command: "reconcile",
+      config: configPath,
+      mode: "apply",
+      "app-id": `\${{ vars.${appIdVar} }}`,
+      "installation-id": `\${{ vars.${installationIdVar} }}`,
+      "private-key": `\${{ secrets.${privateKeySecret} }}`,
+      ...(cycleArgs ? { cycles: cycles!.join(",") } : {}),
     },
-    run: [
-      `npx github-warden reconcile \\`,
-      `  --config "${configPath}" \\`,
-      `  --token-env GH_TOKEN \\`,
-      `  --installation-id-env GOVERNANCE_INSTALLATION_ID \\`,
-      `  --mode apply${cycleFlag}`,
-    ].join("\n"),
   });
 
   const applyJob = new Job({
@@ -256,7 +233,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
     },
     // Skip on PR events — the dry-run job handles those.
     if: "${{ github.event_name != 'pull_request' }}",
-    steps: [checkoutStep, mintTokenStep, setupNodeStep, installStep, applyStep],
+    steps: [checkoutStep, applyWardenStep],
   });
 
   // ── Workflow ────────────────────────────────────────────────────

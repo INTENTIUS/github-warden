@@ -1,17 +1,24 @@
 {
   "name": "github-warden",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Keep your GitHub org and repos in declared state — reconcile, guardrails, drift correction",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "github-warden": "./bin/github-warden.js"
   },
+  "files": [
+    "bin",
+    "dist"
+  ],
   "scripts": {
     "tsc": "tsc --noEmit",
     "test": "vitest run",
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
-    "build:action": "esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='\"1\"' --outfile=action/index.mjs"
+    "build:action": "esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='\"1\"' --outfile=action/index.mjs",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@intentius/chant": "^0.8.2",
