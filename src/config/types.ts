@@ -101,6 +101,35 @@ export interface MemberConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Repository security features
+// ---------------------------------------------------------------------------
+
+/**
+ * Repository security-feature toggles. Absent fields are not managed.
+ *
+ * The first three map to the repo `security_and_analysis` object (set via
+ * `PATCH /repos/{o}/{r}`); the last two use dedicated endpoints
+ * (`vulnerability-alerts`, `automated-security-fixes`).
+ *
+ * License-gated note: GitHub Advanced Security features (`advancedSecurity`,
+ * and secret scanning on private repos) require a GHAS license. Where a feature
+ * is unavailable, GitHub rejects the enabling write; the cycle surfaces that as
+ * a reported failed entry rather than crashing the run (see cycle header).
+ */
+export interface RepoSecurityConfig {
+  /** GitHub Advanced Security (`security_and_analysis.advanced_security`). */
+  advancedSecurity?: boolean;
+  /** Secret scanning (`security_and_analysis.secret_scanning`). */
+  secretScanning?: boolean;
+  /** Secret scanning push protection (`security_and_analysis.secret_scanning_push_protection`). */
+  secretScanningPushProtection?: boolean;
+  /** Dependabot vulnerability alerts (`vulnerability-alerts` endpoint). */
+  vulnerabilityAlerts?: boolean;
+  /** Dependabot automated security fixes (`automated-security-fixes` endpoint). */
+  dependabotSecurityUpdates?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Rulesets (repo + org)
 // ---------------------------------------------------------------------------
 
@@ -207,6 +236,11 @@ export interface RepoConfig {
    * Absent means repo rulesets are not managed by chant.
    */
   rulesets?: RulesetConfig[];
+  /**
+   * Repository security features (GHAS, secret scanning, Dependabot).
+   * Absent means security features are not managed by chant.
+   */
+  security?: RepoSecurityConfig;
 }
 
 // ---------------------------------------------------------------------------
