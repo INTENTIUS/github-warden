@@ -28,6 +28,7 @@ import type {
   VariableConfig,
   DependabotConfig,
   RepoBaselineConfig,
+  TokenPolicyConfig,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,13 @@ export interface DiffOptions {
    * @returns `true` if chant owns this entry and may delete it.
    */
   isOwned?: (resourceType: string, key: string) => boolean;
+
+  /**
+   * Reference "now" in epoch milliseconds, used by time-based diffs (e.g.
+   * token-grant lifetime/idle evaluation). The runner injects `Date.now()` when
+   * unset; tests pass an explicit value for determinism.
+   */
+  nowMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +254,23 @@ export interface LiveOrgState {
   rulesets?: LiveRuleset[];
   secrets?: LiveSecret[];
   variables?: LiveVariable[];
+  tokenGrants?: LiveTokenGrant[];
+}
+
+/** Live snapshot of a fine-grained PAT grant on the org (timestamps in epoch ms). */
+export interface LiveTokenGrant {
+  /** Grant id (used to revoke). */
+  id: number;
+  /** Login of the token owner. */
+  ownerLogin?: string;
+  /** Whether GitHub reports the token as expired. */
+  expired?: boolean;
+  /** Expiry time (epoch ms), if any. */
+  expiresAtMs?: number;
+  /** Last-used time (epoch ms), if known. */
+  lastUsedAtMs?: number;
+  /** When org access was granted (epoch ms). */
+  grantedAtMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +282,7 @@ const RESOURCE_TYPE_ORDER = [
   "org-ruleset",
   "org-secret",
   "org-variable",
+  "token-grant",
   "repo-baseline",
   "team",
   "team-member",
@@ -297,6 +323,7 @@ export function diff(
   diffSecrets("", "org-secret", desired.secrets, live.secrets ?? [], opts, entries);
   diffVariables("", "org-variable", desired.variables, live.variables ?? [], opts, entries);
   diffRepoBaselines(desired.repoBaselines, live.repos ?? {}, entries);
+  diffTokenGrants(desired.tokenPolicy, live.tokenGrants ?? [], opts, entries);
   diffTeams(desired.teams, live.teams ?? {}, opts, entries);
   diffMembers(desired.members, live.members ?? [], opts, entries);
   diffRepos(desired.repos, live.repos ?? {}, opts, entries);
@@ -914,6 +941,74 @@ function diffVariables(
         out.push({ kind: "delete", resourceType, key, before: lv });
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Token governance
+// ---------------------------------------------------------------------------
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Evaluate a single token grant against the policy. Returns a short violation
+ * reason (e.g. "expired", "exceeds-max-lifetime", "idle") or null when the
+ * grant is compliant. Pure — age/idle checks require `nowMs` (skipped when
+ * undefined); the expiry check is clock-free (uses GitHub's `expired` flag).
+ */
+export function evaluateTokenViolation(
+  grant: LiveTokenGrant,
+  policy: TokenPolicyConfig,
+  nowMs?: number,
+): string | null {
+  if (policy.revokeExpired !== false && grant.expired === true) return "expired";
+
+  if (
+    policy.maxLifetimeDays != null &&
+    nowMs != null &&
+    grant.grantedAtMs != null &&
+    (nowMs - grant.grantedAtMs) / MS_PER_DAY > policy.maxLifetimeDays
+  ) {
+    return "exceeds-max-lifetime";
+  }
+
+  if (
+    policy.maxIdleDays != null &&
+    nowMs != null &&
+    grant.lastUsedAtMs != null &&
+    (nowMs - grant.lastUsedAtMs) / MS_PER_DAY > policy.maxIdleDays
+  ) {
+    return "idle";
+  }
+
+  return null;
+}
+
+/**
+ * Diff org token grants against the governance policy. A violating grant is
+ * emitted as an UPDATE (resource type "token-grant", key = grant id) meaning
+ * "revoke org access" — modelled as an update, not a delete, so a routine
+ * revocation sweep does not trip the removalDeltaCap guardrail.
+ */
+function diffTokenGrants(
+  policy: TokenPolicyConfig | undefined,
+  grants: LiveTokenGrant[],
+  opts: DiffOptions,
+  out: ChangeSetEntry[],
+): void {
+  if (policy === undefined) return;
+
+  for (const grant of grants) {
+    const reason = evaluateTokenViolation(grant, policy, opts.nowMs);
+    if (!reason) continue;
+    out.push({
+      kind: "update",
+      resourceType: "token-grant",
+      key: String(grant.id),
+      before: grant,
+      after: { revoke: true, reason, ownerLogin: grant.ownerLogin },
+      fields: [{ field: "access", before: "granted", after: `revoked (${reason})` }],
+    });
   }
 }
 
