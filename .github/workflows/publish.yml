@@ -34,23 +34,39 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # OIDC trusted publishing — no NPM_TOKEN secret needed
+      id-token: write # OIDC trusted publishing (steady state; no secret)
+    env:
+      # npm only lets you configure trusted publishing AFTER a package exists,
+      # so the very FIRST publish of github-warden needs a token. Set an
+      # NPM_TOKEN repo/org secret (npm granular token, publish scope) for that
+      # one release; the job uses it when present. Once the package exists and
+      # trusted publishing is configured (`npm trust` / npm web UI), delete the
+      # secret and every later release authenticates via OIDC — no token stored.
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
-          # Deliberately NOT setting registry-url: that flag makes setup-node
-          # write an .npmrc with `_authToken=${NODE_AUTH_TOKEN}`, and the token
-          # defaults to a literal placeholder when unset — which the registry
-          # 404s on instead of falling through to OIDC. Without registry-url
-          # there is no .npmrc; `npm publish` detects the OIDC id-token
-          # environment and exchanges it for a short-lived publish token via the
-          # package's trusted-publisher record.
+          # Deliberately NOT setting registry-url: that flag writes an .npmrc
+          # with a placeholder token when NODE_AUTH_TOKEN is unset, which 404s
+          # instead of falling through to OIDC. We write .npmrc ourselves below
+          # only when a real token is present; otherwise npm publish uses OIDC.
       - run: npm ci
       - name: Publish github-warden
         run: |
+          set -euo pipefail
           V=$(node -e "process.stdout.write(require('./package.json').version)")
           P=$(npm view github-warden version 2>/dev/null || echo "none")
-          [ "$V" = "$P" ] && echo "github-warden@$V already published, skipping" || npm publish --access public --provenance
+          if [ "$V" = "$P" ]; then
+            echo "github-warden@$V already published, skipping"
+            exit 0
+          fi
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "Publishing $V with NPM_TOKEN (bootstrap)"
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          else
+            echo "Publishing $V via OIDC trusted publishing"
+          fi
+          npm publish --access public --provenance
