@@ -34,6 +34,18 @@ export { loadGovernanceConfig, GovernanceConfigError } from "./config/load.js";
 export type { MintOptions, InstallationToken, AppClientOptions, AppClient } from "./auth/app-client.js";
 export { mintInstallationToken, createAppClient, AppAuthError } from "./auth/app-client.js";
 
+// Reconcile: provider-agnostic core primitive (the seam intended for #20).
+export type {
+  DiffCollectionParams,
+  GuardrailCheck,
+} from "./reconcile/core.js";
+export {
+  deepEqual,
+  diffFields,
+  diffCollection,
+  runGuardrailChecks,
+} from "./reconcile/core.js";
+
 // Reconcile: plan/diff primitive
 export type {
   ChangeKind,
