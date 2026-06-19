@@ -1,19 +1,39 @@
 # github-warden
 
-Keep your GitHub org and repos in declared state — reconcile, guardrails, drift correction.
+[![ci](https://github.com/intentius/github-warden/actions/workflows/ci.yml/badge.svg)](https://github.com/intentius/github-warden/actions/workflows/ci.yml)
+[![e2e (nightly)](https://github.com/intentius/github-warden/actions/workflows/e2e.yml/badge.svg)](https://github.com/intentius/github-warden/actions/workflows/e2e.yml)
+[![npm](https://img.shields.io/npm/v/@intentius/github-warden)](https://www.npmjs.com/package/@intentius/github-warden)
 
-github-warden is a CLI (and GitHub Action) for GitHub **org and repository
-governance**. You declare desired state in a YAML/JSON config; the tool computes
-the diff between desired and live state, runs safety **guardrails**, and either
-reports the plan (`dry-run`) or applies it (`apply`).
+**Keep your GitHub org and repos in a declared state — reconcile, guardrails, drift correction.**
 
-It is **selective-by-omission** at every level: anything you don't declare is
-never read, diffed, or changed. Deletes are **ownership-gated** — warden won't
-remove a live resource unless you explicitly mark it owned.
+Think of it as Terraform for GitHub administration. You write desired state for
+your org and repos in **one YAML file**; warden diffs it against live GitHub,
+runs **safety guardrails**, and either prints the plan (`dry-run`, the default)
+or applies it. It is **selective-by-omission** — anything you don't declare is
+never read, diffed, or touched — and deletes are **ownership-gated**, so it
+won't remove a resource unless you mark it owned. Run it locally, on a schedule,
+or as a GitHub Action.
+
+## What you need to run it
+
+Before warden does anything useful you provide two things:
+
+1. **Auth** — either a pre-minted installation **token** (simplest; good for
+   repo-level reconcile and `audit`) **or** a **GitHub App** installed on your
+   org (App ID + installation ID + private key). An App is **required** for
+   org-level cycles (org settings, members, teams) and the token cycles — see
+   [Auth](#auth).
+2. **A config file** — a YAML/JSON file declaring the desired state you want
+   managed (see [Config format](#config-format)). Declare only what you want
+   warden to own.
+
+Nothing is mutated until you ask: the default mode is `dry-run`, which only
+reads and prints a plan. Start there.
 
 ## Install
 
 ```bash
+# Dry-run against your org — reads only, prints a plan, changes nothing.
 npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
 ```
 
