@@ -3,11 +3,20 @@
   "version": "0.3.0",
   "type": "module",
   "description": "Keep your GitHub org and repos in declared state — reconcile, guardrails, drift correction",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/INTENTIUS/github-warden.git"
+  },
+  "homepage": "https://github.com/INTENTIUS/github-warden#readme",
+  "bugs": {
+    "url": "https://github.com/INTENTIUS/github-warden/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
   "bin": {
-    "github-warden": "./bin/github-warden.js"
+    "github-warden": "bin/github-warden.js"
   },
   "files": [
     "bin",
