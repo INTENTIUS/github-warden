@@ -1,0 +1,37 @@
+name: e2e
+
+# Gated end-to-end suite against a real GitHub test org. Never runs on PRs —
+# nightly + on demand only, so it can't block contributions and only runs where
+# the WARDEN_E2E_* secrets exist. The suite self-skips if they're unset.
+on:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC nightly
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Also run the mutating Phase 2 (teardown-guarded)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: e2e
+        env:
+          WARDEN_E2E_APP_ID: ${{ secrets.WARDEN_E2E_APP_ID }}
+          WARDEN_E2E_INSTALLATION_ID: ${{ secrets.WARDEN_E2E_INSTALLATION_ID }}
+          WARDEN_E2E_PRIVATE_KEY: ${{ secrets.WARDEN_E2E_PRIVATE_KEY }}
+          WARDEN_E2E_ORG: ${{ secrets.WARDEN_E2E_ORG }}
+          WARDEN_E2E_APPLY: ${{ inputs.apply && '1' || '' }}
+        run: npm run test:e2e

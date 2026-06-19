@@ -249,6 +249,29 @@ way the chant lexicons publish. `just release [patch|minor|major]` bumps, tags
 `vX.Y.Z`, and pushes; `publish.yml` then publishes with `id-token: write` +
 `--provenance`.
 
+## End-to-end tests
+
+Unit tests (`npm test`) are fully mocked. A separate **gated** e2e suite exercises
+every cycle against a **real GitHub org** via a real App installation — it's the
+only thing that validates the live API contract (especially the App-only token
+cycles). It's excluded from `npm test` and from PR CI.
+
+```bash
+WARDEN_E2E_APP_ID=… WARDEN_E2E_INSTALLATION_ID=… \
+WARDEN_E2E_PRIVATE_KEY="$(cat key.pem)" WARDEN_E2E_ORG=my-test-org \
+npm run test:e2e
+```
+
+- **Phase 1 (always):** for each cycle, runs `fetchLive` + `diff` against the org
+  and asserts every HTTP call was a `GET` (fetchLive never mutates) and the
+  pipeline composes — this catches API drift. The suite **self-skips** when the
+  `WARDEN_E2E_*` vars are unset.
+- **Phase 2 (opt-in, `WARDEN_E2E_APPLY=1`):** one teardown-guarded mutation
+  (create + delete a repo Actions variable) to prove the write path.
+
+CI runs it nightly + on demand via `.github/workflows/e2e.yml` using
+`WARDEN_E2E_*` repo secrets (never on PRs).
+
 ## Architecture
 
 The provider-agnostic reconcile core (change-set model, generic collection diff,
