@@ -101,6 +101,28 @@ export interface MemberConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Token governance
+// ---------------------------------------------------------------------------
+
+/**
+ * Org fine-grained PAT governance policy. Drives the token-governance cycle's
+ * scheduled sweep: it revokes a token grant's ORG ACCESS when the grant
+ * violates the policy.
+ *
+ * PLATFORM WALL: user PATs cannot be created or rotated on a user's behalf via
+ * the API. warden can only inventory grants, gate approval (#16), and revoke
+ * org access — these token APIs are callable ONLY by a GitHub App.
+ */
+export interface TokenPolicyConfig {
+  /** Revoke org access for an expired grant still listed. Default true. */
+  revokeExpired?: boolean;
+  /** Maximum grant lifetime in days (1–366). Older grants are revoked. */
+  maxLifetimeDays?: number;
+  /** Maximum idle days since last use. Staler grants are revoked. */
+  maxIdleDays?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Dependency hygiene (Dependabot config file)
 // ---------------------------------------------------------------------------
 
@@ -438,6 +460,11 @@ export interface OrgConfig {
    * machine user from a person, so this list is operator-declared.
    */
   machineUsers?: string[];
+  /**
+   * Fine-grained PAT governance policy (scheduled sweep). Absent means token
+   * grants are not governed by chant.
+   */
+  tokenPolicy?: TokenPolicyConfig;
 }
 
 /**

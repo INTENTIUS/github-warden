@@ -357,8 +357,12 @@ export async function runReconcile<TScope = unknown>(
         continue;
       }
 
-      // Step 3: diff.
-      const changeSet: ChangeSet = diff(orgLogin, desired, live, diffOptions);
+      // Step 3: diff. Inject a default "now" for time-based diffs (token grants)
+      // unless the caller supplied one (tests pass an explicit value).
+      const changeSet: ChangeSet = diff(orgLogin, desired, live, {
+        ...diffOptions,
+        nowMs: diffOptions.nowMs ?? Date.now(),
+      });
 
       // Step 4: guardrails.
       const guardrailResult = runGuardrails(changeSet, live, guardrailConfig);

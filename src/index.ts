@@ -23,6 +23,7 @@ export type {
   VariableConfig,
   DependabotConfig,
   RepoBaselineConfig,
+  TokenPolicyConfig,
 } from "./config/types.js";
 
 // Config loader
@@ -52,9 +53,10 @@ export type {
   LiveSecret,
   LiveVariable,
   LiveDependabot,
+  LiveTokenGrant,
   LiveOrgState,
 } from "./reconcile/diff.js";
-export { diff, summarizeChangeSet, renderChangeSet } from "./reconcile/diff.js";
+export { diff, summarizeChangeSet, renderChangeSet, evaluateTokenViolation } from "./reconcile/diff.js";
 
 // Reconcile: guardrails
 export type {
@@ -108,6 +110,8 @@ export { dependencyHygieneCycle, fetchDependabot } from "./cycles/dependency-hyg
 export type { DependencyHygieneScope } from "./cycles/dependency-hygiene.js";
 export { repoBaselineCycle, listOrgRepoNames } from "./cycles/repo-baseline.js";
 export type { RepoBaselineScope } from "./cycles/repo-baseline.js";
+export { tokenGovernanceCycle, mapTokenGrant } from "./cycles/token-governance.js";
+export type { TokenGovernanceScope } from "./cycles/token-governance.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";
