@@ -251,10 +251,10 @@ way the chant lexicons publish. `just release [patch|minor|major]` bumps, tags
 
 ## End-to-end tests
 
-Unit tests (`npm test`) are fully mocked. A separate **gated** e2e suite exercises
-every cycle against a **real GitHub org** via a real App installation — it's the
-only thing that validates the live API contract (especially the App-only token
-cycles). It's excluded from `npm test` and from PR CI.
+Unit tests (`npm test`) are fully mocked. A separate **gated, self-provisioning**
+e2e suite exercises every cycle against a **real GitHub org** via a real App
+installation — the only thing that validates the live API contract (especially
+the App-only token cycles). It's excluded from `npm test` and from PR CI.
 
 ```bash
 WARDEN_E2E_APP_ID=… WARDEN_E2E_INSTALLATION_ID=… \
@@ -262,14 +262,19 @@ WARDEN_E2E_PRIVATE_KEY="$(cat key.pem)" WARDEN_E2E_ORG=my-test-org \
 npm run test:e2e
 ```
 
-- **Phase 1 (always):** for each cycle, runs `fetchLive` + `diff` against the org
-  and asserts every HTTP call was a `GET` (fetchLive never mutates) and the
-  pipeline composes — this catches API drift. The suite **self-skips** when the
-  `WARDEN_E2E_*` vars are unset.
-- **Phase 2 (opt-in, `WARDEN_E2E_APPLY=1`):** one teardown-guarded mutation
-  (create + delete a repo Actions variable) to prove the write path.
+- **Hermetic:** it **creates** a throwaway repo (`warden-e2e-<run>`) plus one
+  Actions variable and one sealed-box-encrypted secret, and **deletes** the repo
+  on teardown — nothing pre-existing is required. The suite **self-skips** when
+  the `WARDEN_E2E_*` vars are unset.
+- **Phase 1 (always):** per cycle, runs `fetchLive` + `diff` against the
+  provisioned repo/org and asserts every HTTP call was a `GET` (fetchLive never
+  mutates) and the pipeline composes — catches API drift.
+- **Phase 2 (opt-in, `WARDEN_E2E_APPLY=1`):** one apply through a cycle (set a
+  repo topic), verified by re-fetch; cleaned up by the repo teardown.
 
-CI runs it nightly + on demand via `.github/workflows/e2e.yml` using
+The App installation needs **repository administration** (create/delete repos)
+and **Actions secrets + variables** read+write, plus the read scopes the cycles
+touch. CI runs it nightly + on demand via `.github/workflows/e2e.yml` using
 `WARDEN_E2E_*` repo secrets (never on PRs).
 
 ## Architecture
