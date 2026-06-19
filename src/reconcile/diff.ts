@@ -20,6 +20,7 @@ import type {
   RepoConfig,
   BranchProtectionConfig,
   RulesetConfig,
+  RepoSecurityConfig,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -185,6 +186,16 @@ export interface LiveRepoConfig {
   branchProtection?: LiveBranchProtectionConfig[];
   topics?: string[];
   rulesets?: LiveRuleset[];
+  security?: LiveRepoSecurity;
+}
+
+/** Live snapshot of a repo's security-feature toggles. Mirrors `RepoSecurityConfig`. */
+export interface LiveRepoSecurity {
+  advancedSecurity?: boolean;
+  secretScanning?: boolean;
+  secretScanningPushProtection?: boolean;
+  vulnerabilityAlerts?: boolean;
+  dependabotSecurityUpdates?: boolean;
 }
 
 export interface LiveOrgState {
@@ -207,6 +218,7 @@ const RESOURCE_TYPE_ORDER = [
   "team-repo",
   "member",
   "repo",
+  "repo-security",
   "branch-protection",
   "repo-ruleset",
 ] as const;
@@ -522,6 +534,9 @@ function diffRepos(
 
     // Repository rulesets
     diffRulesets(`${name}/`, "repo-ruleset", dr.rulesets, lr.rulesets ?? [], opts, out);
+
+    // Repository security features
+    diffRepoSecurity(name, dr.security, lr.security, out);
   }
 
   for (const name of Object.keys(live)) {
@@ -657,6 +672,41 @@ function diffRulesets(
         out.push({ kind: "delete", resourceType, key, before: lr });
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Repository security features
+// ---------------------------------------------------------------------------
+
+/**
+ * Diff a repo's security-feature toggles. Single object per repo, keyed by
+ * repo name, resource type "repo-security". Selective-by-omission: only
+ * declared flags are compared; an absent `security` block is not managed.
+ */
+function diffRepoSecurity(
+  repoName: string,
+  desired: RepoSecurityConfig | undefined,
+  live: LiveRepoSecurity | undefined,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  if (live === undefined) {
+    out.push({ kind: "create", resourceType: "repo-security", key: repoName, after: desired });
+    return;
+  }
+
+  const fields = diffObject(desired as Record<string, unknown>, live as Record<string, unknown>);
+  if (fields.length > 0) {
+    out.push({
+      kind: "update",
+      resourceType: "repo-security",
+      key: repoName,
+      before: live,
+      after: desired,
+      fields,
+    });
   }
 }
 

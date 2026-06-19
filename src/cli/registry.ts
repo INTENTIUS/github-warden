@@ -15,6 +15,7 @@ import { repoSettingsCycle } from "../cycles/repo-settings.js";
 import { membershipCycle } from "../cycles/membership.js";
 import { teamsCycle } from "../cycles/teams.js";
 import { rulesetsCycle } from "../cycles/rulesets.js";
+import { securityFeaturesCycle } from "../cycles/security-features.js";
 
 /**
  * Registry of all available governance cycles, keyed by the name accepted by
@@ -30,4 +31,5 @@ export const CYCLE_REGISTRY: Record<string, Cycle> = {
   [membershipCycle.name]: membershipCycle,
   [teamsCycle.name]: teamsCycle,
   [rulesetsCycle.name]: rulesetsCycle,
+  [securityFeaturesCycle.name]: securityFeaturesCycle,
 };
