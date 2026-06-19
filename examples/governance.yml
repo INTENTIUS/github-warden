@@ -1,0 +1,43 @@
+# github-warden governance config — a starter. Copy to .github/governance.yml,
+# change the org/repo names, then run a dry-run (reads only, changes nothing):
+#
+#   npx @intentius/github-warden reconcile \
+#     --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
+#
+# Selective-by-omission: warden manages ONLY what you declare below. Anything
+# you leave out is never read, diffed, or touched — so delete the blocks you
+# don't want managed, and add fields as you grow. See the README "Config
+# format" section for every available field.
+
+orgs:
+  my-org: # ← your GitHub org login
+
+    # ── Org-level settings (needs a GitHub App with org admin) ──────────────
+    settings:
+      defaultRepositoryPermission: read
+      membersCanCreatePublicRepositories: false
+
+    repos:
+      my-repo: # ← a repository in the org
+
+        # ── Repository settings ─────────────────────────────────────────────
+        hasWiki: false
+        deleteBranchOnMerge: true
+        topics:
+          - service
+          - go
+
+        # ── Branch protection on the default branch ─────────────────────────
+        branchProtection:
+          - pattern: main
+            requirePullRequestReviews: true
+            requiredApprovingReviewCount: 1
+            requireStatusChecks: true
+            requiredStatusCheckContexts:
+              - ci
+
+        # ── Security features (GHAS / secret scanning / Dependabot) ──────────
+        security:
+          secretScanning: true
+          secretScanningPushProtection: true
+          vulnerabilityAlerts: true
