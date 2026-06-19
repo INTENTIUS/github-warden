@@ -242,10 +242,18 @@ main) on a schedule, pinned to a warden Action SHA.
 and pushes — which triggers `.github/workflows/publish.yml` (test gate → `npm
 publish --provenance`).
 
-Publishing uses **GitHub OIDC trusted publishing** — no `NPM_TOKEN` secret. It
-requires a one-time trusted-publisher record on npm for `github-warden` ←
-`intentius/github-warden`'s `publish.yml` (the workflow already requests
-`id-token: write` and publishes with `--provenance`).
+Publishing targets **GitHub OIDC trusted publishing** (no stored token). npm
+only lets you configure trusted publishing *after* a package exists, so there's
+a one-time bootstrap:
+
+1. **First release** — add an `NPM_TOKEN` repo/org secret (an npm granular token
+   with publish scope), then `just release` (e.g. `minor`). The workflow uses
+   the token just for this inaugural publish, which creates the package.
+2. **Wire up trusted publishing** — configure it for the now-existing package
+   via `npm trust github github-warden --repo=intentius/github-warden --file=publish.yml --allow-publish`
+   (or the npmjs.com package settings).
+3. **Delete the `NPM_TOKEN` secret** — every later `just release` authenticates
+   via OIDC (`id-token: write` + `--provenance`), no token stored.
 
 ## Architecture
 
