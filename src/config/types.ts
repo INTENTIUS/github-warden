@@ -65,6 +65,15 @@ export interface TeamConfig {
   /** Parent team slug, if this team is nested under another. */
   parentTeamSlug?: string;
   /**
+   * Former slug of this team. When set, a rename is reconciled as an update
+   * rather than a delete+create: the reconcile guardrails (`resolveRenames`)
+   * collapse a `delete(previously)` + `create(<this slug>)` pair into a single
+   * update, preserving the team's members, repos, and history.
+   *
+   * Not written to GitHub — it is a reconcile-time hint only.
+   */
+  previously?: string;
+  /**
    * Team members and their roles.
    * Absent means membership is not managed by chant.
    */
