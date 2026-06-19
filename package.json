@@ -10,7 +10,8 @@
   "scripts": {
     "tsc": "tsc --noEmit",
     "test": "vitest run",
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js"
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
+    "build:action": "esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='\"1\"' --outfile=action/index.mjs"
   },
   "dependencies": {
     "@intentius/chant": "^0.8.2",
