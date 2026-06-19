@@ -13,10 +13,18 @@
     "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js"
   },
   "dependencies": {
-    "@intentius/chant-lexicon-github": "^0.8.2"
+    "@intentius/chant": "^0.8.2",
+    "@intentius/chant-lexicon-aws": "^0.8.2",
+    "@intentius/chant-lexicon-azure": "^0.8.2",
+    "@intentius/chant-lexicon-docker": "^0.8.2",
+    "@intentius/chant-lexicon-forgejo": "^0.8.2",
+    "@intentius/chant-lexicon-gcp": "^0.8.2",
+    "@intentius/chant-lexicon-github": "^0.8.2",
+    "@intentius/chant-lexicon-gitlab": "^0.8.2",
+    "@intentius/chant-lexicon-helm": "^0.8.2",
+    "@intentius/chant-lexicon-k8s": "^0.8.2"
   },
   "devDependencies": {
-    "@intentius/chant": "^0.8.2",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"

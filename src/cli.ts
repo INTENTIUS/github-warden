@@ -6,6 +6,7 @@
  *
  * Subcommands:
  *   reconcile   Load config, build an authed client, run selected cycles.
+ *   audit       Run chant's posture-audit engine over all managed repos.
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
@@ -31,6 +32,7 @@
  *   1   Guardrail block (apply mode, guardrails tripped, override not set).
  *   2   Argument / config error.
  *   3   Runtime error (network failure, apply failure, etc.).
+ *   4   Audit: findings exceed --fail-on threshold.
  */
 
 import { readFileSync } from "node:fs";
@@ -39,6 +41,8 @@ import { loadGovernanceConfig } from "./config/load.js";
 import { createAppClient } from "./auth/app-client.js";
 import { runReconcile } from "./reconcile/runner.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
+import { auditRepos } from "./audit/engine.js";
+import { renderPostureSummary, shouldFail, type FailOn } from "./audit/summary.js";
 import type { Cycle } from "./reconcile/runner.js";
 
 // ---------------------------------------------------------------------------
@@ -183,6 +187,125 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
 }
 
 // ---------------------------------------------------------------------------
+// Audit subcommand
+// ---------------------------------------------------------------------------
+
+export interface AuditArgs {
+  config: string;
+  appIdEnv: string | undefined;
+  installationIdEnv: string | undefined;
+  tokenEnv: string | undefined;
+  failOn: FailOn;
+}
+
+/**
+ * Parse audit argv (everything after the `audit` subcommand) into `AuditArgs`.
+ *
+ * Accepted flags:
+ *   --config <path>               Path to governance config file (YAML/JSON). Required.
+ *   --token-env <VAR>             Env var holding a pre-minted installation token.
+ *   --app-id-env <VAR>            Env var holding the GitHub App ID.
+ *   --installation-id-env <VAR>   Env var holding the installation ID.
+ *   --fail-on merge-worthy|any|none
+ *                                 Exit 4 when findings exceed this threshold.
+ *                                 Default: none.
+ */
+export function parseAuditArgs(argv: string[]): AuditArgs {
+  const args: AuditArgs = {
+    config: "",
+    appIdEnv: undefined,
+    installationIdEnv: undefined,
+    tokenEnv: undefined,
+    failOn: "none",
+  };
+
+  const knownFlags = new Set([
+    "--config",
+    "--token-env",
+    "--app-id-env",
+    "--installation-id-env",
+    "--fail-on",
+    "--help",
+    "-h",
+  ]);
+
+  let i = 0;
+  while (i < argv.length) {
+    const flag = argv[i];
+
+    if (flag === "--help" || flag === "-h") {
+      printAuditUsage();
+      process.exit(0);
+    }
+
+    if (!flag.startsWith("--")) {
+      throw new CliError(2, `unexpected positional argument: ${flag}`);
+    }
+
+    if (!knownFlags.has(flag)) {
+      throw new CliError(2, `unknown flag: ${flag}`);
+    }
+
+    switch (flag) {
+      case "--config": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--config requires a value");
+        args.config = val;
+        break;
+      }
+      case "--token-env": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--token-env requires a value");
+        args.tokenEnv = val;
+        break;
+      }
+      case "--app-id-env": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--app-id-env requires a value");
+        args.appIdEnv = val;
+        break;
+      }
+      case "--installation-id-env": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--installation-id-env requires a value");
+        args.installationIdEnv = val;
+        break;
+      }
+      case "--fail-on": {
+        const val = argv[++i];
+        const allowed: FailOn[] = ["merge-worthy", "any", "none"];
+        if (!allowed.includes(val as FailOn)) {
+          throw new CliError(
+            2,
+            `--fail-on must be one of [${allowed.join(", ")}], got: ${val ?? "(missing)"}`,
+          );
+        }
+        args.failOn = val as FailOn;
+        break;
+      }
+    }
+    i++;
+  }
+
+  if (!args.config) throw new CliError(2, "--config is required");
+
+  const hasTokenAuth = !!args.tokenEnv;
+  const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
+  if (!hasTokenAuth && !hasAppAuth) {
+    throw new CliError(
+      2,
+      "auth is required: supply --token-env <VAR>, or both --app-id-env <VAR> and --installation-id-env <VAR>",
+    );
+  }
+
+  return args;
+}
+
+// ---------------------------------------------------------------------------
 // Auth client builder
 // ---------------------------------------------------------------------------
 
@@ -194,8 +317,10 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
  *
  * App-client path: delegate to `createAppClient`, which mints and auto-refreshes
  * installation tokens from the App ID, installation ID, and private key PEM.
+ *
+ * Accepts both ReconcileArgs and AuditArgs (both carry the same auth fields).
  */
-function buildClient(args: ReconcileArgs) {
+function buildClient(args: ReconcileArgs | AuditArgs) {
   if (args.tokenEnv) {
     const token = env(args.tokenEnv);
     // Wrap the pre-minted token in a minimal AppClient.
@@ -260,8 +385,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     process.exit(0);
   }
 
+  if (subcommand === "audit") {
+    await runAudit(argv.slice(1));
+    return;
+  }
+
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile" or "audit"?`);
   }
 
   let args: ReconcileArgs;
@@ -622,6 +752,106 @@ function parseScalar(s: string): unknown {
   return s;
 }
 
+/**
+ * Run the `audit` subcommand end-to-end:
+ *   load config → resolve managed repos → get token → auditRepos → print + exit.
+ *
+ * Exits 4 when findings exceed the --fail-on threshold.
+ */
+async function runAudit(argv: string[]): Promise<void> {
+  let auditArgs: AuditArgs;
+  try {
+    auditArgs = parseAuditArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+
+  // ── Load config ────────────────────────────────────────────────────────────
+  let rawConfig: unknown;
+  try {
+    const text = readFileSync(auditArgs.config, "utf-8");
+    rawConfig = parseConfigFile(auditArgs.config, text);
+  } catch (err) {
+    die(3, `failed to read config file "${auditArgs.config}": ${errMsg(err)}`);
+  }
+
+  let config;
+  try {
+    config = loadGovernanceConfig(rawConfig);
+  } catch (err) {
+    die(2, `invalid governance config: ${errMsg(err)}`);
+  }
+
+  // ── Resolve managed repos from config ──────────────────────────────────────
+  const repoUrls: string[] = [];
+  for (const [orgName, orgCfg] of Object.entries(config.orgs)) {
+    for (const repoName of Object.keys(orgCfg.repos ?? {})) {
+      repoUrls.push(`https://github.com/${orgName}/${repoName}`);
+    }
+  }
+
+  if (repoUrls.length === 0) {
+    process.stdout.write("github-warden audit: no repos declared in config; nothing to audit.\n");
+    process.exit(0);
+  }
+
+  // ── Get token ──────────────────────────────────────────────────────────────
+  let token: string | undefined;
+  try {
+    const client = buildClient(auditArgs);
+    // Mint the token by making a no-op request to the meta endpoint.
+    // For a token-env client there is no mint step; read the env var directly.
+    if (auditArgs.tokenEnv) {
+      token = process.env[auditArgs.tokenEnv];
+    } else {
+      // App client: mint an installation token and extract it.
+      // We ping /meta (no auth body) just to trigger the token mint — the
+      // client auto-caches it. For auditRepos we need the raw string, so we
+      // call a harmless endpoint and pull the Authorization header value via
+      // a thin wrapper.
+      //
+      // Simpler: read the private key and mint directly.
+      const appId = env(auditArgs.appIdEnv!);
+      const installationId = env(auditArgs.installationIdEnv!);
+      const privateKeyPem =
+        process.env["GOVERNANCE_APP_PRIVATE_KEY"] ??
+        process.env["GITHUB_APP_PRIVATE_KEY"] ??
+        die(
+          2,
+          "private key not found: set GOVERNANCE_APP_PRIVATE_KEY (or GITHUB_APP_PRIVATE_KEY) to the PEM",
+        );
+      const { mintInstallationToken } = await import("./auth/app-client.js");
+      const { token: minted } = await mintInstallationToken({ appId, installationId, privateKeyPem });
+      token = minted;
+      // Silence the unused import warning — client is used for type-checking above.
+      void client;
+    }
+  } catch (err) {
+    die(3, `auth setup failed: ${errMsg(err)}`);
+  }
+
+  // ── Run audit ──────────────────────────────────────────────────────────────
+  let report;
+  try {
+    report = await auditRepos(repoUrls, token);
+  } catch (err) {
+    die(3, `audit failed: ${errMsg(err)}`);
+  }
+
+  // ── Output ─────────────────────────────────────────────────────────────────
+  process.stdout.write(renderPostureSummary(report));
+
+  if (shouldFail(report, auditArgs.failOn)) {
+    process.stderr.write(
+      `github-warden: audit threshold exceeded (--fail-on ${auditArgs.failOn}): ${report.totals.quickWin + report.totals.needsReview} merge-worthy finding(s)\n`,
+    );
+    process.exit(4);
+  }
+
+  process.exit(0);
+}
+
 function printUsage() {
   process.stdout.write(
     [
@@ -629,6 +859,7 @@ function printUsage() {
       "",
       "Subcommands:",
       "  reconcile   Load config, authenticate, and run governance cycles.",
+      "  audit       Audit managed repos for security/correctness posture.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -639,11 +870,49 @@ function printUsage() {
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
       "  --allow-guardrail-override    Apply even when guardrails trip.",
       "",
+      "Flags (audit):",
+      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --token-env <VAR>             Env var holding a pre-minted installation token.",
+      "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
+      "  --installation-id-env <VAR>   Env var holding the installation ID.",
+      "  --fail-on merge-worthy|any|none",
+      "                                Exit 4 when findings exceed threshold (default: none).",
+      "",
       "Exit codes:",
       "  0   Success.",
       "  1   Guardrail block (apply mode, override not set).",
       "  2   Argument or config error.",
       "  3   Runtime error.",
+      "  4   Audit: findings exceed --fail-on threshold.",
+      "",
+    ].join("\n"),
+  );
+}
+
+function printAuditUsage() {
+  process.stdout.write(
+    [
+      "Usage: github-warden audit [flags]",
+      "",
+      "Audit all repos declared in the governance config for security/correctness posture.",
+      "Uses chant's audit engine (same checks as `chant audit`). Reads private repos",
+      "using the warden App installation token.",
+      "",
+      "Flags:",
+      "  --config <path>               Path to governance config file (YAML or JSON). Required.",
+      "  --token-env <VAR>             Env var holding a pre-minted installation token.",
+      "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
+      "  --installation-id-env <VAR>   Env var holding the installation ID.",
+      "  --fail-on merge-worthy|any|none",
+      "                                Exit 4 when findings exceed threshold (default: none).",
+      "",
+      "Auth: supply --token-env, or both --app-id-env and --installation-id-env.",
+      "",
+      "Exit codes:",
+      "  0   Audit complete (within threshold or --fail-on none).",
+      "  2   Argument or config error.",
+      "  3   Runtime error.",
+      "  4   Findings exceed --fail-on threshold.",
       "",
     ].join("\n"),
   );
