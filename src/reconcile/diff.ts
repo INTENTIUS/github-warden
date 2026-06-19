@@ -24,6 +24,8 @@ import type {
   EnvironmentConfig,
   EnvironmentReviewer,
   DeploymentBranchPolicy,
+  SecretConfig,
+  VariableConfig,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -191,6 +193,19 @@ export interface LiveRepoConfig {
   rulesets?: LiveRuleset[];
   security?: LiveRepoSecurity;
   environments?: LiveEnvironment[];
+  secrets?: LiveSecret[];
+  variables?: LiveVariable[];
+}
+
+/** Live snapshot of an Actions secret — name only (values are never readable). */
+export interface LiveSecret {
+  name: string;
+}
+
+/** Live snapshot of an Actions variable (values ARE readable). */
+export interface LiveVariable {
+  name: string;
+  value?: string;
 }
 
 /** Live snapshot of a deployment environment. Mirrors `EnvironmentConfig`. */
@@ -217,6 +232,8 @@ export interface LiveOrgState {
   members?: LiveMemberConfig[];
   repos?: Record<string, LiveRepoConfig>;
   rulesets?: LiveRuleset[];
+  secrets?: LiveSecret[];
+  variables?: LiveVariable[];
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +243,8 @@ export interface LiveOrgState {
 const RESOURCE_TYPE_ORDER = [
   "org-settings",
   "org-ruleset",
+  "org-secret",
+  "org-variable",
   "team",
   "team-member",
   "team-repo",
@@ -235,6 +254,8 @@ const RESOURCE_TYPE_ORDER = [
   "environment",
   "branch-protection",
   "repo-ruleset",
+  "repo-secret",
+  "repo-variable",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -259,6 +280,8 @@ export function diff(
 
   diffSettings(desired.settings, live.settings, entries);
   diffRulesets("", "org-ruleset", desired.rulesets, live.rulesets ?? [], opts, entries);
+  diffSecrets("", "org-secret", desired.secrets, live.secrets ?? [], opts, entries);
+  diffVariables("", "org-variable", desired.variables, live.variables ?? [], opts, entries);
   diffTeams(desired.teams, live.teams ?? {}, opts, entries);
   diffMembers(desired.members, live.members ?? [], opts, entries);
   diffRepos(desired.repos, live.repos ?? {}, opts, entries);
@@ -554,6 +577,10 @@ function diffRepos(
 
     // Deployment environments
     diffEnvironments(name, dr.environments, lr.environments ?? [], opts, out);
+
+    // Actions secrets & variables
+    diffSecrets(`${name}/`, "repo-secret", dr.secrets, lr.secrets ?? [], opts, out);
+    diffVariables(`${name}/`, "repo-variable", dr.variables, lr.variables ?? [], opts, out);
   }
 
   for (const name of Object.keys(live)) {
@@ -780,6 +807,93 @@ function diffEnvironments(
       const key = `${repoName}/${name}`;
       if (opts.isOwned?.("environment", key)) {
         out.push({ kind: "delete", resourceType: "environment", key, before: le });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Actions secrets & variables
+// ---------------------------------------------------------------------------
+
+/**
+ * Diff Actions secrets by NAME only — values are never readable, so a secret is
+ * either present or not. Emits creates for declared-but-missing secrets (the
+ * apply path reports these; warden never writes values) and ownership-gated
+ * deletes for undeclared live secrets. There are no updates.
+ */
+function diffSecrets(
+  keyPrefix: string,
+  resourceType: "org-secret" | "repo-secret",
+  desired: SecretConfig[] | undefined,
+  live: LiveSecret[],
+  opts: DiffOptions,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  const desiredByName = new Map(desired.map((s) => [s.name, s]));
+  const liveByName = new Map(live.map((s) => [s.name, s]));
+
+  for (const [name, ds] of desiredByName) {
+    if (!liveByName.has(name)) {
+      out.push({ kind: "create", resourceType, key: `${keyPrefix}${name}`, after: ds });
+    }
+  }
+
+  for (const [name, ls] of liveByName) {
+    if (!desiredByName.has(name)) {
+      const key = `${keyPrefix}${name}`;
+      if (opts.isOwned?.(resourceType, key)) {
+        out.push({ kind: "delete", resourceType, key, before: ls });
+      }
+    }
+  }
+}
+
+/**
+ * Diff Actions variables by name + value. Emits creates for missing variables,
+ * updates when a declared value differs, and ownership-gated deletes for
+ * undeclared live variables. A variable with no declared `value` is presence-
+ * only (no update emitted on value).
+ */
+function diffVariables(
+  keyPrefix: string,
+  resourceType: "org-variable" | "repo-variable",
+  desired: VariableConfig[] | undefined,
+  live: LiveVariable[],
+  opts: DiffOptions,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  const desiredByName = new Map(desired.map((v) => [v.name, v]));
+  const liveByName = new Map(live.map((v) => [v.name, v]));
+
+  for (const [name, dv] of desiredByName) {
+    const lv = liveByName.get(name);
+    const key = `${keyPrefix}${name}`;
+    if (!lv) {
+      out.push({ kind: "create", resourceType, key, after: dv });
+      continue;
+    }
+    if (dv.value !== undefined && dv.value !== lv.value) {
+      out.push({
+        kind: "update",
+        resourceType,
+        key,
+        before: lv,
+        after: dv,
+        fields: [{ field: "value", before: lv.value, after: dv.value }],
+      });
+    }
+  }
+
+  for (const [name, lv] of liveByName) {
+    if (!desiredByName.has(name)) {
+      const key = `${keyPrefix}${name}`;
+      if (opts.isOwned?.(resourceType, key)) {
+        out.push({ kind: "delete", resourceType, key, before: lv });
       }
     }
   }
