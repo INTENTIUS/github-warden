@@ -137,6 +137,16 @@ describe("fetchRulesets", () => {
     expect(live).toEqual([]);
   });
 
+  it("returns empty on a 403 (App lacks permission for this rulesets scope)", async () => {
+    const client: MockClient = makeMockClient();
+    client.request = async <T = unknown>(method: string, path: string): Promise<T> => {
+      client.calls.push({ method, path });
+      throw new Error("GET /orgs/test-org/rulesets returned 403: Resource not accessible by integration");
+    };
+    const live = await fetchRulesets(client, "/orgs/test-org/rulesets", makeBudget());
+    expect(live).toEqual([]);
+  });
+
   it("charges the budget: one list page + one detail per ruleset", async () => {
     const client = makeMockClient({
       "GET /orgs/test-org/rulesets?per_page=100&page=1": [
