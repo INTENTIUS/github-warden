@@ -101,6 +101,46 @@ export interface MemberConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Deployment environments
+// ---------------------------------------------------------------------------
+
+/** A required reviewer for an environment (a user or a team, by numeric id). */
+export interface EnvironmentReviewer {
+  /** "User" or "Team". */
+  type: "User" | "Team";
+  /** GitHub numeric id of the user or team. */
+  id: number;
+}
+
+/**
+ * Deployment-branch policy for an environment. At most one of the two flags is
+ * true. `null` (as a declared value) disables the policy entirely.
+ */
+export interface DeploymentBranchPolicy {
+  /** Restrict deployments to branches matching the repo's protection rules. */
+  protectedBranches?: boolean;
+  /** Restrict deployments to branches matching custom name patterns. */
+  customBranchPolicies?: boolean;
+}
+
+/** Desired state for a single deployment environment. Absent fields are not managed. */
+export interface EnvironmentConfig {
+  /** Environment name (the identity key within a repo). */
+  name: string;
+  /** Wait timer in minutes before a deployment can proceed (0–43200). */
+  waitTimer?: number;
+  /** Prevent a deployment's actor from approving their own run. */
+  preventSelfReview?: boolean;
+  /** Required reviewers for deployments to this environment. */
+  reviewers?: EnvironmentReviewer[];
+  /**
+   * Deployment branch policy. An object configures it; `null` disables it.
+   * Absent means the branch policy is not managed.
+   */
+  deploymentBranchPolicy?: DeploymentBranchPolicy | null;
+}
+
+// ---------------------------------------------------------------------------
 // Repository security features
 // ---------------------------------------------------------------------------
 
@@ -241,6 +281,11 @@ export interface RepoConfig {
    * Absent means security features are not managed by chant.
    */
   security?: RepoSecurityConfig;
+  /**
+   * Deployment environments and their protection rules.
+   * Absent means environments are not managed by chant.
+   */
+  environments?: EnvironmentConfig[];
 }
 
 // ---------------------------------------------------------------------------

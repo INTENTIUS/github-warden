@@ -16,6 +16,9 @@ export type {
   RulesetTarget,
   RulesetEnforcement,
   RepoSecurityConfig,
+  EnvironmentConfig,
+  EnvironmentReviewer,
+  DeploymentBranchPolicy,
 } from "./config/types.js";
 
 // Config loader
@@ -41,6 +44,7 @@ export type {
   LiveRepoConfig,
   LiveRuleset,
   LiveRepoSecurity,
+  LiveEnvironment,
   LiveOrgState,
 } from "./reconcile/diff.js";
 export { diff, summarizeChangeSet, renderChangeSet } from "./reconcile/diff.js";
@@ -89,6 +93,8 @@ export { rulesetsCycle, fetchRulesets, buildRulesetBody, mapRulesetToLive } from
 export type { RulesetsScope } from "./cycles/rulesets.js";
 export { securityFeaturesCycle, fetchRepoSecurity, buildSecurityAnalysisBody } from "./cycles/security-features.js";
 export type { SecurityFeaturesScope } from "./cycles/security-features.js";
+export { environmentsCycle, mapEnvironmentToLive, buildEnvironmentBody } from "./cycles/environments.js";
+export type { EnvironmentsScope } from "./cycles/environments.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";

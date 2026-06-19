@@ -21,6 +21,9 @@ import type {
   BranchProtectionConfig,
   RulesetConfig,
   RepoSecurityConfig,
+  EnvironmentConfig,
+  EnvironmentReviewer,
+  DeploymentBranchPolicy,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -187,6 +190,16 @@ export interface LiveRepoConfig {
   topics?: string[];
   rulesets?: LiveRuleset[];
   security?: LiveRepoSecurity;
+  environments?: LiveEnvironment[];
+}
+
+/** Live snapshot of a deployment environment. Mirrors `EnvironmentConfig`. */
+export interface LiveEnvironment {
+  name: string;
+  waitTimer?: number;
+  preventSelfReview?: boolean;
+  reviewers?: EnvironmentReviewer[];
+  deploymentBranchPolicy?: DeploymentBranchPolicy | null;
 }
 
 /** Live snapshot of a repo's security-feature toggles. Mirrors `RepoSecurityConfig`. */
@@ -219,6 +232,7 @@ const RESOURCE_TYPE_ORDER = [
   "member",
   "repo",
   "repo-security",
+  "environment",
   "branch-protection",
   "repo-ruleset",
 ] as const;
@@ -537,6 +551,9 @@ function diffRepos(
 
     // Repository security features
     diffRepoSecurity(name, dr.security, lr.security, out);
+
+    // Deployment environments
+    diffEnvironments(name, dr.environments, lr.environments ?? [], opts, out);
   }
 
   for (const name of Object.keys(live)) {
@@ -707,6 +724,64 @@ function diffRepoSecurity(
       after: desired,
       fields,
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deployment environments
+// ---------------------------------------------------------------------------
+
+const ENVIRONMENT_FIELDS: string[] = [
+  "waitTimer",
+  "preventSelfReview",
+  "reviewers",
+  "deploymentBranchPolicy",
+];
+
+/**
+ * Diff a repo's deployment environments, keyed by environment name. Resource
+ * type "environment", key "<repo>/<env>". Deletes are ownership-gated.
+ *
+ * `reviewers` and `deploymentBranchPolicy` are compared structurally
+ * (deep-equal). The live `id` of each reviewer is part of the comparison, so
+ * authored reviewers must use the same numeric ids the API returns.
+ */
+function diffEnvironments(
+  repoName: string,
+  desired: EnvironmentConfig[] | undefined,
+  live: LiveEnvironment[],
+  opts: DiffOptions,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  const desiredByName = new Map(desired.map((e) => [e.name, e]));
+  const liveByName = new Map(live.map((e) => [e.name, e]));
+
+  for (const [name, de] of desiredByName) {
+    const le = liveByName.get(name);
+    const key = `${repoName}/${name}`;
+    if (!le) {
+      out.push({ kind: "create", resourceType: "environment", key, after: de });
+      continue;
+    }
+    const fields = diffObjectKeys(
+      de as unknown as Record<string, unknown>,
+      le as unknown as Record<string, unknown>,
+      ENVIRONMENT_FIELDS,
+    );
+    if (fields.length > 0) {
+      out.push({ kind: "update", resourceType: "environment", key, before: le, after: de, fields });
+    }
+  }
+
+  for (const [name, le] of liveByName) {
+    if (!desiredByName.has(name)) {
+      const key = `${repoName}/${name}`;
+      if (opts.isOwned?.("environment", key)) {
+        out.push({ kind: "delete", resourceType: "environment", key, before: le });
+      }
+    }
   }
 }
 
