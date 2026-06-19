@@ -80,7 +80,8 @@ describe("governancePipeline", () => {
 
   test("apply job steps include apply mode", () => {
     const yaml = buildYaml();
-    expect(yaml).toContain("--mode apply");
+    // The apply warden step passes mode as a `with:` input, not a CLI flag.
+    expect(yaml).toContain("mode: apply");
   });
 
   // ── Security constraints ───────────────────────────────────────
@@ -95,6 +96,9 @@ describe("governancePipeline", () => {
   test("all external actions are SHA-pinned", () => {
     const yaml = buildYaml();
     // Every `uses:` line must pin to a 40-char commit SHA.
+    // The serializer wraps values with special chars in single quotes, and
+    // SHA-pinned warden steps include a `# v1` inline comment, so we strip
+    // trailing quote, whitespace, and any `# …` comment before matching.
     const SHA_RE = /^[a-f0-9]{40}$/;
     const usesLines = yaml
       .split("\n")
@@ -103,8 +107,9 @@ describe("governancePipeline", () => {
 
     expect(usesLines.length).toBeGreaterThan(0);
     for (const line of usesLines) {
-      // Extract the ref after "@"
-      const ref = line.split("@")[1]?.trim();
+      // Extract the ref after "@", then strip trailing quote + inline comment.
+      const raw = line.split("@")[1] ?? "";
+      const ref = raw.replace(/#.*$/, "").replace(/['"\s]/g, "");
       expect(ref, `Action "${line}" must be pinned to a SHA`).toMatch(SHA_RE);
     }
   });
@@ -143,7 +148,8 @@ describe("governancePipeline", () => {
 
   test("cycles flag is forwarded to reconcile command", () => {
     const yaml = buildYaml({ cycles: ["branch-protection", "team-sync"] });
-    expect(yaml).toContain("--cycles branch-protection,team-sync");
+    // Cycles are now passed as a `with:` input to the warden action.
+    expect(yaml).toContain("cycles: branch-protection,team-sync");
   });
 
   test("custom appIdVar is referenced in mint-token step", () => {
@@ -154,6 +160,49 @@ describe("governancePipeline", () => {
   test("custom privateKeySecret is used (secret, not var)", () => {
     const yaml = buildYaml({ privateKeySecret: "MY_PRIVATE_KEY" });
     expect(yaml).toMatch(/secrets\.MY_PRIVATE_KEY/);
+  });
+
+  // ── Dogfood: github-warden Action reference ────────────────────
+
+  test("warden steps use intentius/github-warden SHA-pinned with # v1 comment", () => {
+    const yaml = buildYaml();
+    // Both jobs should use the warden action pinned to the v1 commit SHA.
+    // The serializer quotes the value (special chars), so look for the SHA
+    // followed by the inline comment inside single quotes.
+    expect(yaml).toContain(
+      "50db522e57c4ccdb36af932062ee38839bc1b88e # v1"
+    );
+    // Two warden steps (dry-run + apply), each appear once.
+    const count = (
+      yaml.match(/intentius\/github-warden@50db522e57c4ccdb36af932062ee38839bc1b88e/g) ?? []
+    ).length;
+    expect(count).toBe(2);
+  });
+
+  test("warden dry-run step passes expected with: inputs including mode dry-run", () => {
+    const yaml = buildYaml();
+    // The dry-run job step must pass command, config, mode, app-id,
+    // installation-id, and private-key as with: inputs.
+    expect(yaml).toContain("command: reconcile");
+    expect(yaml).toContain("mode: dry-run");
+    expect(yaml).toContain("app-id: '${{ vars.GOVERNANCE_APP_ID }}'");
+    expect(yaml).toContain(
+      "installation-id: '${{ vars.GOVERNANCE_INSTALLATION_ID }}'"
+    );
+    expect(yaml).toMatch(/private-key:.*secrets\.GOVERNANCE_APP_PRIVATE_KEY/);
+  });
+
+  test("warden apply step passes mode: apply in with: inputs", () => {
+    const yaml = buildYaml();
+    expect(yaml).toContain("mode: apply");
+  });
+
+  test("emitted workflow has no setup-node or npm-install steps", () => {
+    const yaml = buildYaml();
+    // After switching to the native Action, the workflow must not contain
+    // setup-node or npm-install boilerplate.
+    expect(yaml).not.toContain("setup-node");
+    expect(yaml).not.toContain("npm install");
   });
 
   // ── Serialization ──────────────────────────────────────────────
