@@ -26,6 +26,7 @@ import type {
   DeploymentBranchPolicy,
   SecretConfig,
   VariableConfig,
+  DependabotConfig,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -195,6 +196,16 @@ export interface LiveRepoConfig {
   environments?: LiveEnvironment[];
   secrets?: LiveSecret[];
   variables?: LiveVariable[];
+  dependabot?: LiveDependabot;
+}
+
+/**
+ * Live snapshot of a repo's `.github/dependabot.yml`. `sha` is the GitHub blob
+ * sha (needed to update the file via the Contents API); it is never diffed.
+ */
+export interface LiveDependabot {
+  content?: string;
+  sha?: string;
 }
 
 /** Live snapshot of an Actions secret — name only (values are never readable). */
@@ -256,6 +267,7 @@ const RESOURCE_TYPE_ORDER = [
   "repo-ruleset",
   "repo-secret",
   "repo-variable",
+  "dependabot",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -581,6 +593,9 @@ function diffRepos(
     // Actions secrets & variables
     diffSecrets(`${name}/`, "repo-secret", dr.secrets, lr.secrets ?? [], opts, out);
     diffVariables(`${name}/`, "repo-variable", dr.variables, lr.variables ?? [], opts, out);
+
+    // Dependabot config file
+    diffDependabot(name, dr.dependabot, lr.dependabot, out);
   }
 
   for (const name of Object.keys(live)) {
@@ -896,6 +911,41 @@ function diffVariables(
         out.push({ kind: "delete", resourceType, key, before: lv });
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dependabot config file
+// ---------------------------------------------------------------------------
+
+/**
+ * Diff a repo's `.github/dependabot.yml` against the desired content. Resource
+ * type "dependabot", key = repo name. Create when the file is absent, update
+ * when content differs. Never deletes (managing presence/consistency, not
+ * removal). The live `sha` is carried on `before` for the apply commit.
+ */
+function diffDependabot(
+  repoName: string,
+  desired: DependabotConfig | undefined,
+  live: LiveDependabot | undefined,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  if (live === undefined || live.content === undefined) {
+    out.push({ kind: "create", resourceType: "dependabot", key: repoName, after: desired });
+    return;
+  }
+
+  if (desired.content !== live.content) {
+    out.push({
+      kind: "update",
+      resourceType: "dependabot",
+      key: repoName,
+      before: live,
+      after: desired,
+      fields: [{ field: "content", before: live.content, after: desired.content }],
+    });
   }
 }
 
