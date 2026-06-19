@@ -101,6 +101,20 @@ export interface MemberConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Dependency hygiene (Dependabot config file)
+// ---------------------------------------------------------------------------
+
+/**
+ * Desired state for a repo's `.github/dependabot.yml`. warden ensures the file
+ * exists and matches `content` exactly; encode cooldown / external-code-
+ * execution policy etc. in that content. Absent means the file is not managed.
+ */
+export interface DependabotConfig {
+  /** Exact desired content of `.github/dependabot.yml`. */
+  content: string;
+}
+
+// ---------------------------------------------------------------------------
 // Actions secrets & variables
 // ---------------------------------------------------------------------------
 
@@ -332,6 +346,11 @@ export interface RepoConfig {
    * Absent means variables are not managed by chant.
    */
   variables?: VariableConfig[];
+  /**
+   * Dependabot config file (`.github/dependabot.yml`) management.
+   * Absent means the file is not managed by chant.
+   */
+  dependabot?: DependabotConfig;
 }
 
 // ---------------------------------------------------------------------------

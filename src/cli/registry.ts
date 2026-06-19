@@ -18,6 +18,7 @@ import { rulesetsCycle } from "../cycles/rulesets.js";
 import { securityFeaturesCycle } from "../cycles/security-features.js";
 import { environmentsCycle } from "../cycles/environments.js";
 import { secretsVariablesCycle } from "../cycles/secrets-variables.js";
+import { dependencyHygieneCycle } from "../cycles/dependency-hygiene.js";
 
 /**
  * Registry of all available governance cycles, keyed by the name accepted by
@@ -36,4 +37,5 @@ export const CYCLE_REGISTRY: Record<string, Cycle> = {
   [securityFeaturesCycle.name]: securityFeaturesCycle,
   [environmentsCycle.name]: environmentsCycle,
   [secretsVariablesCycle.name]: secretsVariablesCycle,
+  [dependencyHygieneCycle.name]: dependencyHygieneCycle,
 };

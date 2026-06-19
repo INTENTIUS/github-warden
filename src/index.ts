@@ -21,6 +21,7 @@ export type {
   DeploymentBranchPolicy,
   SecretConfig,
   VariableConfig,
+  DependabotConfig,
 } from "./config/types.js";
 
 // Config loader
@@ -49,6 +50,7 @@ export type {
   LiveEnvironment,
   LiveSecret,
   LiveVariable,
+  LiveDependabot,
   LiveOrgState,
 } from "./reconcile/diff.js";
 export { diff, summarizeChangeSet, renderChangeSet } from "./reconcile/diff.js";
@@ -101,6 +103,8 @@ export { environmentsCycle, mapEnvironmentToLive, buildEnvironmentBody } from ".
 export type { EnvironmentsScope } from "./cycles/environments.js";
 export { secretsVariablesCycle } from "./cycles/secrets-variables.js";
 export type { SecretsVariablesScope } from "./cycles/secrets-variables.js";
+export { dependencyHygieneCycle, fetchDependabot } from "./cycles/dependency-hygiene.js";
+export type { DependencyHygieneScope } from "./cycles/dependency-hygiene.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";
