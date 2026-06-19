@@ -101,6 +101,42 @@ export interface MemberConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Rulesets (repo + org)
+// ---------------------------------------------------------------------------
+
+/** What a ruleset targets. */
+export type RulesetTarget = "branch" | "tag" | "push";
+
+/** How a ruleset is enforced. */
+export type RulesetEnforcement = "active" | "evaluate" | "disabled";
+
+/**
+ * A repository or organization ruleset — the modern replacement for classic
+ * branch protection (a separate REST API). Identified within its scope by
+ * `name`. Absent fields are not managed (selective-by-omission).
+ *
+ * `bypassActors`, `conditions`, and `rules` are passed through in GitHub's
+ * native (snake_case) JSON shape — e.g. a rule is `{ type, parameters? }`, a
+ * condition is `{ ref_name: { include, exclude } }`, a bypass actor is
+ * `{ actor_id, actor_type, bypass_mode }`. Authoring these mirrors the GitHub
+ * API request body so the cycle can forward them verbatim.
+ */
+export interface RulesetConfig {
+  /** Ruleset name — the identity key within its scope (org or repo). */
+  name: string;
+  /** Target ref type. GitHub defaults to "branch" on create when omitted. */
+  target?: RulesetTarget;
+  /** Enforcement level. */
+  enforcement?: RulesetEnforcement;
+  /** Bypass actors, GitHub-native shape: `{ actor_id, actor_type, bypass_mode }`. */
+  bypassActors?: Array<Record<string, unknown>>;
+  /** Conditions, GitHub-native shape: `{ ref_name: { include, exclude }, ... }`. */
+  conditions?: Record<string, unknown>;
+  /** Rules, GitHub-native shape: `[{ type, parameters? }]`. */
+  rules?: Array<Record<string, unknown>>;
+}
+
+// ---------------------------------------------------------------------------
 // Repos
 // ---------------------------------------------------------------------------
 
@@ -166,6 +202,11 @@ export interface RepoConfig {
    * Absent means topics are not managed by chant.
    */
   topics?: string[];
+  /**
+   * Repository rulesets (the modern branch-protection replacement).
+   * Absent means repo rulesets are not managed by chant.
+   */
+  rulesets?: RulesetConfig[];
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +241,11 @@ export interface OrgConfig {
    * Absent means repositories are not managed by chant.
    */
   repos?: Record<string, RepoConfig>;
+  /**
+   * Organization-level rulesets.
+   * Absent means org rulesets are not managed by chant.
+   */
+  rulesets?: RulesetConfig[];
 }
 
 /**

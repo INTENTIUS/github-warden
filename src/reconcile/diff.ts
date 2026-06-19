@@ -19,6 +19,7 @@ import type {
   MemberConfig,
   RepoConfig,
   BranchProtectionConfig,
+  RulesetConfig,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -153,6 +154,22 @@ export interface LiveBranchProtectionConfig {
   enforceAdmins?: boolean;
 }
 
+/**
+ * Live snapshot of a single ruleset. Mirrors `RulesetConfig` plus the GitHub
+ * numeric `id` (not a desired field, so never diffed) which the apply path
+ * needs to address the ruleset for update/delete.
+ */
+export interface LiveRuleset {
+  /** GitHub-assigned ruleset id. Captured for apply (PUT/DELETE), never diffed. */
+  id?: number;
+  name: string;
+  target?: string;
+  enforcement?: string;
+  bypassActors?: Array<Record<string, unknown>>;
+  conditions?: Record<string, unknown>;
+  rules?: Array<Record<string, unknown>>;
+}
+
 export interface LiveRepoConfig {
   description?: string;
   websiteUrl?: string;
@@ -167,6 +184,7 @@ export interface LiveRepoConfig {
   deleteBranchOnMerge?: boolean;
   branchProtection?: LiveBranchProtectionConfig[];
   topics?: string[];
+  rulesets?: LiveRuleset[];
 }
 
 export interface LiveOrgState {
@@ -174,6 +192,7 @@ export interface LiveOrgState {
   teams?: Record<string, LiveTeamConfig>;
   members?: LiveMemberConfig[];
   repos?: Record<string, LiveRepoConfig>;
+  rulesets?: LiveRuleset[];
 }
 
 // ---------------------------------------------------------------------------
@@ -182,12 +201,14 @@ export interface LiveOrgState {
 
 const RESOURCE_TYPE_ORDER = [
   "org-settings",
+  "org-ruleset",
   "team",
   "team-member",
   "team-repo",
   "member",
   "repo",
   "branch-protection",
+  "repo-ruleset",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -211,6 +232,7 @@ export function diff(
   const entries: ChangeSetEntry[] = [];
 
   diffSettings(desired.settings, live.settings, entries);
+  diffRulesets("", "org-ruleset", desired.rulesets, live.rulesets ?? [], opts, entries);
   diffTeams(desired.teams, live.teams ?? {}, opts, entries);
   diffMembers(desired.members, live.members ?? [], opts, entries);
   diffRepos(desired.repos, live.repos ?? {}, opts, entries);
@@ -497,6 +519,9 @@ function diffRepos(
 
     // Branch protection rules
     diffBranchProtection(name, dr.branchProtection, lr.branchProtection ?? [], opts, out);
+
+    // Repository rulesets
+    diffRulesets(`${name}/`, "repo-ruleset", dr.rulesets, lr.rulesets ?? [], opts, out);
   }
 
   for (const name of Object.keys(live)) {
@@ -574,6 +599,62 @@ function diffBranchProtection(
       const key = `${repoName}/${pattern}`;
       if (opts.isOwned?.("branch-protection", key)) {
         out.push({ kind: "delete", resourceType: "branch-protection", key, before: lb });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rulesets (org + repo)
+// ---------------------------------------------------------------------------
+
+const RULESET_FIELDS: string[] = ["target", "enforcement", "bypassActors", "conditions", "rules"];
+
+/**
+ * Diff a list of rulesets (org-level or repo-level), keyed by ruleset name.
+ *
+ * @param keyPrefix - "" for org rulesets, "<repo>/" for repo rulesets.
+ * @param resourceType - "org-ruleset" or "repo-ruleset".
+ *
+ * The live `id` is not part of `RULESET_FIELDS`, so it is never diffed; it is
+ * carried on the `before` snapshot for the apply path. Deletes are ownership-
+ * gated like every other managed collection.
+ */
+function diffRulesets(
+  keyPrefix: string,
+  resourceType: "org-ruleset" | "repo-ruleset",
+  desired: RulesetConfig[] | undefined,
+  live: LiveRuleset[],
+  opts: DiffOptions,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  const desiredByName = new Map(desired.map((r) => [r.name, r]));
+  const liveByName = new Map(live.map((r) => [r.name, r]));
+
+  for (const [name, dr] of desiredByName) {
+    const lr = liveByName.get(name);
+    const key = `${keyPrefix}${name}`;
+    if (!lr) {
+      out.push({ kind: "create", resourceType, key, after: dr });
+      continue;
+    }
+    const fields = diffObjectKeys(
+      dr as unknown as Record<string, unknown>,
+      lr as unknown as Record<string, unknown>,
+      RULESET_FIELDS,
+    );
+    if (fields.length > 0) {
+      out.push({ kind: "update", resourceType, key, before: lr, after: dr, fields });
+    }
+  }
+
+  for (const [name, lr] of liveByName) {
+    if (!desiredByName.has(name)) {
+      const key = `${keyPrefix}${name}`;
+      if (opts.isOwned?.(resourceType, key)) {
+        out.push({ kind: "delete", resourceType, key, before: lr });
       }
     }
   }
