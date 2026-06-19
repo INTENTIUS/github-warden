@@ -109,3 +109,12 @@ export { dumpOrg, serializeToYaml } from "./reconcile/dump.js";
 // Pipeline emitter: governance CI workflow generator
 export type { GovernancePipelineOptions, CycleFilter } from "./emit/pipeline.js";
 export { governancePipeline } from "./emit/pipeline.js";
+
+// Compliance reporting (aggregator)
+export type {
+  ComplianceReport,
+  CycleComplianceEntry,
+  AuditCompliance,
+  ComplianceError,
+} from "./report/compliance.js";
+export { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
