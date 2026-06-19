@@ -12,6 +12,7 @@ import {
 } from "./compliance.js";
 import type { ReconcileResult, CycleResult } from "../reconcile/runner.js";
 import type { PostureReport } from "../audit/engine.js";
+import { buildIdentityReport } from "./identity.js";
 
 // ---------------------------------------------------------------------------
 // Builders for mock run results
@@ -149,6 +150,19 @@ describe("buildComplianceReport", () => {
       postureReport({ reportOnly: 4, total: 4 }),
     );
     expect(report.totals.auditMergeWorthy).toBe(0);
+    expect(report.clean).toBe(true);
+  });
+
+  it("folds in an identity report and flips clean when machine users are flagged", () => {
+    const identity = buildIdentityReport([], ["ci-bot"], ["ci-bot"]);
+    const report = buildComplianceReport([reconcileResult({ cycles: [cycleResult()] })], undefined, identity);
+    expect(report.identity).toBe(identity);
+    expect(report.clean).toBe(false); // flagged machine user
+  });
+
+  it("stays clean with an identity report that flags nobody", () => {
+    const identity = buildIdentityReport([{ app_slug: "warden" }], ["alice"], []);
+    const report = buildComplianceReport([reconcileResult({ cycles: [cycleResult()] })], undefined, identity);
     expect(report.clean).toBe(true);
   });
 

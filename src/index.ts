@@ -125,3 +125,5 @@ export type {
   ComplianceError,
 } from "./report/compliance.js";
 export { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
+export type { IdentityReport, InstalledApp, RawInstallation } from "./report/identity.js";
+export { buildIdentityReport, renderIdentityReport } from "./report/identity.js";

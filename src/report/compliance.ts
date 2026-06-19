@@ -16,6 +16,8 @@
 
 import type { ReconcileResult } from "../reconcile/runner.js";
 import type { PostureReport } from "../audit/engine.js";
+import type { IdentityReport } from "./identity.js";
+import { renderIdentityReport } from "./identity.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -63,6 +65,8 @@ export interface ComplianceReport {
   cycles: CycleComplianceEntry[];
   /** Audit totals, when an audit report was supplied. */
   audit?: AuditCompliance;
+  /** Identity & service-account hygiene, when an identity pass was run. */
+  identity?: IdentityReport;
   /** Cross-cutting roll-ups. */
   totals: {
     /** Total change-set entries across all cycles (total drift). */
@@ -103,6 +107,7 @@ export interface ComplianceReport {
 export function buildComplianceReport(
   results: ReconcileResult[],
   audit?: PostureReport,
+  identity?: IdentityReport,
 ): ComplianceReport {
   const cycles: CycleComplianceEntry[] = [];
   const errored: ComplianceError[] = [];
@@ -163,12 +168,14 @@ export function buildComplianceReport(
     failed === 0 &&
     errored.length === 0 &&
     deferred.length === 0 &&
-    auditMergeWorthy === 0;
+    auditMergeWorthy === 0 &&
+    (identity?.summary.flaggedMachineUsers ?? 0) === 0;
 
   return {
     modes: [...modeSet],
     cycles,
     audit: auditCompliance,
+    identity,
     totals: {
       drift,
       guardrailTrips,
@@ -236,6 +243,11 @@ export function renderComplianceReport(report: ComplianceReport): string {
       `  total=${report.audit.total}  merge-worthy=${report.audit.mergeWorthy}` +
         `  (quick-win=${report.audit.quickWin}, needs-review=${report.audit.needsReview}, report-only=${report.audit.reportOnly})`,
     );
+  }
+
+  if (report.identity) {
+    lines.push("");
+    lines.push(renderIdentityReport(report.identity).trimEnd());
   }
 
   lines.push("");

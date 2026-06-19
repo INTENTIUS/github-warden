@@ -431,6 +431,13 @@ export interface OrgConfig {
    * Absent means repo provisioning is not managed by chant.
    */
   repoBaselines?: RepoBaselineConfig[];
+  /**
+   * Known machine / service-account logins. The identity report flags any of
+   * these that are seat-consuming org members and recommends migrating them to
+   * GitHub Apps (Apps consume no seat). The API cannot reliably distinguish a
+   * machine user from a person, so this list is operator-declared.
+   */
+  machineUsers?: string[];
 }
 
 /**

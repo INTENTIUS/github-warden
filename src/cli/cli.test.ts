@@ -151,6 +151,11 @@ describe("parseReportArgs", () => {
     expect(args.failOn).toBe("attention");
   });
 
+  it("parses --identity", () => {
+    const args = parseReportArgs(["--config", "g.yml", "--token-env", "GH_TOKEN", "--identity"]);
+    expect(args.identity).toBe(true);
+  });
+
   it("throws code 2 when auth is missing", () => {
     expect(() => parseReportArgs(["--config", "g.yml"])).toThrow(
       expect.objectContaining({ code: 2 }),
