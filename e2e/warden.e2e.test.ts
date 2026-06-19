@@ -3,31 +3,38 @@
  * a real GitHub App installation. Gated and excluded from the default test run
  * (`vitest.config.ts` only globs `src/**`); run with `npm run test:e2e`.
  *
- * The whole suite SKIPS unless these env vars are set, so default CI and
- * contributors without a test org are unaffected:
+ * ## Hermetic / self-provisioning
+ * The suite CREATES its own throwaway resources and deletes them afterward — it
+ * does not rely on anything pre-existing in the org:
+ *   - a fresh repo `warden-e2e-<run>` (auto-initialised so `main` exists)
+ *   - one Actions variable and one Actions secret (sealed-box encrypted) on it
+ * Teardown deletes the repo, which removes its secrets/variables with it.
  *
- *   WARDEN_E2E_APP_ID            GitHub App id
- *   WARDEN_E2E_INSTALLATION_ID   installation id on the test org
- *   WARDEN_E2E_PRIVATE_KEY       App private key PEM
- *   WARDEN_E2E_ORG               test org login
- *   WARDEN_E2E_APPLY=1           (optional) also run the mutating Phase 2
+ * ## Gating
+ * Skips entirely unless these env vars are set, so default CI and contributors
+ * without a test org are unaffected:
+ *   WARDEN_E2E_APP_ID  WARDEN_E2E_INSTALLATION_ID  WARDEN_E2E_PRIVATE_KEY
+ *   WARDEN_E2E_ORG     WARDEN_E2E_APPLY=1 (optional, enables the mutating phase)
  *
- * ## Phase 1 — read-only contract checks (always, when configured)
- * For every registered cycle: run `fetchLive` against the real org, then
- * `buildDesired` + `diff`, and assert (a) every HTTP call was a GET — fetchLive
- * never mutates — and (b) the pipeline composes into a valid change set. This
- * is what catches GitHub API-contract drift (renamed fields, moved paths,
- * permission changes), especially for the App-only token cycles that mocks
- * can't validate.
+ * ## Required App permissions (on the test org installation)
+ * Repository administration: read+write (create/delete repos), Actions secrets
+ * + variables: read+write, plus the read scopes the cycles touch (contents,
+ * administration, members, organization administration). Deleting repos needs
+ * the App to allow it.
  *
- * ## Phase 2 — one teardown-guarded mutation (only with WARDEN_E2E_APPLY=1)
- * A single self-cleaning round-trip (create then delete a repo Actions
- * variable) to prove the apply/write path works against real GitHub.
+ * ## Phases
+ *   1 (always): per cycle, fetchLive + diff against the provisioned repo/org,
+ *     asserting every HTTP call was a GET and the change set composes — catches
+ *     live API-contract drift (esp. the App-only token cycles).
+ *   2 (WARDEN_E2E_APPLY=1): one apply through a cycle (set a repo topic),
+ *     verified by re-fetch; cleaned up by the repo teardown.
  */
 
-import { describe, it, beforeAll, expect } from "vitest";
+import { describe, it, beforeAll, afterAll, expect } from "vitest";
+import _sodium from "libsodium-wrappers";
 import { createAppClient, type AppClient } from "../src/auth/app-client.js";
 import { CYCLE_REGISTRY } from "../src/cli/registry.js";
+import { repoSettingsCycle } from "../src/cycles/repo-settings.js";
 import { diff } from "../src/reconcile/diff.js";
 import type { RateBudget } from "../src/reconcile/runner.js";
 import type { OrgConfig, RepoConfig } from "../src/config/types.js";
@@ -52,6 +59,8 @@ if (!configured) {
     "[e2e] skipped — set WARDEN_E2E_APP_ID / _INSTALLATION_ID / _PRIVATE_KEY / _ORG to run.",
   );
 }
+
+const REPO = `warden-e2e-${ENV.GITHUB_RUN_ID ?? Date.now()}`;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -91,6 +100,33 @@ function recording(inner: AppClient): { client: AppClient; calls: Call[] } {
   };
 }
 
+/** Create a repo Actions secret (sealed-box encrypted, as GitHub requires). */
+async function createRepoSecret(
+  client: AppClient,
+  org: string,
+  repo: string,
+  name: string,
+  value: string,
+): Promise<void> {
+  await _sodium.ready;
+  const sodium = _sodium;
+  const pk = await client.request<{ key: string; key_id: string }>(
+    "GET",
+    `/repos/${org}/${repo}/actions/secrets/public-key`,
+  );
+  const encrypted = sodium.to_base64(
+    sodium.crypto_box_seal(
+      sodium.from_string(value),
+      sodium.from_base64(pk.key, sodium.base64_variants.ORIGINAL),
+    ),
+    sodium.base64_variants.ORIGINAL,
+  );
+  await client.request("PUT", `/repos/${org}/${repo}/actions/secrets/${name}`, {
+    encrypted_value: encrypted,
+    key_id: pk.key_id,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -99,6 +135,7 @@ suite("warden e2e (real GitHub org)", () => {
   let client: AppClient;
   let scope: { repos: Record<string, RepoConfig> };
   let orgConfig: OrgConfig;
+  let repoCreated = false;
 
   beforeAll(async () => {
     client = createAppClient({
@@ -107,37 +144,54 @@ suite("warden e2e (real GitHub org)", () => {
       privateKeyPem: PRIVATE_KEY!,
     });
 
-    // Discover a few repos so repo-scoped cycles have something to fetch.
-    const repos = await client.request<Array<{ name: string }>>(
-      "GET",
-      `/orgs/${ORG}/repos?per_page=3&type=all`,
-    );
-    const repoNames = (repos ?? []).map((r) => r.name).slice(0, 3);
+    // Provision a throwaway repo (auto_init gives it a `main` branch).
+    await client.request("POST", `/orgs/${ORG}/repos`, {
+      name: REPO,
+      private: true,
+      auto_init: true,
+      description: "warden e2e — auto-created, safe to delete",
+    });
+    repoCreated = true;
 
-    // A "kitchen-sink" repo config so every repo-scoped cycle's fetchLive
-    // actually hits its endpoints (all reads tolerate 404 for absent resources).
+    // Seed one variable and one (encrypted) secret so the secrets/variables
+    // cycles read real data.
+    await client.request("POST", `/repos/${ORG}/${REPO}/actions/variables`, {
+      name: "WARDEN_E2E_VAR",
+      value: "ok",
+    });
+    await createRepoSecret(client, ORG!, REPO, "WARDEN_E2E_SECRET", "ok");
+
+    // "Kitchen-sink" repo config so every repo-scoped cycle's fetchLive hits
+    // its endpoints (reads tolerate 404 for absent resources).
     const repoCfg: RepoConfig = {
       branchProtection: [{ pattern: "main" }],
       security: { secretScanning: true },
       environments: [{ name: "production" }],
       rulesets: [{ name: "warden-e2e-probe" }],
-      secrets: [{ name: "WARDEN_E2E_PROBE" }],
-      variables: [{ name: "WARDEN_E2E_PROBE" }],
+      secrets: [{ name: "WARDEN_E2E_SECRET" }],
+      variables: [{ name: "WARDEN_E2E_VAR" }],
       dependabot: { content: "version: 2\nupdates: []\n" },
-      description: "warden e2e (not written in Phase 1)",
+      description: "warden e2e",
     };
 
-    const repoMap: Record<string, RepoConfig> = {};
-    for (const n of repoNames) repoMap[n] = { ...repoCfg };
-
-    scope = { repos: repoMap };
+    scope = { repos: { [REPO]: repoCfg } };
     orgConfig = {
       settings: {},
       rulesets: [],
       tokenPolicy: { revokeExpired: true },
       tokenApproval: { default: "manual" },
-      repos: repoMap,
+      repos: { [REPO]: repoCfg },
     };
+  }, 90_000);
+
+  afterAll(async () => {
+    // Best-effort teardown — delete the repo (removes its secrets/variables).
+    if (repoCreated) {
+      await client.request("DELETE", `/repos/${ORG}/${REPO}`).catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.warn(`[e2e] teardown: failed to delete ${ORG}/${REPO}:`, err);
+      });
+    }
   }, 60_000);
 
   // ── Phase 1: every cycle's read path is contract-valid and read-only ──────
@@ -151,33 +205,29 @@ suite("warden e2e (real GitHub org)", () => {
       const desired = cycle.buildDesired(orgConfig, ORG!, scope);
       const changeSet = diff(ORG!, desired, live, {});
 
-      // fetchLive must never mutate — every call it made is a GET.
       const nonGet = rec.calls.filter((c) => c.method !== "GET");
       expect(nonGet, `non-GET calls from ${cycle.name}.fetchLive`).toEqual([]);
-
-      // The pipeline composed into a valid change set.
       expect(Array.isArray(changeSet.entries)).toBe(true);
     }, 60_000);
   }
 
-  // ── Phase 2: one teardown-guarded mutation (opt-in) ───────────────────────
+  // ── Phase 2: one apply through a cycle (opt-in) ───────────────────────────
 
   (APPLY ? it : it.skip)(
-    "apply round-trip: create + delete a repo Actions variable",
+    "apply: repo-settings sets a topic, verified by re-fetch",
     async () => {
-      const repo = Object.keys(scope.repos)[0];
-      expect(repo, "need at least one discovered repo").toBeTruthy();
-      const base = `/repos/${ORG}/${repo}/actions/variables`;
-      const name = "WARDEN_E2E_PROBE";
-
-      try {
-        await client.request("POST", base, { name, value: "ok" });
-        const got = await client.request<{ name: string; value: string }>("GET", `${base}/${name}`);
-        expect(got.value).toBe("ok");
-      } finally {
-        // Always clean up, even if an assertion above failed.
-        await client.request("DELETE", `${base}/${name}`).catch(() => undefined);
-      }
+      await repoSettingsCycle.apply(
+        client,
+        { kind: "update", resourceType: "repo", key: REPO, after: { topics: ["warden-e2e"] } },
+        ORG!,
+        {},
+        makeBudget(),
+      );
+      const got = await client.request<{ names: string[] }>(
+        "GET",
+        `/repos/${ORG}/${REPO}/topics`,
+      );
+      expect(got.names).toContain("warden-e2e");
     },
     60_000,
   );
