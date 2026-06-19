@@ -31,8 +31,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@intentius/chant": "^0.10.0",
-    "@intentius/chant-lexicon-github": "^0.10.0"
+    "@intentius/chant": "^0.11.0",
+    "@intentius/chant-lexicon-github": "^0.11.0"
   },
   "devDependencies": {
     "@types/libsodium-wrappers": "^0.7.14",
