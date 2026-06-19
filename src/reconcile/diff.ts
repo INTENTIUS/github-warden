@@ -36,77 +36,18 @@ import type {
 // Public types
 // ---------------------------------------------------------------------------
 
-/** A single field-level change: what the old value was and what it will become. */
-export interface FieldChange {
-  field: string;
-  before: unknown;
-  after: unknown;
-}
-
-/** The kind of operation this change represents. */
-export type ChangeKind = "create" | "update" | "delete";
-
-/** A single entry in the change set. */
-export interface ChangeSetEntry {
-  kind: ChangeKind;
-  /**
-   * High-level resource category (e.g. "org-settings", "team", "member",
-   * "repo", "team-member", "team-repo", "branch-protection").
-   */
-  resourceType: string;
-  /**
-   * Unique key identifying this resource within its type.
-   * - For top-level resources: "org-settings", a team slug, a member login, a
-   *   repo name.
-   * - For nested resources: "<parent>/<child>" (e.g. "backend/alice" for a
-   *   team member, "my-repo/main" for a branch protection rule).
-   */
-  key: string;
-  /** The live value before the change (absent for creates). */
-  before?: unknown;
-  /** The desired value after the change (absent for deletes). */
-  after?: unknown;
-  /**
-   * Field-level diff, populated for `update` entries. Each entry describes
-   * one field that differs between desired and live.
-   */
-  fields?: FieldChange[];
-}
-
-/** The full set of changes to reconcile for one org. */
-export interface ChangeSet {
-  /** GitHub org login this change set applies to. */
-  org: string;
-  /** All proposed changes, in stable order (see `RESOURCE_TYPE_ORDER`). */
-  entries: ChangeSetEntry[];
-}
-
-/** Options controlling diff behaviour. */
-export interface DiffOptions {
-  /**
-   * Ownership predicate for collection entries (team members, team repos,
-   * org members, branch protection rules, etc.).
-   *
-   * When the desired config declares a collection (e.g. `team.members`), the
-   * diff considers deleting live entries not found in desired. An entry is
-   * only emitted as `delete` when this predicate returns `true` for it.
-   *
-   * If omitted, deletes are never emitted for collection entries — equivalent
-   * to "assume nothing is owned".
-   *
-   * @param resourceType - The resource type string (same as `ChangeSetEntry.resourceType`).
-   * @param key - The entry key (same as `ChangeSetEntry.key`).
-   * @returns `true` if chant owns this entry and may delete it.
-   */
-  isOwned?: (resourceType: string, key: string) => boolean;
-
-  /**
-   * Reference "now" in epoch milliseconds, used by time-based diffs (e.g.
-   * token-grant lifetime/idle evaluation). The runner injects `Date.now()` when
-   * unset; tests pass an explicit value for determinism.
-   */
-  nowMs?: number;
-}
+// The provider-agnostic change-set model lives in the reconcile core; re-export
+// it here so existing `import { ChangeSet, ... } from "./diff.js"` keeps working.
+import type {
+  FieldChange,
+  ChangeKind,
+  ChangeSetEntry,
+  ChangeSet,
+  DiffOptions,
+} from "./core.js";
+import { diffFields, diffCollection, summarizeChangeSet, renderChangeSet } from "./core.js";
+export type { FieldChange, ChangeKind, ChangeSetEntry, ChangeSet, DiffOptions } from "./core.js";
+export { summarizeChangeSet, renderChangeSet } from "./core.js";
 
 // ---------------------------------------------------------------------------
 // Live snapshot types
@@ -449,41 +390,19 @@ function diffTeamMembers(
 ): void {
   if (desired === undefined) return; // not managed
 
-  const desiredByLogin = new Map(desired.map((m) => [m.login, m]));
-  const liveByLogin = new Map(live.map((m) => [m.login, m]));
-
-  // Creates and updates
-  for (const [login, dm] of desiredByLogin) {
-    const lm = liveByLogin.get(login);
-    const effectiveRole = dm.role ?? "member";
-    if (!lm) {
-      out.push({
-        kind: "create",
-        resourceType: "team-member",
-        key: `${teamSlug}/${login}`,
-        after: { login, role: effectiveRole },
-      });
-    } else if (lm.role !== effectiveRole) {
-      out.push({
-        kind: "update",
-        resourceType: "team-member",
-        key: `${teamSlug}/${login}`,
-        before: lm,
-        after: { login, role: effectiveRole },
-        fields: [{ field: "role", before: lm.role, after: effectiveRole }],
-      });
-    }
-  }
-
-  // Deletes: ownership-gated
-  for (const [login, lm] of liveByLogin) {
-    if (!desiredByLogin.has(login)) {
-      const key = `${teamSlug}/${login}`;
-      if (opts.isOwned?.("team-member", key)) {
-        out.push({ kind: "delete", resourceType: "team-member", key, before: lm });
-      }
-    }
-  }
+  const role = (dm: TeamMember) => dm.role ?? "member";
+  diffCollection<TeamMember, LiveTeamMember>({
+    resourceType: "team-member",
+    keyPrefix: `${teamSlug}/`,
+    desired: new Map(desired.map((m) => [m.login, m])),
+    live: new Map(live.map((m) => [m.login, m])),
+    compareFields: (dm, lm) =>
+      lm.role !== role(dm) ? [{ field: "role", before: lm.role, after: role(dm) }] : [],
+    createAfter: (login, dm) => ({ login, role: role(dm) }),
+    updateAfter: (login, dm) => ({ login, role: role(dm) }),
+    opts,
+    out,
+  });
 }
 
 function diffTeamRepos(
@@ -495,38 +414,18 @@ function diffTeamRepos(
 ): void {
   if (desired === undefined) return;
 
-  const desiredByName = new Map(desired.map((r) => [r.name, r]));
-  const liveByName = new Map(live.map((r) => [r.name, r]));
-
-  for (const [name, dr] of desiredByName) {
-    const lr = liveByName.get(name);
-    if (!lr) {
-      out.push({
-        kind: "create",
-        resourceType: "team-repo",
-        key: `${teamSlug}/${name}`,
-        after: dr,
-      });
-    } else if (lr.permission !== dr.permission) {
-      out.push({
-        kind: "update",
-        resourceType: "team-repo",
-        key: `${teamSlug}/${name}`,
-        before: lr,
-        after: dr,
-        fields: [{ field: "permission", before: lr.permission, after: dr.permission }],
-      });
-    }
-  }
-
-  for (const [name, lr] of liveByName) {
-    if (!desiredByName.has(name)) {
-      const key = `${teamSlug}/${name}`;
-      if (opts.isOwned?.("team-repo", key)) {
-        out.push({ kind: "delete", resourceType: "team-repo", key, before: lr });
-      }
-    }
-  }
+  diffCollection<TeamRepo, LiveTeamRepo>({
+    resourceType: "team-repo",
+    keyPrefix: `${teamSlug}/`,
+    desired: new Map(desired.map((r) => [r.name, r])),
+    live: new Map(live.map((r) => [r.name, r])),
+    compareFields: (dr, lr) =>
+      lr.permission !== dr.permission
+        ? [{ field: "permission", before: lr.permission, after: dr.permission }]
+        : [],
+    opts,
+    out,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -541,39 +440,18 @@ function diffMembers(
 ): void {
   if (desired === undefined) return;
 
-  const desiredByLogin = new Map(desired.map((m) => [m.login, m]));
-  const liveByLogin = new Map(live.map((m) => [m.login, m]));
-
-  for (const [login, dm] of desiredByLogin) {
-    const lm = liveByLogin.get(login);
-    const effectiveRole = dm.role ?? "member";
-    if (!lm) {
-      out.push({
-        kind: "create",
-        resourceType: "member",
-        key: login,
-        after: { login, role: effectiveRole },
-      });
-    } else if (lm.role !== effectiveRole) {
-      out.push({
-        kind: "update",
-        resourceType: "member",
-        key: login,
-        before: lm,
-        after: { login, role: effectiveRole },
-        fields: [{ field: "role", before: lm.role, after: effectiveRole }],
-      });
-    }
-  }
-
-  for (const [login, lm] of liveByLogin) {
-    if (!desiredByLogin.has(login)) {
-      const key = login;
-      if (opts.isOwned?.("member", key)) {
-        out.push({ kind: "delete", resourceType: "member", key, before: lm });
-      }
-    }
-  }
+  const role = (dm: MemberConfig) => dm.role ?? "member";
+  diffCollection<MemberConfig, LiveMemberConfig>({
+    resourceType: "member",
+    desired: new Map(desired.map((m) => [m.login, m])),
+    live: new Map(live.map((m) => [m.login, m])),
+    compareFields: (dm, lm) =>
+      lm.role !== role(dm) ? [{ field: "role", before: lm.role, after: role(dm) }] : [],
+    createAfter: (login, dm) => ({ login, role: role(dm) }),
+    updateAfter: (login, dm) => ({ login, role: role(dm) }),
+    opts,
+    out,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -748,34 +626,20 @@ function diffRulesets(
 ): void {
   if (desired === undefined) return;
 
-  const desiredByName = new Map(desired.map((r) => [r.name, r]));
-  const liveByName = new Map(live.map((r) => [r.name, r]));
-
-  for (const [name, dr] of desiredByName) {
-    const lr = liveByName.get(name);
-    const key = `${keyPrefix}${name}`;
-    if (!lr) {
-      out.push({ kind: "create", resourceType, key, after: dr });
-      continue;
-    }
-    const fields = diffObjectKeys(
-      dr as unknown as Record<string, unknown>,
-      lr as unknown as Record<string, unknown>,
-      RULESET_FIELDS,
-    );
-    if (fields.length > 0) {
-      out.push({ kind: "update", resourceType, key, before: lr, after: dr, fields });
-    }
-  }
-
-  for (const [name, lr] of liveByName) {
-    if (!desiredByName.has(name)) {
-      const key = `${keyPrefix}${name}`;
-      if (opts.isOwned?.(resourceType, key)) {
-        out.push({ kind: "delete", resourceType, key, before: lr });
-      }
-    }
-  }
+  diffCollection<RulesetConfig, LiveRuleset>({
+    resourceType,
+    keyPrefix,
+    desired: new Map(desired.map((r) => [r.name, r])),
+    live: new Map(live.map((r) => [r.name, r])),
+    compareFields: (dr, lr) =>
+      diffObjectKeys(
+        dr as unknown as Record<string, unknown>,
+        lr as unknown as Record<string, unknown>,
+        RULESET_FIELDS,
+      ),
+    opts,
+    out,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -841,34 +705,20 @@ function diffEnvironments(
 ): void {
   if (desired === undefined) return;
 
-  const desiredByName = new Map(desired.map((e) => [e.name, e]));
-  const liveByName = new Map(live.map((e) => [e.name, e]));
-
-  for (const [name, de] of desiredByName) {
-    const le = liveByName.get(name);
-    const key = `${repoName}/${name}`;
-    if (!le) {
-      out.push({ kind: "create", resourceType: "environment", key, after: de });
-      continue;
-    }
-    const fields = diffObjectKeys(
-      de as unknown as Record<string, unknown>,
-      le as unknown as Record<string, unknown>,
-      ENVIRONMENT_FIELDS,
-    );
-    if (fields.length > 0) {
-      out.push({ kind: "update", resourceType: "environment", key, before: le, after: de, fields });
-    }
-  }
-
-  for (const [name, le] of liveByName) {
-    if (!desiredByName.has(name)) {
-      const key = `${repoName}/${name}`;
-      if (opts.isOwned?.("environment", key)) {
-        out.push({ kind: "delete", resourceType: "environment", key, before: le });
-      }
-    }
-  }
+  diffCollection<EnvironmentConfig, LiveEnvironment>({
+    resourceType: "environment",
+    keyPrefix: `${repoName}/`,
+    desired: new Map(desired.map((e) => [e.name, e])),
+    live: new Map(live.map((e) => [e.name, e])),
+    compareFields: (de, le) =>
+      diffObjectKeys(
+        de as unknown as Record<string, unknown>,
+        le as unknown as Record<string, unknown>,
+        ENVIRONMENT_FIELDS,
+      ),
+    opts,
+    out,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -891,23 +741,16 @@ function diffSecrets(
 ): void {
   if (desired === undefined) return;
 
-  const desiredByName = new Map(desired.map((s) => [s.name, s]));
-  const liveByName = new Map(live.map((s) => [s.name, s]));
-
-  for (const [name, ds] of desiredByName) {
-    if (!liveByName.has(name)) {
-      out.push({ kind: "create", resourceType, key: `${keyPrefix}${name}`, after: ds });
-    }
-  }
-
-  for (const [name, ls] of liveByName) {
-    if (!desiredByName.has(name)) {
-      const key = `${keyPrefix}${name}`;
-      if (opts.isOwned?.(resourceType, key)) {
-        out.push({ kind: "delete", resourceType, key, before: ls });
-      }
-    }
-  }
+  // Presence-only: never an update (values are unreadable). compareFields → [].
+  diffCollection<SecretConfig, LiveSecret>({
+    resourceType,
+    keyPrefix,
+    desired: new Map(desired.map((s) => [s.name, s])),
+    live: new Map(live.map((s) => [s.name, s])),
+    compareFields: () => [],
+    opts,
+    out,
+  });
 }
 
 /**
@@ -926,36 +769,19 @@ function diffVariables(
 ): void {
   if (desired === undefined) return;
 
-  const desiredByName = new Map(desired.map((v) => [v.name, v]));
-  const liveByName = new Map(live.map((v) => [v.name, v]));
-
-  for (const [name, dv] of desiredByName) {
-    const lv = liveByName.get(name);
-    const key = `${keyPrefix}${name}`;
-    if (!lv) {
-      out.push({ kind: "create", resourceType, key, after: dv });
-      continue;
-    }
-    if (dv.value !== undefined && dv.value !== lv.value) {
-      out.push({
-        kind: "update",
-        resourceType,
-        key,
-        before: lv,
-        after: dv,
-        fields: [{ field: "value", before: lv.value, after: dv.value }],
-      });
-    }
-  }
-
-  for (const [name, lv] of liveByName) {
-    if (!desiredByName.has(name)) {
-      const key = `${keyPrefix}${name}`;
-      if (opts.isOwned?.(resourceType, key)) {
-        out.push({ kind: "delete", resourceType, key, before: lv });
-      }
-    }
-  }
+  diffCollection<VariableConfig, LiveVariable>({
+    resourceType,
+    keyPrefix,
+    desired: new Map(desired.map((v) => [v.name, v])),
+    live: new Map(live.map((v) => [v.name, v])),
+    // Presence + value: only declared values are compared.
+    compareFields: (dv, lv) =>
+      dv.value !== undefined && dv.value !== lv.value
+        ? [{ field: "value", before: lv.value, after: dv.value }]
+        : [],
+    opts,
+    out,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,102 +957,22 @@ function diffDependabot(
 }
 
 // ---------------------------------------------------------------------------
-// Object-level field diffing helpers
+// Object-level field diffing helpers (thin adapters over the core primitive)
 // ---------------------------------------------------------------------------
 
-/**
- * Diff only the keys present in `desired` against `live`. Returns one
- * FieldChange per key where the values differ (using deep equality via JSON).
- * Keys absent from `desired` are not compared — selective-by-omission.
- */
+/** Diff every key present in `desired` against `live`. See `core.diffFields`. */
 function diffObject(
   desired: Record<string, unknown>,
   live: Record<string, unknown>,
 ): FieldChange[] {
-  const fields: FieldChange[] = [];
-  for (const key of Object.keys(desired)) {
-    const dv = desired[key];
-    const lv = live[key];
-    if (!deepEqual(dv, lv)) {
-      fields.push({ field: key, before: lv, after: dv });
-    }
-  }
-  return fields;
+  return diffFields(desired, live);
 }
 
-/**
- * Diff only the listed keys (if present in desired) against live.
- */
+/** Diff only the listed keys (if present in `desired`) against `live`. */
 function diffObjectKeys(
   desired: Record<string, unknown>,
   live: Record<string, unknown>,
   keys: string[],
 ): FieldChange[] {
-  const fields: FieldChange[] = [];
-  for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(desired, key)) continue;
-    const dv = desired[key];
-    const lv = live[key];
-    if (!deepEqual(dv, lv)) {
-      fields.push({ field: key, before: lv, after: dv });
-    }
-  }
-  return fields;
-}
-
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (a === null || b === null) return false;
-  if (typeof a !== "object" || typeof b !== "object") return false;
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-
-// ---------------------------------------------------------------------------
-// Summary helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Count entries per change kind.
- */
-export function summarizeChangeSet(cs: ChangeSet): Record<ChangeKind, number> {
-  const counts: Record<ChangeKind, number> = { create: 0, update: 0, delete: 0 };
-  for (const e of cs.entries) counts[e.kind]++;
-  return counts;
-}
-
-/**
- * Human-readable plan summary for dry-run output. Pure — returns a string.
- */
-export function renderChangeSet(cs: ChangeSet): string {
-  const counts = summarizeChangeSet(cs);
-  const header = `Plan for ${cs.org}: ${counts.create} to create, ${counts.update} to update, ${counts.delete} to delete`;
-
-  if (cs.entries.length === 0) return `${header}\nNo changes.`;
-
-  const lines: string[] = [header];
-
-  const byKind: Record<ChangeKind, ChangeSetEntry[]> = { create: [], update: [], delete: [] };
-  for (const e of cs.entries) byKind[e.kind].push(e);
-
-  const ORDER: ChangeKind[] = ["create", "update", "delete"];
-  for (const kind of ORDER) {
-    const group = byKind[kind];
-    if (group.length === 0) continue;
-    lines.push(`\n${kind.toUpperCase()}:`);
-    for (const e of group) {
-      lines.push(`  [${e.resourceType}] ${e.key}`);
-      for (const f of e.fields ?? []) {
-        lines.push(`    ${f.field}: ${fmt(f.before)} → ${fmt(f.after)}`);
-      }
-    }
-  }
-
-  return lines.join("\n");
-}
-
-function fmt(v: unknown): string {
-  if (v === undefined) return "<unset>";
-  if (typeof v === "string") return v.length > 60 ? `${v.slice(0, 57)}...` : v;
-  const json = JSON.stringify(v);
-  return json.length > 60 ? `${json.slice(0, 57)}...` : json;
+  return diffFields(desired, live, keys);
 }

@@ -18,33 +18,15 @@
  * - `adminFloor.min`              — 2 (at least 2 admins must remain)
  */
 
-import type { ChangeSet, ChangeSetEntry, LiveMemberConfig, LiveOrgState } from "./diff.js";
-
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
-/** A single tripped guardrail with a human-readable message. */
-export interface GuardrailDiagnostic {
-  /** Short identifier for the guardrail, e.g. "removalDeltaCap". */
-  guardrail: string;
-  /** Clear, actionable description of why the apply was refused. */
-  message: string;
-}
-
-/** Aggregated result from `runGuardrails`. */
-export type GuardrailResult =
-  | { ok: true }
-  | { ok: false; diagnostics: GuardrailDiagnostic[] };
-
-/** Config for `removalDeltaCap`. */
-export interface RemovalDeltaCapOptions {
-  /**
-   * Maximum fraction of managed entries that may be deleted in a single apply.
-   * Must be in (0, 1]. Default: 0.25.
-   */
-  maxFraction?: number;
-}
+import type { ChangeSet, LiveMemberConfig, LiveOrgState } from "./diff.js";
+// The provider-agnostic guardrail framework lives in the reconcile core; this
+// module composes the member-aware (GitHub-specific) guardrails on top. The
+// generic pieces are re-exported so existing imports from "./guardrails.js"
+// keep resolving.
+import type { GuardrailDiagnostic, GuardrailResult, RemovalDeltaCapOptions } from "./core.js";
+import { resolveRenames, removalDeltaCap } from "./core.js";
+export type { GuardrailDiagnostic, GuardrailResult, RemovalDeltaCapOptions } from "./core.js";
+export { resolveRenames, removalDeltaCap } from "./core.js";
 
 /** Config for `adminFloor`. */
 export interface AdminFloorOptions {
@@ -80,118 +62,13 @@ export interface GuardrailConfig {
   requireSelf?: RequireSelfOptions;
 }
 
-// ---------------------------------------------------------------------------
-// Rename-without-loss helper
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve rename aliases before running guardrails.
- *
- * Desired config entries may include a `previously` field indicating a former
- * key. When the ChangeSet contains a delete whose key matches `previously` on
- * a create entry, the pair is collapsed into an update and removed from the
- * effective delete list.
- *
- * Returns a new ChangeSet with renames resolved as updates.
- */
-export function resolveRenames(changeSet: ChangeSet): ChangeSet {
-  // Build a map of delete keys
-  const deleteEntries = new Map<string, ChangeSetEntry>();
-  for (const e of changeSet.entries) {
-    if (e.kind === "delete") deleteEntries.set(e.key, e);
-  }
-
-  // Find creates that carry a `previously` alias
-  const resolvedDeletes = new Set<string>();
-  const resolvedCreates = new Set<string>();
-  const syntheticUpdates: ChangeSetEntry[] = [];
-
-  for (const e of changeSet.entries) {
-    if (e.kind !== "create") continue;
-    const after = e.after as Record<string, unknown> | undefined;
-    if (!after) continue;
-    const previously = after["previously"];
-    if (typeof previously !== "string") continue;
-
-    const deleted = deleteEntries.get(previously);
-    if (!deleted) continue;
-
-    // Collapse delete(previously) + create(key) → update
-    resolvedDeletes.add(previously);
-    resolvedCreates.add(e.key);
-    syntheticUpdates.push({
-      kind: "update",
-      resourceType: e.resourceType,
-      key: e.key,
-      before: deleted.before,
-      after: e.after,
-      fields: [{ field: "key", before: previously, after: e.key }],
-    });
-  }
-
-  if (resolvedDeletes.size === 0) return changeSet;
-
-  const filteredEntries = changeSet.entries.filter(
-    (e) =>
-      !(e.kind === "delete" && resolvedDeletes.has(e.key)) &&
-      !(e.kind === "create" && resolvedCreates.has(e.key)),
-  );
-
-  return {
-    org: changeSet.org,
-    entries: [...filteredEntries, ...syntheticUpdates],
-  };
-}
+// `resolveRenames` and `removalDeltaCap` are the provider-agnostic guardrails —
+// they live in `core.ts` and are imported + re-exported above. The member-aware
+// guardrails below build on the same change-set model.
 
 // ---------------------------------------------------------------------------
-// Individual guardrails
+// Individual guardrails (member-aware, GitHub-specific)
 // ---------------------------------------------------------------------------
-
-/**
- * Refuse if deletes exceed `maxFraction` of the pre-existing managed entries.
- *
- * The denominator is the count of pre-existing entries (deletes + updates),
- * deliberately EXCLUDING creates. Including creates would let a flood of new
- * entries dilute the delete fraction (e.g. 5 deletes + 100 creates ≈ 4.7%,
- * which would sneak under a 25% cap and defeat a mass-deletion typo). Measuring
- * deletes against only what already exists keeps the cap meaningful.
- *
- * This guards against a typo wiping the entire config in one apply.
- *
- * Default `maxFraction`: 0.25 (25 %).
- *
- * CONTRACT: `changeSet` must be RENAME-RESOLVED before passing to this
- * function. `runGuardrails` calls `resolveRenames` once and passes the result
- * here. Callers that invoke `removalDeltaCap` standalone MUST call
- * `resolveRenames(changeSet)` first so that a delete+create rename pair is not
- * counted as a deletion.
- */
-export function removalDeltaCap(
-  changeSet: ChangeSet,
-  opts: RemovalDeltaCapOptions = {},
-): GuardrailDiagnostic | null {
-  const maxFraction = opts.maxFraction ?? 0.25;
-
-  // Pre-existing entries only (deletes + updates); creates excluded. If nothing
-  // pre-exists, no deletes are possible → pass (also avoids divide-by-zero/NaN).
-  const total = changeSet.entries.filter((e) => e.kind !== "create").length;
-  if (total === 0) return null;
-
-  const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
-  const fraction = deletes / total;
-
-  if (fraction > maxFraction) {
-    return {
-      guardrail: "removalDeltaCap",
-      message:
-        `${deletes} of ${total} managed entries (${Math.round(fraction * 100)}%) would be deleted, ` +
-        `exceeding the ${Math.round(maxFraction * 100)}% threshold. ` +
-        `Check for typos in config or raise maxFraction to proceed.`,
-    };
-  }
-
-  return null;
-}
 
 /**
  * Refuse if the apply would leave fewer than `min` org admins.
