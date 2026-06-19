@@ -1,0 +1,24 @@
+{
+  "name": "github-warden",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Keep your GitHub org and repos in declared state — reconcile, guardrails, drift correction",
+  "bin": {
+    "github-warden": "./bin/github-warden.js"
+  },
+  "scripts": {
+    "tsc": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js"
+  },
+  "dependencies": {
+    "@intentius/chant-lexicon-github": "^0.8.2"
+  },
+  "devDependencies": {
+    "@intentius/chant": "^0.8.2",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.9"
+  }
+}
