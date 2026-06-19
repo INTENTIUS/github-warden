@@ -24,6 +24,7 @@ export type {
   DependabotConfig,
   RepoBaselineConfig,
   TokenPolicyConfig,
+  TokenApprovalPolicy,
 } from "./config/types.js";
 
 // Config loader
@@ -54,9 +55,10 @@ export type {
   LiveVariable,
   LiveDependabot,
   LiveTokenGrant,
+  LiveTokenRequest,
   LiveOrgState,
 } from "./reconcile/diff.js";
-export { diff, summarizeChangeSet, renderChangeSet, evaluateTokenViolation } from "./reconcile/diff.js";
+export { diff, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
 
 // Reconcile: guardrails
 export type {
@@ -112,6 +114,8 @@ export { repoBaselineCycle, listOrgRepoNames } from "./cycles/repo-baseline.js";
 export type { RepoBaselineScope } from "./cycles/repo-baseline.js";
 export { tokenGovernanceCycle, mapTokenGrant } from "./cycles/token-governance.js";
 export type { TokenGovernanceScope } from "./cycles/token-governance.js";
+export { tokenApprovalCycle, mapTokenRequest, flattenRequestPermissions } from "./cycles/token-approval.js";
+export type { TokenApprovalScope } from "./cycles/token-approval.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";

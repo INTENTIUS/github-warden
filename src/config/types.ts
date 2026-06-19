@@ -122,6 +122,29 @@ export interface TokenPolicyConfig {
   maxIdleDays?: number;
 }
 
+/**
+ * Policy for auto-deciding pending fine-grained PAT requests (the token-approval
+ * cycle). A request is auto-APPROVED when every permission it asks for is in
+ * `allowedPermissions`; otherwise the `default` decision applies. These request
+ * endpoints are callable ONLY by a GitHub App.
+ *
+ * Platform note: admins can only approve or deny a request — they cannot change
+ * the repo scope a creator chose.
+ */
+export interface TokenApprovalPolicy {
+  /**
+   * Permission scope names that may be auto-approved. A request is approved only
+   * when ALL of its requested permissions are in this list. Absent → no request
+   * is auto-approved.
+   */
+  allowedPermissions?: string[];
+  /**
+   * Decision for a request that is not auto-approved: "deny" (auto-deny) or
+   * "manual" (leave pending for a human). Default "manual".
+   */
+  default?: "deny" | "manual";
+}
+
 // ---------------------------------------------------------------------------
 // Dependency hygiene (Dependabot config file)
 // ---------------------------------------------------------------------------
@@ -465,6 +488,11 @@ export interface OrgConfig {
    * grants are not governed by chant.
    */
   tokenPolicy?: TokenPolicyConfig;
+  /**
+   * Policy for auto-deciding pending fine-grained PAT requests. Absent means
+   * PAT requests are not auto-decided by chant.
+   */
+  tokenApproval?: TokenApprovalPolicy;
 }
 
 /**
