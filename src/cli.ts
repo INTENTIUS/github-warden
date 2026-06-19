@@ -45,6 +45,7 @@ import { auditRepos } from "./audit/engine.js";
 import { renderPostureSummary, shouldFail, type FailOn } from "./audit/summary.js";
 import type { Cycle, ReconcileResult } from "./reconcile/runner.js";
 import { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
+import { buildIdentityReport, type RawInstallation } from "./report/identity.js";
 
 // ---------------------------------------------------------------------------
 // Arg parser
@@ -320,6 +321,8 @@ export interface ReportArgs {
   out: string | undefined;
   /** Include an audit pass in the report. */
   audit: boolean;
+  /** Include an identity & service-account hygiene pass in the report. */
+  identity: boolean;
   /** Exit non-zero when the report needs attention. */
   failOn: "none" | "attention";
 }
@@ -345,6 +348,7 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     cycles: [],
     out: undefined,
     audit: false,
+    identity: false,
     failOn: "none",
   };
 
@@ -356,6 +360,7 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     "--cycles",
     "--out",
     "--audit",
+    "--identity",
     "--fail-on",
   ]);
 
@@ -405,6 +410,10 @@ export function parseReportArgs(argv: string[]): ReportArgs {
       }
       case "--audit": {
         args.audit = true;
+        break;
+      }
+      case "--identity": {
+        args.identity = true;
         break;
       }
       case "--fail-on": {
@@ -1082,8 +1091,44 @@ async function runReport(argv: string[]): Promise<void> {
     }
   }
 
+  // ── Optional identity & service-account hygiene pass ───────────────────────
+  let identityReport;
+  if (reportArgs.identity) {
+    try {
+      const installations: RawInstallation[] = [];
+      const memberLogins: string[] = [];
+      const machineUsers: string[] = [];
+      for (const [orgName, orgCfg] of Object.entries(config.orgs)) {
+        // App installations on the org (tolerate 403/404 — no access / none).
+        try {
+          const data = await client.request<{ installations?: RawInstallation[] }>(
+            "GET",
+            `/orgs/${orgName}/installations?per_page=100`,
+          );
+          installations.push(...(data.installations ?? []));
+        } catch (err) {
+          if (!(err instanceof Error && (err.message.includes("404") || err.message.includes("403")))) throw err;
+        }
+        // Org members (logins).
+        try {
+          const members = await client.request<Array<{ login?: string }>>(
+            "GET",
+            `/orgs/${orgName}/members?per_page=100`,
+          );
+          for (const m of members ?? []) if (typeof m.login === "string") memberLogins.push(m.login);
+        } catch (err) {
+          if (!(err instanceof Error && (err.message.includes("404") || err.message.includes("403")))) throw err;
+        }
+        machineUsers.push(...(orgCfg.machineUsers ?? []));
+      }
+      identityReport = buildIdentityReport(installations, memberLogins, machineUsers);
+    } catch (err) {
+      die(3, `identity pass failed: ${errMsg(err)}`);
+    }
+  }
+
   // ── Aggregate + output ─────────────────────────────────────────────────────
-  const report = buildComplianceReport([result], auditReport);
+  const report = buildComplianceReport([result], auditReport, identityReport);
   report.generatedAt = new Date().toISOString();
   process.stdout.write(renderComplianceReport(report));
 
@@ -1136,6 +1181,7 @@ function printUsage() {
       "  --cycles <name[,name...]>     Cycles to include (default: all).",
       "  --out <path>                  Write the JSON compliance artifact to this path.",
       "  --audit                       Include an audit pass in the report.",
+      "  --identity                    Include an identity & service-account hygiene pass.",
       "  --fail-on none|attention      Exit 4 when the report needs attention (default: none).",
       "",
       "Exit codes:",
