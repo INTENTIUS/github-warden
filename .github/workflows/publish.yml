@@ -34,32 +34,19 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # enables --provenance attestation
-    env:
-      # Auth comes from an NPM_TOKEN repo secret (GitHub: Settings → Secrets and
-      # variables → Actions). Create the token at npmjs.com → Access Tokens
-      # (Granular, with read+write to the @intentius scope — or a classic
-      # Automation token). When the secret is present we publish with it; if it
-      # is ever removed we fall through to OIDC (once trusted publishing is set
-      # up for this repo).
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      id-token: write # OIDC trusted publishing (2FA-exempt; no token)
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: npm
+          # No registry-url on purpose: it would write an .npmrc with a
+          # placeholder token that 404s; without it, npm publish uses the OIDC
+          # id-token via the package's trusted-publisher record.
       - run: npm ci
       - name: Publish @intentius/github-warden
         run: |
-          set -euo pipefail
           V=$(node -e "process.stdout.write(require('./package.json').version)")
           P=$(npm view @intentius/github-warden version 2>/dev/null || echo "none")
-          if [ "$V" = "$P" ]; then
-            echo "@intentius/github-warden@$V already published, skipping"
-            exit 0
-          fi
-          if [ -n "${NPM_TOKEN:-}" ]; then
-            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          fi
-          npm publish --access public --provenance
+          [ "$V" = "$P" ] && echo "@intentius/github-warden@$V already published, skipping" || npm publish --access public --provenance
