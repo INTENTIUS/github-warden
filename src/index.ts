@@ -22,6 +22,7 @@ export type {
   SecretConfig,
   VariableConfig,
   DependabotConfig,
+  RepoBaselineConfig,
 } from "./config/types.js";
 
 // Config loader
@@ -105,6 +106,8 @@ export { secretsVariablesCycle } from "./cycles/secrets-variables.js";
 export type { SecretsVariablesScope } from "./cycles/secrets-variables.js";
 export { dependencyHygieneCycle, fetchDependabot } from "./cycles/dependency-hygiene.js";
 export type { DependencyHygieneScope } from "./cycles/dependency-hygiene.js";
+export { repoBaselineCycle, listOrgRepoNames } from "./cycles/repo-baseline.js";
+export type { RepoBaselineScope } from "./cycles/repo-baseline.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";
