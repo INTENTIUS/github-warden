@@ -1,0 +1,61 @@
+name: github-warden
+description: >
+  Keep your GitHub org and repos in declared state — reconcile, guardrails,
+  drift correction. Runs warden's reconcile or audit subcommand as a native
+  Node.js action with GitHub App authentication.
+
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  command:
+    description: "Subcommand to run: reconcile or audit."
+    required: false
+    default: reconcile
+
+  config:
+    description: "Path to the governance config file (YAML or JSON)."
+    required: true
+
+  mode:
+    description: "Reconcile mode: dry-run or apply. Only used when command is reconcile."
+    required: false
+    default: dry-run
+
+  cycles:
+    description: >
+      Comma-separated list of cycle names to run (e.g. branch-protection).
+      Defaults to all cycles. Only used when command is reconcile.
+    required: false
+
+  app-id:
+    description: "GitHub App ID (numeric)."
+    required: true
+
+  installation-id:
+    description: "GitHub App installation ID (numeric)."
+    required: true
+
+  private-key:
+    description: "GitHub App private key in PEM format. Pass as a secret."
+    required: true
+
+  fail-on:
+    description: >
+      Audit failure threshold: none, merge-worthy, or any.
+      Exit 4 when findings exceed this level. Only used when command is audit.
+      Default: none.
+    required: false
+    default: none
+
+  allow-guardrail-override:
+    description: >
+      Set to 'true' to apply changes even when guardrails trip.
+      Only used when command is reconcile.
+    required: false
+    default: "false"
+
+runs:
+  using: node20
+  main: action/index.mjs

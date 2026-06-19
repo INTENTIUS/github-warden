@@ -930,10 +930,12 @@ export async function run(argv: string[]): Promise<void> {
   await main(argv);
 }
 
-// Run only when invoked as the entrypoint (the installed `bin`), not when this
-// module is imported (e.g. by the consistency test, which imports the parser).
+// Run only when invoked as the CLI entrypoint, not when imported as a module
+// (e.g. by the consistency test or the GitHub Action bundle).
+// GITHUB_WARDEN_IS_ACTION=1 is injected at action-bundle build time so that
+// this guard does not fire inside the action bundle.
 const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
-if (import.meta.url === invokedPath) {
+if (import.meta.url === invokedPath && !process.env["GITHUB_WARDEN_IS_ACTION"]) {
   main().catch((err: unknown) => {
     process.stderr.write(`github-warden: fatal: ${errMsg(err)}\n`);
     process.exit(3);

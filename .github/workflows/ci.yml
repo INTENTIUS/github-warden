@@ -27,6 +27,8 @@ jobs:
         run: npx tsc --noEmit
       - name: test
         run: npm test
+      - name: action bundle up to date
+        run: npm run build:action && git diff --exit-code action/index.mjs
 
   dogfood-audit:
     runs-on: ubuntu-latest
