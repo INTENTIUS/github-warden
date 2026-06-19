@@ -16,7 +16,7 @@ import { CYCLE_REGISTRY } from "./registry.js";
 // input; `main()` catches it and exits non-zero.
 // ---------------------------------------------------------------------------
 
-import { parseReconcileArgs, CliError } from "../cli.js";
+import { parseReconcileArgs, parseReportArgs, CliError } from "../cli.js";
 
 // ---------------------------------------------------------------------------
 // Arg parsing tests
@@ -118,6 +118,55 @@ describe("parseReconcileArgs", () => {
     expect(() =>
       parseReconcileArgs(["--config", "--token-env", "GH_TOKEN"]),
     ).toThrow(expect.objectContaining({ code: 2 }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseReportArgs
+// ---------------------------------------------------------------------------
+
+describe("parseReportArgs", () => {
+  it("parses a basic report invocation with defaults", () => {
+    const args = parseReportArgs(["--config", "g.yml", "--token-env", "GH_TOKEN"]);
+    expect(args.config).toBe("g.yml");
+    expect(args.tokenEnv).toBe("GH_TOKEN");
+    expect(args.audit).toBe(false);
+    expect(args.failOn).toBe("none");
+    expect(args.out).toBeUndefined();
+    expect(args.cycles).toEqual([]);
+  });
+
+  it("parses --out, --audit, --cycles, and --fail-on attention", () => {
+    const args = parseReportArgs([
+      "--config", "g.yml",
+      "--token-env", "GH_TOKEN",
+      "--out", "compliance.json",
+      "--audit",
+      "--cycles", "org-settings,membership",
+      "--fail-on", "attention",
+    ]);
+    expect(args.out).toBe("compliance.json");
+    expect(args.audit).toBe(true);
+    expect(args.cycles).toEqual(["org-settings", "membership"]);
+    expect(args.failOn).toBe("attention");
+  });
+
+  it("throws code 2 when auth is missing", () => {
+    expect(() => parseReportArgs(["--config", "g.yml"])).toThrow(
+      expect.objectContaining({ code: 2 }),
+    );
+  });
+
+  it("throws code 2 for an invalid --fail-on value", () => {
+    expect(() =>
+      parseReportArgs(["--config", "g.yml", "--token-env", "GH_TOKEN", "--fail-on", "bad"]),
+    ).toThrow(expect.objectContaining({ code: 2 }));
+  });
+
+  it("throws CliError for an unknown flag", () => {
+    expect(() =>
+      parseReportArgs(["--config", "g.yml", "--token-env", "GH_TOKEN", "--nope"]),
+    ).toThrow(CliError);
   });
 });
 

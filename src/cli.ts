@@ -35,7 +35,7 @@
  *   4   Audit: findings exceed --fail-on threshold.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { loadGovernanceConfig } from "./config/load.js";
 import { createAppClient } from "./auth/app-client.js";
@@ -43,7 +43,8 @@ import { runReconcile } from "./reconcile/runner.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
 import { auditRepos } from "./audit/engine.js";
 import { renderPostureSummary, shouldFail, type FailOn } from "./audit/summary.js";
-import type { Cycle } from "./reconcile/runner.js";
+import type { Cycle, ReconcileResult } from "./reconcile/runner.js";
+import { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
 
 // ---------------------------------------------------------------------------
 // Arg parser
@@ -306,6 +307,133 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
 }
 
 // ---------------------------------------------------------------------------
+// Report subcommand
+// ---------------------------------------------------------------------------
+
+export interface ReportArgs {
+  config: string;
+  appIdEnv: string | undefined;
+  installationIdEnv: string | undefined;
+  tokenEnv: string | undefined;
+  cycles: string[];
+  /** Path to write the committable JSON artifact (optional). */
+  out: string | undefined;
+  /** Include an audit pass in the report. */
+  audit: boolean;
+  /** Exit non-zero when the report needs attention. */
+  failOn: "none" | "attention";
+}
+
+/**
+ * Parse report argv. Pure: throws `CliError` (carrying an exit code) on any
+ * parse error instead of touching `process`.
+ *
+ * Accepted flags:
+ *   --config <path>               Governance config file (YAML/JSON). Required.
+ *   --token-env / --app-id-env / --installation-id-env   Auth (same as reconcile).
+ *   --cycles <name[,name...]>     Cycles to include (default: all).
+ *   --out <path>                  Write the JSON compliance artifact to this path.
+ *   --audit                       Include an audit pass in the report.
+ *   --fail-on none|attention      Exit 4 when the report needs attention. Default: none.
+ */
+export function parseReportArgs(argv: string[]): ReportArgs {
+  const args: ReportArgs = {
+    config: "",
+    appIdEnv: undefined,
+    installationIdEnv: undefined,
+    tokenEnv: undefined,
+    cycles: [],
+    out: undefined,
+    audit: false,
+    failOn: "none",
+  };
+
+  const knownFlags = new Set([
+    "--config",
+    "--token-env",
+    "--app-id-env",
+    "--installation-id-env",
+    "--cycles",
+    "--out",
+    "--audit",
+    "--fail-on",
+  ]);
+
+  let i = 0;
+  while (i < argv.length) {
+    const flag = argv[i];
+    if (!flag.startsWith("--")) throw new CliError(2, `unexpected positional argument: ${flag}`);
+    if (!knownFlags.has(flag)) throw new CliError(2, `unknown flag: ${flag}`);
+
+    switch (flag) {
+      case "--config": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--")) throw new CliError(2, "--config requires a value");
+        args.config = val;
+        break;
+      }
+      case "--token-env": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--")) throw new CliError(2, "--token-env requires a value");
+        args.tokenEnv = val;
+        break;
+      }
+      case "--app-id-env": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--")) throw new CliError(2, "--app-id-env requires a value");
+        args.appIdEnv = val;
+        break;
+      }
+      case "--installation-id-env": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--installation-id-env requires a value");
+        args.installationIdEnv = val;
+        break;
+      }
+      case "--cycles": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--")) throw new CliError(2, "--cycles requires a value");
+        args.cycles = val.split(",").map((s) => s.trim()).filter(Boolean);
+        break;
+      }
+      case "--out": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--")) throw new CliError(2, "--out requires a value");
+        args.out = val;
+        break;
+      }
+      case "--audit": {
+        args.audit = true;
+        break;
+      }
+      case "--fail-on": {
+        const val = argv[++i];
+        if (val !== "none" && val !== "attention") {
+          throw new CliError(2, `--fail-on must be "none" or "attention", got: ${val ?? "(missing)"}`);
+        }
+        args.failOn = val;
+        break;
+      }
+    }
+    i++;
+  }
+
+  if (!args.config) throw new CliError(2, "--config is required");
+
+  const hasTokenAuth = !!args.tokenEnv;
+  const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
+  if (!hasTokenAuth && !hasAppAuth) {
+    throw new CliError(
+      2,
+      "auth is required: supply --token-env <VAR>, or both --app-id-env <VAR> and --installation-id-env <VAR>",
+    );
+  }
+
+  return args;
+}
+
+// ---------------------------------------------------------------------------
 // Auth client builder
 // ---------------------------------------------------------------------------
 
@@ -320,7 +448,7 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
  *
  * Accepts both ReconcileArgs and AuditArgs (both carry the same auth fields).
  */
-function buildClient(args: ReconcileArgs | AuditArgs) {
+function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs) {
   if (args.tokenEnv) {
     const token = env(args.tokenEnv);
     // Wrap the pre-minted token in a minimal AppClient.
@@ -390,8 +518,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
 
+  if (subcommand === "report") {
+    await runReport(argv.slice(1));
+    return;
+  }
+
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile" or "audit"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", or "report"?`);
   }
 
   let args: ReconcileArgs;
@@ -852,6 +985,124 @@ async function runAudit(argv: string[]): Promise<void> {
   process.exit(0);
 }
 
+/**
+ * Run the `report` subcommand: run all (or selected) cycles in dry-run,
+ * optionally run an audit pass, aggregate into a compliance snapshot, print it,
+ * and optionally write a committable JSON artifact.
+ *
+ * Detect-and-report only — never mutates (cycles run in dry-run).
+ *
+ * Exits 4 when `--fail-on attention` is set and the report needs attention.
+ */
+async function runReport(argv: string[]): Promise<void> {
+  let reportArgs: ReportArgs;
+  try {
+    reportArgs = parseReportArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+
+  // ── Load config ────────────────────────────────────────────────────────────
+  let rawConfig: unknown;
+  try {
+    const text = readFileSync(reportArgs.config, "utf-8");
+    rawConfig = parseConfigFile(reportArgs.config, text);
+  } catch (err) {
+    die(3, `failed to read config file "${reportArgs.config}": ${errMsg(err)}`);
+  }
+
+  let config;
+  try {
+    config = loadGovernanceConfig(rawConfig);
+  } catch (err) {
+    die(2, `invalid governance config: ${errMsg(err)}`);
+  }
+
+  // ── Build client ───────────────────────────────────────────────────────────
+  let client;
+  try {
+    client = buildClient(reportArgs);
+  } catch (err) {
+    die(3, `auth setup failed: ${errMsg(err)}`);
+  }
+
+  // ── Resolve cycles ─────────────────────────────────────────────────────────
+  let cycles: Cycle[];
+  if (reportArgs.cycles.length === 0) {
+    cycles = Object.values(CYCLE_REGISTRY);
+  } else {
+    cycles = [];
+    for (const name of reportArgs.cycles) {
+      const cycle = CYCLE_REGISTRY[name];
+      if (!cycle) {
+        die(2, `unknown cycle: "${name}". Known cycles: ${Object.keys(CYCLE_REGISTRY).join(", ")}`);
+      }
+      cycles.push(cycle);
+    }
+  }
+
+  // ── Reconcile in dry-run (detect-only) ─────────────────────────────────────
+  let result: ReconcileResult;
+  try {
+    result = await runReconcile({ config, client, cycles, mode: "dry-run" });
+  } catch (err) {
+    die(3, `reconcile failed: ${errMsg(err)}`);
+  }
+
+  // ── Optional audit pass ────────────────────────────────────────────────────
+  let auditReport;
+  if (reportArgs.audit) {
+    const repoUrls: string[] = [];
+    for (const [orgName, orgCfg] of Object.entries(config.orgs)) {
+      for (const repoName of Object.keys(orgCfg.repos ?? {})) {
+        repoUrls.push(`https://github.com/${orgName}/${repoName}`);
+      }
+    }
+    if (repoUrls.length > 0) {
+      try {
+        let token: string | undefined;
+        if (reportArgs.tokenEnv) {
+          token = process.env[reportArgs.tokenEnv];
+        } else {
+          const appId = env(reportArgs.appIdEnv!);
+          const installationId = env(reportArgs.installationIdEnv!);
+          const privateKeyPem =
+            process.env["GOVERNANCE_APP_PRIVATE_KEY"] ??
+            process.env["GITHUB_APP_PRIVATE_KEY"] ??
+            die(2, "private key not found: set GOVERNANCE_APP_PRIVATE_KEY (or GITHUB_APP_PRIVATE_KEY) to the PEM");
+          const { mintInstallationToken } = await import("./auth/app-client.js");
+          const { token: minted } = await mintInstallationToken({ appId, installationId, privateKeyPem });
+          token = minted;
+        }
+        auditReport = await auditRepos(repoUrls, token);
+      } catch (err) {
+        die(3, `audit failed: ${errMsg(err)}`);
+      }
+    }
+  }
+
+  // ── Aggregate + output ─────────────────────────────────────────────────────
+  const report = buildComplianceReport([result], auditReport);
+  report.generatedAt = new Date().toISOString();
+  process.stdout.write(renderComplianceReport(report));
+
+  if (reportArgs.out) {
+    try {
+      writeFileSync(reportArgs.out, complianceArtifact(report), "utf-8");
+      process.stdout.write(`wrote artifact: ${reportArgs.out}\n`);
+    } catch (err) {
+      die(3, `failed to write artifact "${reportArgs.out}": ${errMsg(err)}`);
+    }
+  }
+
+  if (reportArgs.failOn === "attention" && !report.clean) {
+    process.stderr.write("github-warden: compliance report needs attention (--fail-on attention)\n");
+    process.exit(4);
+  }
+  process.exit(0);
+}
+
 function printUsage() {
   process.stdout.write(
     [
@@ -860,6 +1111,7 @@ function printUsage() {
       "Subcommands:",
       "  reconcile   Load config, authenticate, and run governance cycles.",
       "  audit       Audit managed repos for security/correctness posture.",
+      "  report      Aggregate cycle drift (+ optional audit) into a compliance snapshot.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -878,12 +1130,20 @@ function printUsage() {
       "  --fail-on merge-worthy|any|none",
       "                                Exit 4 when findings exceed threshold (default: none).",
       "",
+      "Flags (report):",
+      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
+      "  --cycles <name[,name...]>     Cycles to include (default: all).",
+      "  --out <path>                  Write the JSON compliance artifact to this path.",
+      "  --audit                       Include an audit pass in the report.",
+      "  --fail-on none|attention      Exit 4 when the report needs attention (default: none).",
+      "",
       "Exit codes:",
       "  0   Success.",
       "  1   Guardrail block (apply mode, override not set).",
       "  2   Argument or config error.",
       "  3   Runtime error.",
-      "  4   Audit: findings exceed --fail-on threshold.",
+      "  4   Audit/report: threshold exceeded or report needs attention.",
       "",
     ].join("\n"),
   );
