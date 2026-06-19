@@ -144,10 +144,12 @@ suite("warden e2e (real GitHub org)", () => {
       privateKeyPem: PRIVATE_KEY!,
     });
 
-    // Provision a throwaway repo (auto_init gives it a `main` branch).
+    // Provision a throwaway repo (auto_init gives it a `main` branch). Public so
+    // that feature-gated capabilities (branch protection, rulesets, environments)
+    // are available even on a free org — a private free repo 403s on those.
     await client.request("POST", `/orgs/${ORG}/repos`, {
       name: REPO,
-      private: true,
+      private: false,
       auto_init: true,
       description: "warden e2e — auto-created, safe to delete",
     });
