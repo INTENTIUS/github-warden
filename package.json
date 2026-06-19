@@ -21,8 +21,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@intentius/chant": "^0.9.0",
-    "@intentius/chant-lexicon-github": "^0.9.0"
+    "@intentius/chant": "^0.10.0",
+    "@intentius/chant-lexicon-github": "^0.10.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
