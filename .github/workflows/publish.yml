@@ -1,0 +1,60 @@
+name: publish
+
+# Publishes github-warden to npm on a version tag (e.g. v0.2.0), or manually.
+# Use `just release [patch|minor|major]` to bump + tag + push.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Gate the publish on the same checks CI runs on every PR.
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: typecheck
+        run: npx tsc --noEmit
+      - name: test
+        run: npm test
+      - name: action bundle up to date
+        run: npm run build:action && git diff --exit-code action/index.mjs
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC trusted publishing — no NPM_TOKEN needed
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          # Deliberately NOT setting registry-url: that flag makes setup-node
+          # write an .npmrc with `_authToken=${NODE_AUTH_TOKEN}`, and the token
+          # defaults to a literal placeholder when unset — which the registry
+          # 404s on instead of falling through to OIDC. Without registry-url
+          # there is no .npmrc; `npm publish` detects the OIDC id-token
+          # environment and exchanges it for a short-lived publish token via the
+          # package's trusted-publisher record.
+      - run: npm ci
+      - name: Publish github-warden
+        run: |
+          V=$(node -e "process.stdout.write(require('./package.json').version)")
+          P=$(npm view github-warden version 2>/dev/null || echo "none")
+          if [ "$V" = "$P" ]; then
+            echo "github-warden@$V already published, skipping"
+          else
+            npm publish --access public --provenance
+          fi
