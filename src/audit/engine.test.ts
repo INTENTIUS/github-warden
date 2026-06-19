@@ -2,7 +2,8 @@
  * Tests for the posture-audit engine and CLI subcommand.
  *
  * All tests are offline: a `fixtureFetch` intercepts GitHub API calls and
- * serves an in-memory file set that exercises multiple lexicons.
+ * serves an in-memory file set that exercises the github lexicon (warden audits
+ * GitHub posture only).
  */
 
 import { describe, it, expect } from "vitest";
@@ -25,20 +26,6 @@ const FIXTURE_FILES: Record<string, string> = {
     "    steps:",
     "      - uses: actions/checkout@v4",
     "      - run: echo ${{ github.event.issue.title }}",
-  ].join("\n") + "\n",
-  "k8s/deploy.yaml": [
-    "apiVersion: apps/v1",
-    "kind: Deployment",
-    "metadata:",
-    "  name: web",
-    "spec:",
-    "  template:",
-    "    spec:",
-    "      containers:",
-    "        - name: c",
-    "          image: nginx:latest",
-    "          securityContext:",
-    "            privileged: true",
   ].join("\n") + "\n",
 };
 

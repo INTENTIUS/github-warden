@@ -5,15 +5,25 @@
  * buildReportModel) over the warden App token, so managed repos — including
  * private ones — are audited with the same token used for reconcile cycles.
  *
- * All chant imports are lazy (dynamic `import()`) so the module can be loaded
- * in any Node.js environment: the audit engine only runs when actually called,
- * not at module initialisation time.
+ * SCOPE: github-warden governs GitHub, so the audit is GitHub-only. It uses the
+ * `github` CI lexicon (path-detected `.github/workflows/*`, audited with the
+ * github `postSynthChecks`). Multi-domain IaC auditing (aws/azure/k8s/etc.) is
+ * the job of the separate `blacklight` app, not warden.
+ *
+ * chant imports are bundled by esbuild at build time (see package.json `build`),
+ * so the produced `dist/cli.js` runs under plain Node with no `.ts` source load.
  *
  * DETECT-AND-REPORT only. No mutations.
  */
 
+import { fetchRepoFiles } from "@intentius/chant/audit/fetch";
+import { classifyFiles } from "@intentius/chant/audit/discover";
+import { auditFiles } from "@intentius/chant/audit/core";
+import { buildReportModel } from "@intentius/chant/audit/report-model";
+import { postSynthChecks as githubChecks } from "@intentius/chant-lexicon-github/lint/post-synth";
+
 // ---------------------------------------------------------------------------
-// Public types (no chant imports at the top level — keep module loadable)
+// Public types
 // ---------------------------------------------------------------------------
 
 /** The result of auditing a single repo. */
@@ -77,9 +87,6 @@ export async function auditRepos(
   token: string | undefined,
   opts: AuditReposOptions = {},
 ): Promise<PostureReport> {
-  // Lazy-load chant's audit pipeline and all lexicon imports.
-  const pipeline = await loadPipeline();
-
   const concurrency = opts.concurrency ?? 3;
   const maxFiles = opts.maxFiles ?? 50;
   const fetchImpl = opts.fetchImpl;
@@ -90,7 +97,7 @@ export async function auditRepos(
   for (let i = 0; i < repoUrls.length; i += concurrency) {
     const batch = repoUrls.slice(i, i + concurrency);
     const settled = await Promise.allSettled(
-      batch.map((url) => auditOneRepo(url, token, { maxFiles, fetchImpl }, pipeline)),
+      batch.map((url) => auditOneRepo(url, token, { maxFiles, fetchImpl })),
     );
     for (const outcome of settled) {
       if (outcome.status === "fulfilled") {
@@ -101,7 +108,7 @@ export async function auditRepos(
           repoUrl: "unknown",
           slug: "unknown",
           scanned: 0,
-          model: pipeline.buildReportModel([]),
+          model: buildReportModel([]),
           error: String(outcome.reason),
         });
       }
@@ -138,118 +145,27 @@ function slugFromUrl(url: string): string {
   }
 }
 
-/** Shape of the lazily-loaded audit pipeline. */
-interface AuditPipeline {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fetchRepoFiles: (url: string, opts?: any) => Promise<Array<{ path: string; content: string }>>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  classifyFiles: (files: any[], plugins: any[]) => any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  auditFiles: (inputs: any[], opts?: any) => Promise<any[]>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  buildReportModel: (findings: any[], opts?: any) => any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  DETECTORS: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  checksProvider: (lexicon: string) => Promise<any[]>;
-}
-
-/** Lazy-loaded audit pipeline. Resolved once and cached. */
-let _pipeline: AuditPipeline | null = null;
+/**
+ * Detectors for classifyFiles. github-warden audits GitHub posture only, so the
+ * single detector is the `github` CI lexicon — path-detected (`.github/workflows/*`,
+ * name only, no detectTemplate).
+ */
+const DETECTORS = [{ name: "github" }];
 
 /**
- * Dynamically import everything the audit engine needs from chant and the
- * lexicon packages. Called once per process; result is cached.
- *
- * Dynamic imports keep the module-load-time surface to zero — no chant `.ts`
- * files are resolved until the first `auditRepos()` call.
+ * Checks provider for auditFiles. Only the `github` lexicon's post-synth checks
+ * are wired; any other lexicon name yields no checks.
  */
-async function loadPipeline(): Promise<AuditPipeline> {
-  if (_pipeline) return _pipeline;
-
-  const [
-    { fetchRepoFiles },
-    { classifyFiles },
-    { auditFiles },
-    { buildReportModel },
-    { detectTemplate: detectK8s },
-    { detectTemplate: detectDocker },
-    { detectTemplate: detectAws },
-    { detectTemplate: detectAzure },
-    { detectTemplate: detectGcp },
-    { detectTemplate: detectHelm },
-    { postSynthChecks: githubChecks },
-    { postSynthChecks: gitlabChecks },
-    { postSynthChecks: forgejoChecks },
-    { postSynthChecks: k8sChecks },
-    { postSynthChecks: dockerChecks },
-    { postSynthChecks: awsChecks },
-    { postSynthChecks: azureChecks },
-    { postSynthChecks: gcpChecks },
-    { postSynthChecks: helmChecks },
-  ] = await Promise.all([
-    import("@intentius/chant/audit/fetch"),
-    import("@intentius/chant/audit/discover"),
-    import("@intentius/chant/audit/core"),
-    import("@intentius/chant/audit/report-model"),
-    import("@intentius/chant-lexicon-k8s/detect"),
-    import("@intentius/chant-lexicon-docker/detect"),
-    import("@intentius/chant-lexicon-aws/detect"),
-    import("@intentius/chant-lexicon-azure/detect"),
-    import("@intentius/chant-lexicon-gcp/detect"),
-    import("@intentius/chant-lexicon-helm/detect"),
-    import("@intentius/chant-lexicon-github/lint/post-synth"),
-    import("@intentius/chant-lexicon-gitlab/lint/post-synth"),
-    import("@intentius/chant-lexicon-forgejo/lint/post-synth"),
-    import("@intentius/chant-lexicon-k8s/lint/post-synth"),
-    import("@intentius/chant-lexicon-docker/lint/post-synth"),
-    import("@intentius/chant-lexicon-aws/lint/post-synth"),
-    import("@intentius/chant-lexicon-azure/lint/post-synth"),
-    import("@intentius/chant-lexicon-gcp/lint/post-synth"),
-    import("@intentius/chant-lexicon-helm/lint/post-synth"),
-  ]);
-
-  /** Mirrors blacklight's DETECTORS list. */
-  const DETECTORS = [
-    { name: "github" },
-    { name: "gitlab" },
-    { name: "forgejo" },
-    { name: "k8s", detectTemplate: detectK8s },
-    { name: "docker", detectTemplate: detectDocker },
-    { name: "aws", detectTemplate: detectAws },
-    { name: "azure", detectTemplate: detectAzure },
-    { name: "gcp", detectTemplate: detectGcp },
-    { name: "helm", detectTemplate: detectHelm },
-  ];
-
-  /** Mirrors blacklight's CHECKS map. */
-  const CHECKS: Record<string, unknown[]> = {
-    github: githubChecks,
-    gitlab: gitlabChecks,
-    forgejo: [...forgejoChecks, ...githubChecks],
-    k8s: k8sChecks,
-    docker: dockerChecks,
-    aws: awsChecks,
-    azure: azureChecks,
-    gcp: gcpChecks,
-    helm: helmChecks,
-  };
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const checksProvider = async (lexicon: string): Promise<any[]> => CHECKS[lexicon] ?? [];
-
-  _pipeline = { fetchRepoFiles, classifyFiles, auditFiles, buildReportModel, DETECTORS, checksProvider };
-  return _pipeline;
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const checksProvider = async (lexicon: string): Promise<any[]> =>
+  lexicon === "github" ? githubChecks : [];
 
 async function auditOneRepo(
   repoUrl: string,
   token: string | undefined,
   opts: { maxFiles: number; fetchImpl?: typeof fetch },
-  pipeline: AuditPipeline,
 ): Promise<RepoAuditResult> {
   const slug = slugFromUrl(repoUrl);
-  const { fetchRepoFiles, classifyFiles, auditFiles, buildReportModel, DETECTORS, checksProvider } = pipeline;
   try {
     const files = await fetchRepoFiles(repoUrl, {
       token,

@@ -10,22 +10,15 @@
   "scripts": {
     "tsc": "tsc --noEmit",
     "test": "vitest run",
-    "build": "tsc -p tsconfig.build.json && chmod +x dist/cli.js"
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js"
   },
   "dependencies": {
     "@intentius/chant": "^0.8.2",
-    "@intentius/chant-lexicon-aws": "^0.8.2",
-    "@intentius/chant-lexicon-azure": "^0.8.2",
-    "@intentius/chant-lexicon-docker": "^0.8.2",
-    "@intentius/chant-lexicon-forgejo": "^0.8.2",
-    "@intentius/chant-lexicon-gcp": "^0.8.2",
-    "@intentius/chant-lexicon-github": "^0.8.2",
-    "@intentius/chant-lexicon-gitlab": "^0.8.2",
-    "@intentius/chant-lexicon-helm": "^0.8.2",
-    "@intentius/chant-lexicon-k8s": "^0.8.2"
+    "@intentius/chant-lexicon-github": "^0.8.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9"
   }
