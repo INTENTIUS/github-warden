@@ -27,6 +27,7 @@ import type {
   SecretConfig,
   VariableConfig,
   DependabotConfig,
+  RepoBaselineConfig,
 } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
@@ -256,6 +257,7 @@ const RESOURCE_TYPE_ORDER = [
   "org-ruleset",
   "org-secret",
   "org-variable",
+  "repo-baseline",
   "team",
   "team-member",
   "team-repo",
@@ -294,6 +296,7 @@ export function diff(
   diffRulesets("", "org-ruleset", desired.rulesets, live.rulesets ?? [], opts, entries);
   diffSecrets("", "org-secret", desired.secrets, live.secrets ?? [], opts, entries);
   diffVariables("", "org-variable", desired.variables, live.variables ?? [], opts, entries);
+  diffRepoBaselines(desired.repoBaselines, live.repos ?? {}, entries);
   diffTeams(desired.teams, live.teams ?? {}, opts, entries);
   diffMembers(desired.members, live.members ?? [], opts, entries);
   diffRepos(desired.repos, live.repos ?? {}, opts, entries);
@@ -910,6 +913,30 @@ function diffVariables(
       if (opts.isOwned?.(resourceType, key)) {
         out.push({ kind: "delete", resourceType, key, before: lv });
       }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Repository baseline / provisioning
+// ---------------------------------------------------------------------------
+
+/**
+ * Diff declared repo baselines against the live org repos. Resource type
+ * "repo-baseline", key = repo name. Existence-only: emits a create when a
+ * declared repo is missing from the org; never updates or deletes (settings
+ * are reconciled by the per-repo cycles, and baselines never remove a repo).
+ */
+function diffRepoBaselines(
+  desired: RepoBaselineConfig[] | undefined,
+  liveRepos: Record<string, LiveRepoConfig>,
+  out: ChangeSetEntry[],
+): void {
+  if (desired === undefined) return;
+
+  for (const baseline of desired) {
+    if (!Object.prototype.hasOwnProperty.call(liveRepos, baseline.name)) {
+      out.push({ kind: "create", resourceType: "repo-baseline", key: baseline.name, after: baseline });
     }
   }
 }

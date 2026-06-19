@@ -256,6 +256,32 @@ export interface RulesetConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Repository baseline / provisioning
+// ---------------------------------------------------------------------------
+
+/**
+ * A repo that should EXIST in the org (provisioning, not pure reconcile). The
+ * baseline cycle creates the repo when it is missing — optionally from a
+ * template — so a periodic run guarantees declared repos exist. Per-repo
+ * SETTINGS (description, visibility, branch protection, …) are reconciled by
+ * the other cycles via the `repos` map; this only ensures existence.
+ *
+ * Existence-only: the baseline cycle never deletes a repo.
+ */
+export interface RepoBaselineConfig {
+  /** Repository name (without the org prefix). */
+  name: string;
+  /**
+   * Template repo to generate from, as "owner/repo". When set, a missing repo
+   * is created via the template-generate endpoint; otherwise an empty repo is
+   * created.
+   */
+  template?: string;
+  /** Whether a newly-created repo is private. Defaults to true (safe default). */
+  private?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Repos
 // ---------------------------------------------------------------------------
 
@@ -400,6 +426,11 @@ export interface OrgConfig {
    * Absent means variables are not managed by chant.
    */
   variables?: VariableConfig[];
+  /**
+   * Repositories that must exist in the org (provisioning/templating).
+   * Absent means repo provisioning is not managed by chant.
+   */
+  repoBaselines?: RepoBaselineConfig[];
 }
 
 /**
