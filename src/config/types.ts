@@ -101,6 +101,42 @@ export interface MemberConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Actions secrets & variables
+// ---------------------------------------------------------------------------
+
+/**
+ * An Actions secret declaration. warden manages a secret's PRESENCE only — it
+ * NEVER reads or writes secret values (those are provisioned out-of-band). A
+ * declared-but-missing secret is reported; its value must be supplied
+ * separately. An undeclared live secret is only removed when ownership-gated.
+ */
+export interface SecretConfig {
+  /** Secret name (the identity key within its scope). */
+  name: string;
+  /**
+   * Optional informational rotation pointer (e.g. a ticket or KMS key ref).
+   * Recorded for humans/automation; never sent to GitHub and never diffed.
+   */
+  rotationRef?: string;
+}
+
+/**
+ * An Actions variable declaration. Unlike secrets, variable values are NOT
+ * secret, so warden can reconcile them fully (create/update/delete).
+ */
+export interface VariableConfig {
+  /** Variable name (the identity key within its scope). */
+  name: string;
+  /** Variable value. Required to create or update; absent → presence-only. */
+  value?: string;
+  /**
+   * Visibility for ORG-level variables on create: "all" | "private" |
+   * "selected". Ignored for repo-level variables. Defaults to "all".
+   */
+  visibility?: "all" | "private" | "selected";
+}
+
+// ---------------------------------------------------------------------------
 // Deployment environments
 // ---------------------------------------------------------------------------
 
@@ -286,6 +322,16 @@ export interface RepoConfig {
    * Absent means environments are not managed by chant.
    */
   environments?: EnvironmentConfig[];
+  /**
+   * Repo-level Actions secrets (presence only — never values).
+   * Absent means secrets are not managed by chant.
+   */
+  secrets?: SecretConfig[];
+  /**
+   * Repo-level Actions variables.
+   * Absent means variables are not managed by chant.
+   */
+  variables?: VariableConfig[];
 }
 
 // ---------------------------------------------------------------------------
@@ -325,6 +371,16 @@ export interface OrgConfig {
    * Absent means org rulesets are not managed by chant.
    */
   rulesets?: RulesetConfig[];
+  /**
+   * Org-level Actions secrets (presence only — never values).
+   * Absent means secrets are not managed by chant.
+   */
+  secrets?: SecretConfig[];
+  /**
+   * Org-level Actions variables.
+   * Absent means variables are not managed by chant.
+   */
+  variables?: VariableConfig[];
 }
 
 /**

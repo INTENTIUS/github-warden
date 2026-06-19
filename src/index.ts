@@ -19,6 +19,8 @@ export type {
   EnvironmentConfig,
   EnvironmentReviewer,
   DeploymentBranchPolicy,
+  SecretConfig,
+  VariableConfig,
 } from "./config/types.js";
 
 // Config loader
@@ -45,6 +47,8 @@ export type {
   LiveRuleset,
   LiveRepoSecurity,
   LiveEnvironment,
+  LiveSecret,
+  LiveVariable,
   LiveOrgState,
 } from "./reconcile/diff.js";
 export { diff, summarizeChangeSet, renderChangeSet } from "./reconcile/diff.js";
@@ -95,6 +99,8 @@ export { securityFeaturesCycle, fetchRepoSecurity, buildSecurityAnalysisBody } f
 export type { SecurityFeaturesScope } from "./cycles/security-features.js";
 export { environmentsCycle, mapEnvironmentToLive, buildEnvironmentBody } from "./cycles/environments.js";
 export type { EnvironmentsScope } from "./cycles/environments.js";
+export { secretsVariablesCycle } from "./cycles/secrets-variables.js";
+export type { SecretsVariablesScope } from "./cycles/secrets-variables.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";
