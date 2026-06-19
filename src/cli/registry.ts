@@ -10,6 +10,7 @@
 
 import type { Cycle } from "../reconcile/runner.js";
 import { branchProtectionCycle } from "../cycles/branch-protection.js";
+import { orgSettingsCycle } from "../cycles/org-settings.js";
 
 /**
  * Registry of all available governance cycles, keyed by the name accepted by
@@ -20,4 +21,5 @@ import { branchProtectionCycle } from "../cycles/branch-protection.js";
  */
 export const CYCLE_REGISTRY: Record<string, Cycle> = {
   [branchProtectionCycle.name]: branchProtectionCycle,
+  [orgSettingsCycle.name]: orgSettingsCycle,
 };
