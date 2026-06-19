@@ -144,10 +144,12 @@ suite("warden e2e (real GitHub org)", () => {
       privateKeyPem: PRIVATE_KEY!,
     });
 
-    // Provision a throwaway repo (auto_init gives it a `main` branch).
+    // Provision a throwaway repo (auto_init gives it a `main` branch). Public so
+    // that feature-gated capabilities (branch protection, rulesets, environments)
+    // are available even on a free org — a private free repo 403s on those.
     await client.request("POST", `/orgs/${ORG}/repos`, {
       name: REPO,
-      private: true,
+      private: false,
       auto_init: true,
       description: "warden e2e — auto-created, safe to delete",
     });
@@ -201,7 +203,26 @@ suite("warden e2e (real GitHub org)", () => {
       const rec = recording(client);
       const budget = makeBudget();
 
-      const live = await cycle.fetchLive(rec.client, ORG!, scope, budget);
+      let live;
+      try {
+        live = await cycle.fetchLive(rec.client, ORG!, scope, budget);
+      } catch (err) {
+        // fetchLive only ever issues GETs — assert that even on the failure
+        // path, then treat a 403 (the App lacks that permission, or the feature
+        // is unavailable on the org's plan) as "not exercisable here" rather
+        // than a failure. Keeps the harness robust to the App's permission
+        // scope; the warning shows which cycles need broader grants.
+        const nonGet = rec.calls.filter((c) => c.method !== "GET");
+        expect(nonGet, `${cycle.name}.fetchLive made a non-GET before failing`).toEqual([]);
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("403")) {
+          // eslint-disable-next-line no-console
+          console.warn(`[e2e] ${cycle.name}: skipped (403) — ${msg.slice(0, 140)}`);
+          return;
+        }
+        throw err;
+      }
+
       const desired = cycle.buildDesired(orgConfig, ORG!, scope);
       const changeSet = diff(ORG!, desired, live, {});
 
