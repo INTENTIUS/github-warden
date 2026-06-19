@@ -277,6 +277,14 @@ and **Actions secrets + variables** read+write, plus the read scopes the cycles
 touch. CI runs it nightly + on demand via `.github/workflows/e2e.yml` using
 `WARDEN_E2E_*` repo secrets (never on PRs).
 
+Once the App is created, installed on the test org, and its `.pem` downloaded
+(the web-only steps), wiring the secrets and triggering a run is automated:
+
+```bash
+just e2e-setup <test-org> <app-slug> ./warden-e2e.pem   # discovers app/installation id, sets the 4 secrets
+just e2e-run                                             # dispatch Phase 1 (add `true` for Phase 2)
+```
+
 ## Architecture
 
 The provider-agnostic reconcile core (change-set model, generic collection diff,

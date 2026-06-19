@@ -59,3 +59,33 @@ release bump="patch":
     git tag "v$next"
     git push origin main "v$next"
     echo "Released v$next — publish workflow triggered (tag pattern v*)"
+
+# Wire the e2e repo secrets from an already-installed GitHub App (the
+# gh-automatable part of e2e setup). Discovers the App id + installation id
+# from the org and sets all four WARDEN_E2E_* secrets.
+#   just e2e-setup <test-org> <app-slug> <path-to-private-key.pem>
+# Prereqs you must do by hand first (not available via gh/API): create the
+# GitHub App, download its .pem, and install it on the test org.
+e2e-setup org app_slug pem:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo="intentius/github-warden"
+    if [ ! -f "{{pem}}" ]; then echo "private key not found: {{pem}}" >&2; exit 1; fi
+    echo "Looking up '{{app_slug}}' installation on org '{{org}}'…"
+    inst=$(gh api "/orgs/{{org}}/installations" --jq '.installations[] | select(.app_slug=="{{app_slug}}")')
+    if [ -z "$inst" ]; then echo "No '{{app_slug}}' installation found on '{{org}}' (is it installed?)" >&2; exit 1; fi
+    app_id=$(echo "$inst" | jq -r .app_id)
+    install_id=$(echo "$inst" | jq -r .id)
+    echo "Found app_id=$app_id installation_id=$install_id"
+    gh secret set WARDEN_E2E_ORG             --repo "$repo" --body "{{org}}"
+    gh secret set WARDEN_E2E_APP_ID          --repo "$repo" --body "$app_id"
+    gh secret set WARDEN_E2E_INSTALLATION_ID --repo "$repo" --body "$install_id"
+    gh secret set WARDEN_E2E_PRIVATE_KEY     --repo "$repo" < "{{pem}}"
+    echo "Set 4 e2e secrets on $repo. Kick it off with: just e2e-run"
+
+# Trigger the e2e workflow on GitHub (set apply=true to also run Phase 2).
+#   just e2e-run            # Phase 1 only
+#   just e2e-run true       # + the teardown-guarded apply phase
+e2e-run apply="false":
+    gh workflow run e2e.yml --repo intentius/github-warden -f apply={{apply}}
+    echo "Dispatched e2e.yml — watch with: gh run watch \$(gh run list --repo intentius/github-warden --workflow e2e.yml --limit 1 --json databaseId -q '.[0].databaseId')"
