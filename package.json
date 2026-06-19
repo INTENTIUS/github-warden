@@ -25,6 +25,7 @@
   "scripts": {
     "tsc": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
     "build:action": "esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='\"1\"' --outfile=action/index.mjs",
     "prepublishOnly": "npm run build"
