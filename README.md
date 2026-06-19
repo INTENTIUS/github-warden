@@ -242,13 +242,10 @@ main) on a schedule, pinned to a warden Action SHA.
 and pushes — which triggers `.github/workflows/publish.yml` (test gate → `npm
 publish --provenance`).
 
-npm auth is one of two modes (the workflow supports both):
-
-- **OIDC trusted publishing** (preferred, no secret) — requires a one-time
-  trusted-publisher record on npm for `github-warden` ← `intentius/github-warden`
-  `publish.yml`. Works only after the package's first publish exists.
-- **`NPM_TOKEN` secret** (fallback) — set a repo/org `NPM_TOKEN` secret for the
-  first publish; drop it once trusted publishing is configured.
+Publishing uses **GitHub OIDC trusted publishing** — no `NPM_TOKEN` secret. It
+requires a one-time trusted-publisher record on npm for `github-warden` ←
+`intentius/github-warden`'s `publish.yml` (the workflow already requests
+`id-token: write` and publishes with `--provenance`).
 
 ## Architecture
 
