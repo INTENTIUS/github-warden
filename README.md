@@ -22,10 +22,10 @@ Before warden does anything useful you provide two things:
    repo-level reconcile and `audit`) **or** a **GitHub App** installed on your
    org (App ID + installation ID + private key). An App is **required** for
    org-level cycles (org settings, members, teams) and the token cycles — see
-   [Auth](#auth).
+   [Auth](#auth) and the [App setup checklist](docs/github-app-setup.md).
 2. **A config file** — a YAML/JSON file declaring the desired state you want
-   managed (see [Config format](#config-format)). Declare only what you want
-   warden to own.
+   managed. Start from [`examples/governance.yml`](examples/governance.yml) and
+   see [Config format](#config-format). Declare only what you want warden to own.
 
 Nothing is mutated until you ask: the default mode is `dry-run`, which only
 reads and prints a plan. Start there.
@@ -109,7 +109,8 @@ omit it to run all.
 
 ## Config format
 
-Every field is optional — declare only what you want managed.
+Every field is optional — declare only what you want managed. A ready-to-edit
+starter lives in [`examples/governance.yml`](examples/governance.yml).
 
 ```yaml
 orgs:
@@ -201,7 +202,8 @@ Two mutually-exclusive modes (token takes precedence):
 2. **GitHub App** — `--app-id-env` + `--installation-id-env`, with the private key in `GOVERNANCE_APP_PRIVATE_KEY` (or `GITHUB_APP_PRIVATE_KEY`).
 
 A **GitHub App** is required for org-level token policy/approval and several
-org administration APIs.
+org administration APIs. The [App setup checklist](docs/github-app-setup.md)
+walks through creating it, the per-cycle permissions, and installation.
 
 ## Use as a GitHub Action
 
