@@ -1,5 +1,5 @@
 {
-  "name": "github-warden",
+  "name": "@intentius/github-warden",
   "version": "0.1.0",
   "type": "module",
   "description": "Keep your GitHub org and repos in declared state — reconcile, guardrails, drift correction",
