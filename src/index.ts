@@ -75,6 +75,8 @@ export { orgSettingsCycle, buildOrgPatchBody } from "./cycles/org-settings.js";
 export type { OrgSettingsScope } from "./cycles/org-settings.js";
 export { repoSettingsCycle, buildRepoPatchBody, fetchLiveRepoSettings } from "./cycles/repo-settings.js";
 export type { RepoSettingsScope } from "./cycles/repo-settings.js";
+export { membershipCycle, listOrgMembers } from "./cycles/membership.js";
+export type { MembershipScope } from "./cycles/membership.js";
 
 // Reconcile: dump (export live state to desired-state config)
 export type { DumpOrgOptions, DumpResult } from "./reconcile/dump.js";

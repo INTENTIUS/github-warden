@@ -12,6 +12,7 @@ import type { Cycle } from "../reconcile/runner.js";
 import { branchProtectionCycle } from "../cycles/branch-protection.js";
 import { orgSettingsCycle } from "../cycles/org-settings.js";
 import { repoSettingsCycle } from "../cycles/repo-settings.js";
+import { membershipCycle } from "../cycles/membership.js";
 
 /**
  * Registry of all available governance cycles, keyed by the name accepted by
@@ -24,4 +25,5 @@ export const CYCLE_REGISTRY: Record<string, Cycle> = {
   [branchProtectionCycle.name]: branchProtectionCycle,
   [orgSettingsCycle.name]: orgSettingsCycle,
   [repoSettingsCycle.name]: repoSettingsCycle,
+  [membershipCycle.name]: membershipCycle,
 };
