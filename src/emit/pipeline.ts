@@ -40,7 +40,7 @@ const CHECKOUT_SHA = "11bd71901bbe5b1630ceea73d27597364c9af683";
  * intentius/github-warden v1
  * https://github.com/intentius/github-warden/releases/tag/v1
  *
- * SHA-pinned to satisfy GHA029. The `# v1` comment preserves human readability
+ * SHA-pinned to satisfy GHA029. The `# v0.1.0` comment preserves human readability
  * while preventing silent tag-repoint attacks. Warden's own audit (GHA021/029)
  * enforces this pattern — the emitted pipeline dogfoods it.
  */
@@ -165,7 +165,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
 
   const dryRunWardenStep = new Step({
     name: "Dry-run reconcile",
-    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v1`,
+    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.1.0`,
     with: {
       command: "reconcile",
       config: configPath,
@@ -212,7 +212,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
 
   const applyWardenStep = new Step({
     name: "Apply reconcile",
-    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v1`,
+    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.1.0`,
     with: {
       command: "reconcile",
       config: configPath,
