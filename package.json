@@ -1,6 +1,6 @@
 {
   "name": "@intentius/github-warden",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Keep your GitHub org and repos in declared state — reconcile, guardrails, drift correction",
   "publishConfig": {
