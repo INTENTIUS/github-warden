@@ -6,6 +6,17 @@
 
 **Keep your GitHub org and repos in a declared state — reconcile, guardrails, drift correction.**
 
+## Install
+
+```bash
+# Dry-run against your org — reads only, prints a plan, changes nothing.
+npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
+```
+
+Installs the `github-warden` CLI; or run it as a
+[GitHub Action](#use-as-a-github-action), no install needed. Org-level cycles
+need a GitHub App — see [what you need](#what-you-need-to-run-it) below.
+
 Think of it as Terraform for GitHub administration. You write desired state for
 your org and repos in **one YAML file**; warden diffs it against live GitHub,
 runs **safety guardrails**, and either prints the plan (`dry-run`, the default)
@@ -29,16 +40,6 @@ Before warden does anything useful you provide two things:
 
 Nothing is mutated until you ask: the default mode is `dry-run`, which only
 reads and prints a plan. Start there.
-
-## Install
-
-```bash
-# Dry-run against your org — reads only, prints a plan, changes nothing.
-npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
-```
-
-The installed CLI binary is `github-warden`. Or run it as a
-[GitHub Action](#use-as-a-github-action) — no install needed.
 
 ## Subcommands
 
