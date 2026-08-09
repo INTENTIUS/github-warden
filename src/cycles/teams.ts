@@ -249,6 +249,7 @@ function splitKey(key: string, resourceType: string): [string, string] {
 
 export const teamsCycle: Cycle<TeamsScope> = {
   name: "teams",
+  verb: "membership",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

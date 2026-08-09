@@ -200,6 +200,7 @@ async function applyVariable(
 
 export const secretsVariablesCycle: Cycle<SecretsVariablesScope> = {
   name: "secrets-variables",
+  verb: "secret-material",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

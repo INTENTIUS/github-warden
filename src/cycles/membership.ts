@@ -101,6 +101,7 @@ export async function listOrgMembers(
  */
 export const membershipCycle: Cycle<MembershipScope> = {
   name: "membership",
+  verb: "membership",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

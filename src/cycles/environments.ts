@@ -179,6 +179,7 @@ async function fetchRepoEnvironments(
 
 export const environmentsCycle: Cycle<EnvironmentsScope> = {
   name: "environments",
+  verb: "policy-guardrail",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 
