@@ -88,6 +88,7 @@ export async function listOrgRepoNames(
 
 export const repoBaselineCycle: Cycle<RepoBaselineScope> = {
   name: "repo-baseline",
+  verb: "org-unit",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

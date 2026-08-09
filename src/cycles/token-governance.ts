@@ -81,6 +81,7 @@ export function mapTokenGrant(raw: GhTokenGrant): LiveTokenGrant {
 
 export const tokenGovernanceCycle: Cycle<TokenGovernanceScope> = {
   name: "token-governance",
+  verb: "identity-assignment",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

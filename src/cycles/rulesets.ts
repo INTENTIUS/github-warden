@@ -195,6 +195,7 @@ async function applyRuleset(
 
 export const rulesetsCycle: Cycle<RulesetsScope> = {
   name: "rulesets",
+  verb: "policy-guardrail",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

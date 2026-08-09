@@ -158,6 +158,7 @@ export function buildRepoPatchBody(desired: RepoConfig): Record<string, unknown>
  */
 export const repoSettingsCycle: Cycle<RepoSettingsScope> = {
   name: "repo-settings",
+  verb: "org-unit",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

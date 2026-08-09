@@ -74,6 +74,7 @@ export function mapTokenRequest(raw: GhTokenRequest): LiveTokenRequest {
 
 export const tokenApprovalCycle: Cycle<TokenApprovalScope> = {
   name: "token-approval",
+  verb: "identity-assignment",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

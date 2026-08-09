@@ -163,6 +163,7 @@ export function buildSecurityAnalysisBody(desired: RepoSecurityConfig): Record<s
 
 export const securityFeaturesCycle: Cycle<SecurityFeaturesScope> = {
   name: "security-features",
+  verb: "policy-guardrail",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

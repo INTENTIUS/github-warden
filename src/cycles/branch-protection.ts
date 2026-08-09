@@ -345,6 +345,7 @@ function buildProtectionBody(
  */
 export const branchProtectionCycle: Cycle<BranchProtectionScope> = {
   name: "branch-protection",
+  verb: "policy-guardrail",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 

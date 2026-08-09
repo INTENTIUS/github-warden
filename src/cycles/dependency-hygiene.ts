@@ -99,6 +99,7 @@ export async function fetchDependabot(
 
 export const dependencyHygieneCycle: Cycle<DependencyHygieneScope> = {
   name: "dependency-hygiene",
+  verb: "policy-guardrail",
 
   // ── Part 2: fetchLive ──────────────────────────────────────────────────────
 
