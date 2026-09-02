@@ -30,6 +30,34 @@ jobs:
       - name: action bundle up to date
         run: npm run build:action && git diff --exit-code action/index.mjs
 
+  mock-smoke:
+    # Hermetic e2e smoke: every cycle's read/diff/apply loop against the
+    # stateful mock GitHub (e2e/mock-github/server.mjs — plain node, no docker,
+    # no credentials, seconds to run). The nightly real-App e2e (e2e.yml) stays
+    # the only thing that validates the live API contract.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: mock smoke
+        env:
+          GITHUB_WARDEN_E2E_URL: http://localhost:8188
+        run: |
+          node e2e/mock-github/server.mjs &
+          for i in $(seq 1 50); do
+            curl -fsS http://localhost:8188/__mock/health >/dev/null 2>&1 && break
+            sleep 0.2
+          done
+          curl -fsS http://localhost:8188/__mock/health >/dev/null
+          npm run test:e2e
+
   dogfood-audit:
     runs-on: ubuntu-latest
     timeout-minutes: 5
