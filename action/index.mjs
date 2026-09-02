@@ -232821,6 +232821,7 @@ var package_default = {
   ],
   scripts: {
     tsc: "tsc --noEmit",
+    "lint:prose": "bash mkdocs-stage.sh && node scripts/lint-prose.mjs $(find _docs -name '*.md')",
     test: "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     build: "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
@@ -232836,6 +232837,7 @@ var package_default = {
     "@types/node": "^22.0.0",
     esbuild: "^0.28.0",
     "libsodium-wrappers": "^0.8.4",
+    sentences: "^0.1.1",
     typescript: "^5.9.3",
     vitest: "^4.1.9"
   }
