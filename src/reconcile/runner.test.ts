@@ -4,6 +4,9 @@ import type { Cycle, RateBudget } from "./runner.js";
 import type { AppClient } from "../auth/app-client.js";
 import type { ChangeSetEntry, LiveOrgState } from "./diff.js";
 import type { GovernanceConfig, OrgConfig } from "../config/types.js";
+import { loadGovernanceConfig } from "../config/load.js";
+import { securityFeaturesCycle } from "../cycles/security-features.js";
+import { secretsVariablesCycle } from "../cycles/secrets-variables.js";
 
 // ---------------------------------------------------------------------------
 // Mock client — records every request; the runner itself never calls request,
@@ -555,5 +558,74 @@ describe("runReconcile — rate budget", () => {
     expect(result.deferred.skippedCycles).toHaveLength(0);
     expect(result.deferred.skippedEntries).toHaveLength(0);
     expect(result.budgetRemaining).toBe(99);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLI-loaded config reachability — slices that the loader forwards reach their
+// cycle's buildDesired through the runner. These use the REAL cycles with a
+// config produced by loadGovernanceConfig (the CLI path), proving end-to-end
+// that a slice typed in config/types.ts is planned, not silently dropped.
+// ---------------------------------------------------------------------------
+
+describe("runReconcile — CLI-loaded config reaches cycle buildDesired", () => {
+  it("per-repo security from a loaded config is planned by the security-features cycle", async () => {
+    // A client whose GETs return an empty object: the live repo exists but has
+    // no security_and_analysis block, so declared toggles surface as an update.
+    const client: AppClient = {
+      async request<T = unknown>(): Promise<T> {
+        return {} as T;
+      },
+    };
+    const config = loadGovernanceConfig({
+      orgs: {
+        "test-org": {
+          repos: {
+            api: {
+              security: { secretScanning: true },
+            },
+          },
+        },
+      },
+    });
+
+    // Scope points fetchLive at the declared repos so the nested
+    // repo-security diff runs against a live repo entry.
+    const result = await runReconcile({
+      config,
+      client,
+      cycles: [securityFeaturesCycle as Cycle<unknown>],
+      scope: { repos: config.orgs["test-org"].repos },
+    });
+
+    expect(result.completed).toBe(true);
+    const cr = result.cycles[0]!;
+    expect(cr.counts.update).toBe(1);
+    expect(cr.plan).toContain("[repo-security] api");
+    expect(cr.plan).toContain("secretScanning");
+  });
+
+  it("org secrets from a loaded config are planned by the secrets-variables cycle", async () => {
+    const client = makeMockClient();
+    const config = loadGovernanceConfig({
+      orgs: {
+        "test-org": {
+          secrets: [{ name: "DEPLOY_KEY", rotationRef: "TICKET-42" }],
+        },
+      },
+    });
+
+    // The mock client returns no live secrets, so the declared org secret must
+    // surface as a create in the dry-run plan.
+    const result = await runReconcile({
+      config,
+      client,
+      cycles: [secretsVariablesCycle as Cycle<unknown>],
+    });
+
+    expect(result.completed).toBe(true);
+    const cr = result.cycles[0]!;
+    expect(cr.counts.create).toBe(1);
+    expect(cr.plan).toContain("[org-secret] DEPLOY_KEY");
   });
 });

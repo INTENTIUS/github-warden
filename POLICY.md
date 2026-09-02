@@ -23,34 +23,23 @@ It is the one file you must author.
   Owned deletes still run the guardrails (`removalDeltaCap` etc.) before any
   apply.
 
-Two authoring notes:
-
-- **YAML subset.** The CLI ships a small built-in YAML reader: block-style
-  mappings and sequences, string/bool/number scalars, comments. No flow style
-  (`{ }` / `[ ]`), no multi-line scalars (`|` / `>`), no anchors. For anything
-  richer, such as the multi-line `dependabot.content`, use JSON.
-- **Loader coverage (v0.3.x).** The CLI's config loader currently validates and
-  forwards these slices: `owned`, `settings`, `members`, `teams` (without
-  `previously`), and `repos` (the scalar repo settings, `branchProtection`,
-  and `topics`).
-  The remaining slices below are declared in the schema and consumed by their
-  cycles, but the v0.3.x loader does not yet pass them through from a config
-  file; they are reachable programmatically via `runReconcile`. Each is marked
-  **[typed]** in the example. Check `src/config/load.ts` in your installed
-  version before relying on a [typed] slice from YAML.
+One authoring note: the CLI ships a small built-in YAML reader that handles
+block-style mappings and sequences, string/bool/number scalars, and comments.
+No flow style
+(`{ }` / `[ ]`), no multi-line scalars (`|` / `>`), no anchors. For anything
+richer, such as the multi-line `dependabot.content`, use JSON.
 
 ## A complete policy
 
 Copy this, delete what you don't want managed, and edit it. Every field in the
-schema is shown. Comments name the cycle that consumes each slice, and mark
-**[wired]** (the CLI loader forwards it) vs **[typed]** (schema + cycle exist;
-CLI loader passthrough pending, see above).
+schema is shown, and the loader validates and forwards every slice. Comments
+name the cycle that consumes each slice.
 
 ```yaml
 orgs:
   my-org:                                  # keyed by org login; one entry per org
 
-    # ── Ownership ── consumed by the diff of every cycle ── [wired] ─────────
+    # ── Ownership ── consumed by the diff of every cycle ────────────────────
     # Gates deletes. Absent/false (default): nothing is owned, no deletes are
     # ever planned. true: every reconciled collection is owned; live resources
     # missing from this policy are planned for deletion. A list limits
@@ -58,7 +47,7 @@ orgs:
     # branch-protection, org-variable). Guardrails still apply.
     owned: false
 
-    # ── Org settings ── cycle: org-settings ── [wired] ──────────────────────
+    # ── Org settings ── cycle: org-settings ─────────────────────────────────
     # PATCH /orgs/{org} is a partial update: only declared keys are sent.
     settings:
       description: Engineering org         # public org profile description
@@ -70,7 +59,7 @@ orgs:
       defaultRepositoryPermission: read    # none | read | write | admin
       requireTwoFactorAuthentication: true # surfaced for drift; read-only on most plans
 
-    # ── Org membership & roles ── cycle: membership ── [wired] ──────────────
+    # ── Org membership & roles ── cycle: membership ─────────────────────────
     # Adds / re-roles declared members. Removal of undeclared members is
     # ownership-gated (never happens from the CLI); when removals are enabled,
     # the member-aware guardrails (adminFloor etc.) gate the apply.
@@ -79,14 +68,14 @@ orgs:
         role: admin                        # member | admin; default member
       - login: bob
 
-    # ── Teams ── cycle: teams ── [wired, except `previously`] ───────────────
+    # ── Teams ── cycle: teams ───────────────────────────────────────────────
     # Keyed by team slug. Emits team, team-member, and team-repo entries.
     teams:
       backend:
         description: Backend services team
         privacy: closed                    # secret (default) | closed
         parentTeamSlug: engineering        # nest under another team
-        previously: platform-be            # [typed] rename hint: collapses
+        previously: platform-be            # rename hint: collapses
                                            # delete(platform-be)+create(backend)
                                            # into one update; never sent to GitHub
         members:                           # absent -> membership not managed
@@ -99,7 +88,7 @@ orgs:
     # ── Repositories ── keyed by repo name (no org prefix) ──────────────────
     repos:
       api:
-        # ── Repo settings ── cycle: repo-settings ── [wired] ────────────────
+        # ── Repo settings ── cycle: repo-settings ───────────────────────────
         description: Public API service
         websiteUrl: https://api.example.com
         private: true
@@ -115,7 +104,7 @@ orgs:
           - service
           - api
 
-        # ── Classic branch protection ── cycle: branch-protection ── [wired] ─
+        # ── Classic branch protection ── cycle: branch-protection ───────────
         # One entry per branch pattern. The live-state probe only resolves
         # literal branch names; wildcard patterns exist on GitHub but are not
         # discovered (see the cycles doc).
@@ -134,7 +123,7 @@ orgs:
             allowDeletions: false
             requireLinearHistory: true
 
-        # ── Repo rulesets ── cycle: rulesets ── [typed] ─────────────────────
+        # ── Repo rulesets ── cycle: rulesets ────────────────────────────────
         # The modern branch-protection replacement. bypassActors / conditions /
         # rules use GitHub's native snake_case API shape, forwarded verbatim.
         rulesets:
@@ -149,7 +138,7 @@ orgs:
             rules:
               - type: pull_request
 
-        # ── Security features ── cycle: security-features ── [typed] ────────
+        # ── Security features ── cycle: security-features ───────────────────
         # GHAS-gated features that your plan lacks surface as reported failed
         # entries, not a crashed run.
         security:
@@ -159,7 +148,7 @@ orgs:
           vulnerabilityAlerts: true
           dependabotSecurityUpdates: true
 
-        # ── Deployment environments ── cycle: environments ── [typed] ───────
+        # ── Deployment environments ── cycle: environments ──────────────────
         environments:
           - name: production
             waitTimer: 10                  # minutes, 0-43200
@@ -171,7 +160,7 @@ orgs:
               protectedBranches: true      # absent -> not managed
               customBranchPolicies: false
 
-        # ── Repo Actions secrets/variables ── cycle: secrets-variables ── [typed]
+        # ── Repo Actions secrets/variables ── cycle: secrets-variables ──────
         secrets:                           # PRESENCE only; values never touched
           - name: DEPLOY_KEY
             rotationRef: OPS-123           # informational; never sent or diffed
@@ -179,13 +168,13 @@ orgs:
           - name: SERVICE_TIER
             value: gold
 
-        # ── Dependabot config file ── cycle: dependency-hygiene ── [typed] ──
+        # ── Dependabot config file ── cycle: dependency-hygiene ─────────────
         # Ensures .github/dependabot.yml exists and matches `content` exactly.
         # content is multi-line, so author this slice in JSON.
         dependabot:
           content: "version: 2\n..."
 
-    # ── Org rulesets ── cycle: rulesets ── [typed] ──────────────────────────
+    # ── Org rulesets ── cycle: rulesets ─────────────────────────────────────
     rulesets:
       - name: org-default-protection
         target: branch
@@ -198,7 +187,7 @@ orgs:
         rules:
           - type: pull_request
 
-    # ── Org Actions secrets/variables ── cycle: secrets-variables ── [typed] ─
+    # ── Org Actions secrets/variables ── cycle: secrets-variables ───────────
     secrets:
       - name: ORG_DEPLOY_TOKEN             # presence only; provision out-of-band
     variables:
@@ -207,7 +196,7 @@ orgs:
         visibility: all                    # all (default) | private | selected
                                            # (org-level create only)
 
-    # ── Repo provisioning ── cycle: repo-baseline ── [typed] ────────────────
+    # ── Repo provisioning ── cycle: repo-baseline ───────────────────────────
     # Ensures declared repos EXIST (creates missing ones, optionally from a
     # template). Never updates or deletes a repo.
     repoBaselines:
@@ -215,7 +204,7 @@ orgs:
         template: my-org/service-template  # "owner/repo"; omit for an empty repo
         private: true                      # default true
 
-    # ── Fine-grained PAT sweep ── cycle: token-governance ── [typed] ────────
+    # ── Fine-grained PAT sweep ── cycle: token-governance ───────────────────
     # GitHub App auth required. Revokes a grant's ORG ACCESS on violation;
     # PATs themselves cannot be rotated or created via the API.
     tokenPolicy:
@@ -223,7 +212,7 @@ orgs:
       maxLifetimeDays: 90                  # 1-366; older grants revoked
       maxIdleDays: 60                      # staler grants revoked
 
-    # ── Pending PAT requests ── cycle: token-approval ── [typed] ────────────
+    # ── Pending PAT requests ── cycle: token-approval ───────────────────────
     # GitHub App auth required. Approves a request only when EVERY requested
     # permission (flattened to group:scope) is allowed; otherwise `default`.
     tokenApproval:
@@ -232,7 +221,7 @@ orgs:
         - repository:metadata
       default: manual                      # deny | manual (default manual)
 
-    # ── Machine users ── consumed by `report --identity` ── [typed] ─────────
+    # ── Machine users ── consumed by `report --identity` ────────────────────
     # Operator-declared service-account logins; the identity report flags any
     # that consume an org seat and suggests migrating them to GitHub Apps.
     machineUsers:
@@ -283,7 +272,7 @@ consumes the field.
 | `description` | string | not managed | teams | Team description. |
 | `privacy` | `secret` \| `closed` | not managed (GitHub default `secret`) | teams | Team visibility. |
 | `parentTeamSlug` | string | not managed | teams | Parent team for nesting. |
-| `previously` | string | not managed | teams | Former slug; a rename hint for the guardrail layer only, never written to GitHub. Not forwarded by the v0.3.x CLI loader. |
+| `previously` | string | not managed | teams | Former slug; a rename hint for the guardrail layer only, never written to GitHub. |
 | `members[]` | list | absent → membership not managed | teams | `{ login (required), role: member (default) \| maintainer }`. |
 | `repos[]` | list | absent → repo access not managed | teams | `{ name (required), permission (required): pull \| triage \| push \| maintain \| admin }`. |
 

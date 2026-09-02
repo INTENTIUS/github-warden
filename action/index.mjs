@@ -232925,6 +232925,7 @@ function normalizeTeamConfig(raw, field) {
   if (obj.description !== void 0) team.description = assertString(obj.description, `${field}.description`);
   if (obj.privacy !== void 0) team.privacy = assertEnum(obj.privacy, `${field}.privacy`, ["secret", "closed"]);
   if (obj.parentTeamSlug !== void 0) team.parentTeamSlug = assertString(obj.parentTeamSlug, `${field}.parentTeamSlug`);
+  if (obj.previously !== void 0) team.previously = assertString(obj.previously, `${field}.previously`);
   if (obj.members !== void 0) {
     const arr = assertArray(obj.members, `${field}.members`);
     team.members = arr.map((m, i) => normalizeTeamMember(m, `${field}.members[${i}]`));
@@ -232976,6 +232977,135 @@ function normalizeBranchProtection(raw, field) {
   if (obj.requireLinearHistory !== void 0) bp.requireLinearHistory = assertBoolean(obj.requireLinearHistory, `${field}.requireLinearHistory`);
   return bp;
 }
+function normalizeRuleset(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.name === void 0) throw new GovernanceConfigError(`${field}.name`, "required field missing");
+  const ruleset = { name: assertString(obj.name, `${field}.name`) };
+  if (obj.target !== void 0) ruleset.target = assertEnum(obj.target, `${field}.target`, ["branch", "tag", "push"]);
+  if (obj.enforcement !== void 0) ruleset.enforcement = assertEnum(obj.enforcement, `${field}.enforcement`, ["active", "evaluate", "disabled"]);
+  if (obj.bypassActors !== void 0) {
+    const arr = assertArray(obj.bypassActors, `${field}.bypassActors`);
+    ruleset.bypassActors = arr.map((a, i) => assertObject(a, `${field}.bypassActors[${i}]`));
+  }
+  if (obj.conditions !== void 0) ruleset.conditions = assertObject(obj.conditions, `${field}.conditions`);
+  if (obj.rules !== void 0) {
+    const arr = assertArray(obj.rules, `${field}.rules`);
+    ruleset.rules = arr.map((r, i) => assertObject(r, `${field}.rules[${i}]`));
+  }
+  return ruleset;
+}
+function normalizeRulesets(raw, field) {
+  const arr = assertArray(raw, field);
+  return arr.map((r, i) => normalizeRuleset(r, `${field}[${i}]`));
+}
+function normalizeSecret(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.name === void 0) throw new GovernanceConfigError(`${field}.name`, "required field missing");
+  const secret = { name: assertString(obj.name, `${field}.name`) };
+  if (obj.rotationRef !== void 0) secret.rotationRef = assertString(obj.rotationRef, `${field}.rotationRef`);
+  return secret;
+}
+function normalizeSecrets(raw, field) {
+  const arr = assertArray(raw, field);
+  return arr.map((s, i) => normalizeSecret(s, `${field}[${i}]`));
+}
+function normalizeVariable(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.name === void 0) throw new GovernanceConfigError(`${field}.name`, "required field missing");
+  const variable = { name: assertString(obj.name, `${field}.name`) };
+  if (obj.value !== void 0) variable.value = assertString(obj.value, `${field}.value`);
+  if (obj.visibility !== void 0) variable.visibility = assertEnum(obj.visibility, `${field}.visibility`, ["all", "private", "selected"]);
+  return variable;
+}
+function normalizeVariables(raw, field) {
+  const arr = assertArray(raw, field);
+  return arr.map((v, i) => normalizeVariable(v, `${field}[${i}]`));
+}
+function normalizeEnvironmentReviewer(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.type === void 0) throw new GovernanceConfigError(`${field}.type`, "required field missing");
+  if (obj.id === void 0) throw new GovernanceConfigError(`${field}.id`, "required field missing");
+  return {
+    type: assertEnum(obj.type, `${field}.type`, ["User", "Team"]),
+    id: assertNumber(obj.id, `${field}.id`)
+  };
+}
+function normalizeDeploymentBranchPolicy(raw, field) {
+  if (raw === null) return null;
+  const obj = assertObject(raw, field);
+  const policy = {};
+  if (obj.protectedBranches !== void 0) policy.protectedBranches = assertBoolean(obj.protectedBranches, `${field}.protectedBranches`);
+  if (obj.customBranchPolicies !== void 0) policy.customBranchPolicies = assertBoolean(obj.customBranchPolicies, `${field}.customBranchPolicies`);
+  return policy;
+}
+function normalizeEnvironment(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.name === void 0) throw new GovernanceConfigError(`${field}.name`, "required field missing");
+  const env2 = { name: assertString(obj.name, `${field}.name`) };
+  if (obj.waitTimer !== void 0) env2.waitTimer = assertNumber(obj.waitTimer, `${field}.waitTimer`);
+  if (obj.preventSelfReview !== void 0) env2.preventSelfReview = assertBoolean(obj.preventSelfReview, `${field}.preventSelfReview`);
+  if (obj.reviewers !== void 0) {
+    const arr = assertArray(obj.reviewers, `${field}.reviewers`);
+    env2.reviewers = arr.map((r, i) => normalizeEnvironmentReviewer(r, `${field}.reviewers[${i}]`));
+  }
+  if (obj.deploymentBranchPolicy !== void 0) {
+    env2.deploymentBranchPolicy = normalizeDeploymentBranchPolicy(obj.deploymentBranchPolicy, `${field}.deploymentBranchPolicy`);
+  }
+  return env2;
+}
+function normalizeEnvironments(raw, field) {
+  const arr = assertArray(raw, field);
+  return arr.map((e, i) => normalizeEnvironment(e, `${field}[${i}]`));
+}
+function normalizeRepoSecurity(raw, field) {
+  const obj = assertObject(raw, field);
+  const security = {};
+  if (obj.advancedSecurity !== void 0) security.advancedSecurity = assertBoolean(obj.advancedSecurity, `${field}.advancedSecurity`);
+  if (obj.secretScanning !== void 0) security.secretScanning = assertBoolean(obj.secretScanning, `${field}.secretScanning`);
+  if (obj.secretScanningPushProtection !== void 0) security.secretScanningPushProtection = assertBoolean(obj.secretScanningPushProtection, `${field}.secretScanningPushProtection`);
+  if (obj.vulnerabilityAlerts !== void 0) security.vulnerabilityAlerts = assertBoolean(obj.vulnerabilityAlerts, `${field}.vulnerabilityAlerts`);
+  if (obj.dependabotSecurityUpdates !== void 0) security.dependabotSecurityUpdates = assertBoolean(obj.dependabotSecurityUpdates, `${field}.dependabotSecurityUpdates`);
+  return security;
+}
+function normalizeDependabot(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.content === void 0) throw new GovernanceConfigError(`${field}.content`, "required field missing");
+  return { content: assertString(obj.content, `${field}.content`) };
+}
+function normalizeRepoBaseline(raw, field) {
+  const obj = assertObject(raw, field);
+  if (obj.name === void 0) throw new GovernanceConfigError(`${field}.name`, "required field missing");
+  const baseline = { name: assertString(obj.name, `${field}.name`) };
+  if (obj.template !== void 0) baseline.template = assertString(obj.template, `${field}.template`);
+  if (obj.private !== void 0) baseline.private = assertBoolean(obj.private, `${field}.private`);
+  return baseline;
+}
+function normalizeRepoBaselines(raw, field) {
+  const arr = assertArray(raw, field);
+  return arr.map((b, i) => normalizeRepoBaseline(b, `${field}[${i}]`));
+}
+function normalizeMachineUsers(raw, field) {
+  const arr = assertArray(raw, field);
+  return arr.map((u, i) => assertString(u, `${field}[${i}]`));
+}
+function normalizeTokenPolicy(raw, field) {
+  const obj = assertObject(raw, field);
+  const policy = {};
+  if (obj.revokeExpired !== void 0) policy.revokeExpired = assertBoolean(obj.revokeExpired, `${field}.revokeExpired`);
+  if (obj.maxLifetimeDays !== void 0) policy.maxLifetimeDays = assertNumber(obj.maxLifetimeDays, `${field}.maxLifetimeDays`);
+  if (obj.maxIdleDays !== void 0) policy.maxIdleDays = assertNumber(obj.maxIdleDays, `${field}.maxIdleDays`);
+  return policy;
+}
+function normalizeTokenApproval(raw, field) {
+  const obj = assertObject(raw, field);
+  const policy = {};
+  if (obj.allowedPermissions !== void 0) {
+    const arr = assertArray(obj.allowedPermissions, `${field}.allowedPermissions`);
+    policy.allowedPermissions = arr.map((p, i) => assertString(p, `${field}.allowedPermissions[${i}]`));
+  }
+  if (obj.default !== void 0) policy.default = assertEnum(obj.default, `${field}.default`, ["deny", "manual"]);
+  return policy;
+}
 function normalizeRepoConfig(raw, field) {
   const obj = assertObject(raw, field);
   const repo = {};
@@ -232998,6 +233128,12 @@ function normalizeRepoConfig(raw, field) {
     const arr = assertArray(obj.topics, `${field}.topics`);
     repo.topics = arr.map((t, i) => assertString(t, `${field}.topics[${i}]`));
   }
+  if (obj.rulesets !== void 0) repo.rulesets = normalizeRulesets(obj.rulesets, `${field}.rulesets`);
+  if (obj.security !== void 0) repo.security = normalizeRepoSecurity(obj.security, `${field}.security`);
+  if (obj.environments !== void 0) repo.environments = normalizeEnvironments(obj.environments, `${field}.environments`);
+  if (obj.secrets !== void 0) repo.secrets = normalizeSecrets(obj.secrets, `${field}.secrets`);
+  if (obj.variables !== void 0) repo.variables = normalizeVariables(obj.variables, `${field}.variables`);
+  if (obj.dependabot !== void 0) repo.dependabot = normalizeDependabot(obj.dependabot, `${field}.dependabot`);
   return repo;
 }
 function normalizeRepos(raw, field) {
@@ -233024,6 +233160,13 @@ function normalizeOrgConfig(raw, field) {
   if (obj.teams !== void 0) org.teams = normalizeTeams(obj.teams, `${field}.teams`);
   if (obj.members !== void 0) org.members = normalizeMembers(obj.members, `${field}.members`);
   if (obj.repos !== void 0) org.repos = normalizeRepos(obj.repos, `${field}.repos`);
+  if (obj.rulesets !== void 0) org.rulesets = normalizeRulesets(obj.rulesets, `${field}.rulesets`);
+  if (obj.secrets !== void 0) org.secrets = normalizeSecrets(obj.secrets, `${field}.secrets`);
+  if (obj.variables !== void 0) org.variables = normalizeVariables(obj.variables, `${field}.variables`);
+  if (obj.repoBaselines !== void 0) org.repoBaselines = normalizeRepoBaselines(obj.repoBaselines, `${field}.repoBaselines`);
+  if (obj.machineUsers !== void 0) org.machineUsers = normalizeMachineUsers(obj.machineUsers, `${field}.machineUsers`);
+  if (obj.tokenPolicy !== void 0) org.tokenPolicy = normalizeTokenPolicy(obj.tokenPolicy, `${field}.tokenPolicy`);
+  if (obj.tokenApproval !== void 0) org.tokenApproval = normalizeTokenApproval(obj.tokenApproval, `${field}.tokenApproval`);
   return org;
 }
 function loadGovernanceConfig(input) {
