@@ -35,7 +35,7 @@
  * A `TeamConfig.previously` slug marks a rename. Its effect is at the GUARDRAIL
  * layer: `resolveRenames` collapses a `delete(previously)` + `create(slug)`
  * pair into a single update so the rename does not count against
- * `removalDeltaCap` (a rename is not a mass-deletion). The delete half only
+ * `removalLiveCap` (a rename is not a mass-deletion). The delete half only
  * exists when the old slug is owned (`DiffOptions.isOwned`); with the safe
  * default (no ownership predicate) a renamed team is emitted purely as a
  * create, leaving the old team in place — nothing is deleted, so nothing is

@@ -23,7 +23,7 @@
  *
  * A violation is emitted by the diff as an UPDATE on a "token-grant" resource
  * (meaning "revoke org access"), not a delete — so a routine revocation sweep
- * does not trip the removalDeltaCap guardrail. The violation logic itself lives
+ * does not trip the removalLiveCap guardrail. The violation logic itself lives
  * in `evaluateTokenViolation` (pure, in diff.ts) and is exercised against the
  * `nowMs` the runner injects.
  */

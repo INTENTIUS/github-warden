@@ -70,13 +70,14 @@ export type {
   LiveTokenRequest,
   LiveOrgState,
 } from "./reconcile/diff.js";
-export { diff, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
+export { diff, countLiveManaged, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
 
 // Reconcile: guardrails
 export type {
   GuardrailDiagnostic,
   GuardrailResult,
   RemovalDeltaCapOptions,
+  RemovalLiveCapOptions,
   AdminFloorOptions,
   RequiredAdminsOptions,
   RequireSelfOptions,
@@ -85,6 +86,7 @@ export type {
 export {
   resolveRenames,
   removalDeltaCap,
+  removalLiveCap,
   adminFloor,
   requiredAdmins,
   requireSelf,

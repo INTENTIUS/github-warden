@@ -629,3 +629,137 @@ describe("runReconcile — CLI-loaded config reaches cycle buildDesired", () => 
     expect(cr.plan).toContain("[org-secret] DEPLOY_KEY");
   });
 });
+
+// ---------------------------------------------------------------------------
+// removalLiveCap wiring — the runner pairs each cycle×org's change set with the
+// live denominator computed from the SAME diff invocation.
+// ---------------------------------------------------------------------------
+
+describe("runReconcile — removalLiveCap (live denominator)", () => {
+  /** Live state with `count` members (2 admins + fillers). */
+  function liveMembers(count: number): LiveOrgState {
+    return {
+      members: [
+        { login: "admin1", role: "admin" },
+        { login: "admin2", role: "admin" },
+        ...Array.from({ length: count - 2 }, (_, i) => ({
+          login: `user${i}`,
+          role: "member" as const,
+        })),
+      ],
+    };
+  }
+
+  /** Desired keeping the admins plus the first `keep` fillers. */
+  function desiredKeeping(keep: number): OrgConfig {
+    return {
+      members: [
+        { login: "admin1", role: "admin" },
+        { login: "admin2", role: "admin" },
+        ...Array.from({ length: keep }, (_, i) => ({
+          login: `user${i}`,
+          role: "member" as const,
+        })),
+      ],
+    };
+  }
+
+  it("one stale delete out of 10 live members passes (converged cycle)", async () => {
+    // 9 of 10 live members are declared; the 10th is a stale delete. Under the
+    // old plan denominator this was 1 delete / 1 non-create entry = 100% and a
+    // guaranteed block; under the live denominator it is 10% and passes.
+    const cycle = makeFakeCycle({ live: liveMembers(10), desired: desiredKeeping(7) });
+
+    const result = await runReconcile({
+      config: { orgs: { "test-org": { owned: ["member"], members: [] } } },
+      client: makeMockClient(),
+      cycles: [cycle],
+      mode: "apply",
+    });
+
+    const cr = result.cycles[0]!;
+    expect(cr.counts.delete).toBe(1);
+    expect(cr.guardrails.ok).toBe(true);
+    expect(cr.guardrailBlocked).toBe(false);
+    expect(cycle.applied).toHaveLength(1);
+  });
+
+  it("4 deletes out of 10 live members blocks", async () => {
+    const cycle = makeFakeCycle({ live: liveMembers(10), desired: desiredKeeping(4) });
+
+    const result = await runReconcile({
+      config: { orgs: { "test-org": { owned: ["member"], members: [] } } },
+      client: makeMockClient(),
+      cycles: [cycle],
+      mode: "apply",
+    });
+
+    const cr = result.cycles[0]!;
+    expect(cr.counts.delete).toBe(4);
+    expect(cr.guardrails.ok).toBe(false);
+    if (!cr.guardrails.ok) {
+      expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalLiveCap");
+      expect(cr.guardrails.diagnostics[0]!.message).toContain("4 of 10 live managed entries");
+    }
+    expect(cr.guardrailBlocked).toBe(true);
+    expect(cycle.applied).toHaveLength(0);
+  });
+
+  it("locks the diff→guardrails sequencing: each org's guardrails see that org's live total", async () => {
+    // Two orgs through one cycle. org-a has 10 live members and 1 stale delete
+    // (10% — passes); org-b has 4 live members and 1 stale delete (25%+ with a
+    // tightened threshold — blocks). The runner captures the live denominator
+    // from the diff call immediately preceding each guardrail evaluation, so a
+    // sequencing break (a guardrail seeing the OTHER org's total) would flip
+    // one of these outcomes.
+    const liveByOrg: Record<string, LiveOrgState> = {
+      "org-a": liveMembers(10),
+      "org-b": liveMembers(4),
+    };
+    const desiredByOrg: Record<string, OrgConfig> = {
+      "org-a": desiredKeeping(7), // 1 delete of 10 live = 10%
+      "org-b": desiredKeeping(1), // 1 delete of 4 live = 25% → blocks at 20%
+    };
+
+    const applied: string[] = [];
+    const cycle: Cycle = {
+      name: "seq-check",
+      async fetchLive(_client, orgLogin) {
+        return liveByOrg[orgLogin]!;
+      },
+      buildDesired(_config, orgLogin) {
+        return desiredByOrg[orgLogin]!;
+      },
+      async apply(_client, entry, orgLogin) {
+        applied.push(`${orgLogin}:${entry.key}`);
+      },
+    };
+
+    const result = await runReconcile({
+      config: {
+        orgs: {
+          "org-a": { owned: ["member"] },
+          "org-b": { owned: ["member"] },
+        },
+      },
+      client: makeMockClient(),
+      cycles: [cycle],
+      mode: "apply",
+      guardrails: { removalLiveCap: { maxFraction: 0.2 } },
+    });
+
+    const byOrg = Object.fromEntries(result.cycles.map((c) => [c.org, c]));
+    expect(byOrg["org-a"]!.guardrails.ok).toBe(true);
+    expect(byOrg["org-a"]!.guardrailBlocked).toBe(false);
+    expect(byOrg["org-b"]!.guardrails.ok).toBe(false);
+    expect(byOrg["org-b"]!.guardrailBlocked).toBe(true);
+    if (!byOrg["org-b"]!.guardrails.ok) {
+      expect(byOrg["org-b"]!.guardrails.diagnostics[0]!.message).toContain(
+        "1 of 4 live managed entries",
+      );
+    }
+    // Only org-a's entries were applied — org-b was blocked.
+    expect(applied.length).toBeGreaterThan(0);
+    expect(applied.every((k) => k.startsWith("org-a:"))).toBe(true);
+  });
+});

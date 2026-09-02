@@ -237,7 +237,7 @@ Before any apply, warden runs safety checks and refuses dangerous changes
 
 | Guardrail | What it refuses or protects |
 |---|---|
-| `removalDeltaCap` | Refuses if deletes exceed 25% of pre-existing managed entries (typo protection). |
+| `removalLiveCap` | Refuses if deletes exceed 25% of the live entries in the declared collections (typo protection). With nothing live it falls back to chant's plan-denominator `removalDeltaCap`. |
 | `adminFloor` | Refuses if fewer than 2 org admins would remain. |
 | `requiredAdmins` / `requireSelf` | Keep named admins (and the managing identity) from being removed. |
 | rename-without-loss | A `previously` alias collapses a delete+create into an update, so a rename doesn't count as a deletion. |

@@ -20,7 +20,7 @@ It is the one file you must author.
   resource collection it reconciles there; `owned: [team, repo, ...]` limits
   ownership to the listed change-set resource types. A programmatic
   `diffOptions.isOwned` predicate, when supplied, overrides the declaration.
-  Owned deletes still run the guardrails (`removalDeltaCap` etc.) before any
+  Owned deletes still run the guardrails (`removalLiveCap` etc.) before any
   apply.
 
 One authoring note: the CLI ships a small built-in YAML reader that handles
@@ -416,8 +416,8 @@ only approve or deny; the requested repo scope cannot be changed.
 
 ## What the policy does not declare
 
-- **Guardrail thresholds.** `removalDeltaCap` (default: deletes capped at 25%
-  of pre-existing managed entries), `adminFloor` (default: at least 2 org
+- **Guardrail thresholds.** `removalLiveCap` (default: deletes capped at 25%
+  of the live entries in the declared collections), `adminFloor` (default: at least 2 org
   admins must remain), `requiredAdmins`, and `requireSelf` are configured
   programmatically (`runReconcile({ guardrails })`), not in the policy file.
   The CLI runs with the defaults; `--allow-guardrail-override` applies anyway

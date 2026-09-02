@@ -298,6 +298,62 @@ export function diff(
 }
 
 // ---------------------------------------------------------------------------
+// countLiveManaged — live denominator for the removalLiveCap guardrail
+// ---------------------------------------------------------------------------
+
+/**
+ * Count the LIVE entries in the collections the desired config declares — the
+ * denominator for the `removalLiveCap` guardrail.
+ *
+ * Uses the same declared-slice conditions as `diff` (a collection absent from
+ * `desired` is not managed, so its live entries do not count), and counts only
+ * the collections whose diff can emit ownership-gated deletes: teams (plus
+ * per-team members/repos where declared), org members, repos (plus per-repo
+ * branch protection, rulesets, environments, secrets, and variables where
+ * declared), org rulesets, and org secrets/variables. Singleton slices
+ * (org-settings, repo-security, dependabot) and the never-deleting token and
+ * repo-baseline slices never produce deletes and are excluded.
+ *
+ * Pure and deterministic; computed per diff invocation so the runner can pair
+ * each change set with its own live denominator.
+ */
+export function countLiveManaged(desired: OrgConfig, live: LiveOrgState): number {
+  let n = 0;
+
+  if (desired.rulesets !== undefined) n += (live.rulesets ?? []).length;
+  if (desired.secrets !== undefined) n += (live.secrets ?? []).length;
+  if (desired.variables !== undefined) n += (live.variables ?? []).length;
+  if (desired.members !== undefined) n += (live.members ?? []).length;
+
+  if (desired.teams !== undefined) {
+    const liveTeams = live.teams ?? {};
+    n += Object.keys(liveTeams).length;
+    for (const [slug, dt] of Object.entries(desired.teams)) {
+      const lt = liveTeams[slug];
+      if (!lt) continue;
+      if (dt.members !== undefined) n += (lt.members ?? []).length;
+      if (dt.repos !== undefined) n += (lt.repos ?? []).length;
+    }
+  }
+
+  if (desired.repos !== undefined) {
+    const liveRepos = live.repos ?? {};
+    n += Object.keys(liveRepos).length;
+    for (const [name, dr] of Object.entries(desired.repos)) {
+      const lr = liveRepos[name];
+      if (!lr) continue;
+      if (dr.branchProtection !== undefined) n += (lr.branchProtection ?? []).length;
+      if (dr.rulesets !== undefined) n += (lr.rulesets ?? []).length;
+      if (dr.environments !== undefined) n += (lr.environments ?? []).length;
+      if (dr.secrets !== undefined) n += (lr.secrets ?? []).length;
+      if (dr.variables !== undefined) n += (lr.variables ?? []).length;
+    }
+  }
+
+  return n;
+}
+
+// ---------------------------------------------------------------------------
 // Org settings
 // ---------------------------------------------------------------------------
 
@@ -828,7 +884,7 @@ export function evaluateTokenViolation(
  * Diff org token grants against the governance policy. A violating grant is
  * emitted as an UPDATE (resource type "token-grant", key = grant id) meaning
  * "revoke org access" — modelled as an update, not a delete, so a routine
- * revocation sweep does not trip the removalDeltaCap guardrail.
+ * revocation sweep does not trip the removalLiveCap guardrail.
  */
 function diffTokenGrants(
   policy: TokenPolicyConfig | undefined,
