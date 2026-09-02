@@ -545,3 +545,137 @@ describe("renderChangeSet", () => {
     expect(output).toContain("New");
   });
 });
+
+// ---------------------------------------------------------------------------
+// managedCounts — per-type live denominators for removalDeltaCap
+// ---------------------------------------------------------------------------
+
+describe("diff — managedCounts (per-type live counts)", () => {
+  it("counts each declared delete-capable collection under its own resource type", () => {
+    const desired: OrgConfig = {
+      members: [{ login: "alice" }],
+      teams: {
+        platform: {
+          members: [{ login: "alice" }],
+          repos: [{ name: "app", permission: "push" }],
+        },
+      },
+      rulesets: [{ name: "org-baseline" }],
+      secrets: [{ name: "ORG_KEY" }],
+      variables: [{ name: "ENV" }],
+      repos: {
+        app: {
+          branchProtection: [{ pattern: "main" }],
+          rulesets: [{ name: "protect-main" }],
+          environments: [{ name: "production" }],
+          secrets: [{ name: "APP_KEY" }],
+          variables: [{ name: "REGION" }],
+        },
+      },
+    };
+    const live: LiveOrgState = {
+      members: [
+        { login: "alice", role: "member" },
+        { login: "bob", role: "member" },
+      ],
+      teams: {
+        platform: {
+          members: [
+            { login: "alice", role: "member" },
+            { login: "stray", role: "member" },
+          ],
+          repos: [{ name: "app", permission: "push" }],
+        },
+        ghost: {},
+      },
+      rulesets: [{ name: "org-baseline" }, { name: "stray" }],
+      secrets: [{ name: "ORG_KEY" }],
+      variables: [{ name: "ENV" }, { name: "STRAY" }],
+      repos: {
+        app: {
+          branchProtection: [{ pattern: "main" }, { pattern: "release/*" }],
+          rulesets: [{ name: "protect-main" }],
+          environments: [{ name: "production" }, { name: "staging" }],
+          secrets: [{ name: "APP_KEY" }],
+          variables: [{ name: "REGION" }],
+        },
+        extra: {},
+      },
+    };
+
+    const cs = diff("my-org", desired, live, ownAll());
+    expect(cs.managedCounts).toEqual({
+      member: 2,
+      team: 2,
+      "team-member": 2,
+      "team-repo": 1,
+      "org-ruleset": 2,
+      "org-secret": 1,
+      "org-variable": 2,
+      repo: 2,
+      "branch-protection": 2,
+      "repo-ruleset": 1,
+      environment: 2,
+      "repo-secret": 1,
+      "repo-variable": 1,
+    });
+  });
+
+  it("an undeclared collection contributes no count (selective-by-omission)", () => {
+    const desired: OrgConfig = { members: [{ login: "alice" }] };
+    const live: LiveOrgState = {
+      members: [{ login: "alice", role: "member" }],
+      teams: { ghost: {} },
+      repos: { extra: {} },
+      rulesets: [{ name: "stray" }],
+    };
+    const cs = diff("my-org", desired, live, noOwnership());
+    expect(cs.managedCounts).toEqual({ member: 1 });
+  });
+
+  it("never-deleting slices contribute no count", () => {
+    // org-settings, repo-security, dependabot, repo baselines, and the token
+    // slices can never emit a delete, so they must not appear as denominators.
+    const desired: OrgConfig = {
+      settings: { description: "d" },
+      repoBaselines: [{ name: "provisioned" }],
+      tokenPolicy: { revokeExpired: true },
+      tokenApproval: { default: "manual" },
+      repos: {
+        app: {
+          security: { secretScanning: true },
+          dependabot: { content: "version: 2\n" },
+        },
+      },
+    };
+    const live: LiveOrgState = {
+      settings: { description: "d" },
+      repos: {
+        app: {
+          security: { secretScanning: true },
+          dependabot: { content: "version: 2\n" },
+        },
+      },
+      tokenGrants: [{ id: 1 }],
+      tokenRequests: [{ id: 2, permissions: [] }],
+    };
+    const cs = diff("my-org", desired, live, ownAll());
+    expect(cs.managedCounts).toEqual({ repo: 1 });
+  });
+
+  it("nested collections are only counted for repos/teams that exist live", () => {
+    // "new-repo" is a create — its declared environments have no live
+    // counterpart to count. Only app's live environments enter the denominator.
+    const desired: OrgConfig = {
+      repos: {
+        app: { environments: [{ name: "production" }] },
+        "new-repo": { environments: [{ name: "production" }] },
+      },
+    };
+    const live: LiveOrgState = {
+      repos: { app: { environments: [{ name: "production" }, { name: "staging" }] } },
+    };
+    const cs = diff("my-org", desired, live, ownAll());
+    expect(cs.managedCounts).toEqual({ repo: 1, environment: 2 });
+  });
+});

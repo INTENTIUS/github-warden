@@ -5,7 +5,10 @@
  * before any mutation. Run between diff and apply; if any trips, the apply is
  * refused with a structured result.
  *
- * None of these functions throw. Every check returns structured diagnostics.
+ * A tripped guardrail returns structured diagnostics. Misconfiguration, by
+ * contrast, THROWS — `runGuardrails` refuses an unknown `GuardrailConfig` key
+ * (a stale key must fail closed, not silently drop a safety option), and
+ * chant's `removalDeltaCap` throws on a `maxFraction` outside (0,1].
  *
  * ## Rename-without-loss
  * A member or resource may carry a `previously` alias field in the desired
@@ -14,7 +17,8 @@
  * rename (update) rather than a mass-deletion signal.
  *
  * ## Configurable thresholds (defaults)
- * - `removalDeltaCap.maxFraction` — 0.25 (25 % of live managed entries)
+ * - `removalDeltaCap.maxFraction` — 0.25 (25 % per resource type, measured
+ *   against that type's live managed entries — `ChangeSet.managedCounts`)
  * - `adminFloor.min`              — 2 (at least 2 admins must remain)
  */
 
@@ -57,9 +61,11 @@ export interface RequireSelfOptions {
 /** Full guardrail config passed to `runGuardrails`. */
 export interface GuardrailConfig {
   /**
-   * Options for chant's removal cap. `managedTotal` is normally supplied by the
-   * runner (the live count from `countLiveManaged`); setting it here only
-   * matters for callers that invoke `runGuardrails` without a live total.
+   * Options for chant's removal cap, forwarded to `removalDeltaCap` verbatim.
+   * The per-type live denominators normally come from the change set itself
+   * (`ChangeSet.managedCounts`, stamped by warden's `diff`); options given
+   * here follow chant's own precedence — e.g. `managedTotals` overrides the
+   * change set's counts, and `maxFraction` tightens or loosens the cap.
    */
   removalDeltaCap?: RemovalDeltaCapOptions;
   adminFloor?: AdminFloorOptions;
@@ -67,11 +73,78 @@ export interface GuardrailConfig {
   requireSelf?: RequireSelfOptions;
 }
 
+/** The GuardrailConfig keys `runGuardrails` accepts. */
+const KNOWN_GUARDRAIL_CONFIG_KEYS = new Set<string>([
+  "removalDeltaCap",
+  "adminFloor",
+  "requiredAdmins",
+  "requireSelf",
+]);
+
 // `resolveRenames` and the removal cap are the provider-agnostic guardrails —
-// chant's `removalDeltaCap` takes a `managedTotal` live denominator (chant
-// #2067), so warden passes the `countLiveManaged` value straight through and
-// carries no removal-cap logic of its own. The member-aware guardrails below
-// build on the same change-set model.
+// chant's `removalDeltaCap` reads the per-type live denominators warden's
+// `diff` stamps on the change set (`managedCounts`), so warden carries no
+// removal-cap logic of its own. The member-aware guardrails below build on the
+// same change-set model.
+
+// ---------------------------------------------------------------------------
+// Post-apply membership view (shared by the member-aware guardrails)
+// ---------------------------------------------------------------------------
+
+/**
+ * The org membership as it would look after applying the ChangeSet. Computed
+ * once per `runGuardrails` call and shared by `adminFloor`, `requiredAdmins`,
+ * and `requireSelf`.
+ */
+export interface PostApplyMembers {
+  /** login → post-apply org role. A login absent here loses membership. */
+  roles: Map<string, string>;
+  /** Logins whose post-apply role is "admin". */
+  admins: Set<string>;
+}
+
+/**
+ * Compute the post-apply membership view from the live roster and the
+ * (rename-resolved) ChangeSet. A rename collapsed into an update whose
+ * resulting login differs from the prior login drops the prior login, so a
+ * renamed-away admin no longer counts as surviving — otherwise the ghost
+ * would keep the member-aware guardrails fail-open.
+ */
+export function computePostApplyMembers(
+  changeSet: ChangeSet,
+  liveMembers: LiveMemberConfig[],
+): PostApplyMembers {
+  const roles = new Map<string, string>(liveMembers.map((m) => [m.login, m.role]));
+
+  for (const e of changeSet.entries) {
+    if (e.resourceType !== "member") continue;
+
+    if (e.kind === "delete") {
+      roles.delete(e.key);
+    } else if (e.kind === "create" || e.kind === "update") {
+      const after = e.after as { login?: string; role?: string } | undefined;
+      const login = after?.login ?? e.key;
+
+      if (e.kind === "update") {
+        const before = e.before as { login?: string } | undefined;
+        const priorLogin = before?.login ?? e.key;
+        if (priorLogin !== login) roles.delete(priorLogin);
+      }
+
+      // The diff always stamps a role on member entries; default to the org
+      // default ("member") if one is ever absent — fail closed, never a
+      // phantom admin.
+      roles.set(login, after?.role ?? "member");
+    }
+  }
+
+  const admins = new Set<string>();
+  for (const [login, role] of roles) {
+    if (role === "admin") admins.add(login);
+  }
+
+  return { roles, admins };
+}
 
 // ---------------------------------------------------------------------------
 // Individual guardrails (member-aware, GitHub-specific)
@@ -80,7 +153,8 @@ export interface GuardrailConfig {
 /**
  * Refuse if the apply would leave fewer than `min` org admins.
  *
- * Computes the post-apply admin count from the live snapshot and the ChangeSet.
+ * Computes the post-apply admin count from the live snapshot and the ChangeSet
+ * (or reuses a precomputed `postApply` view when the caller has one).
  *
  * Default `min`: 2.
  */
@@ -88,13 +162,11 @@ export function adminFloor(
   changeSet: ChangeSet,
   live: LiveOrgState,
   opts: AdminFloorOptions = {},
+  postApply?: PostApplyMembers,
 ): GuardrailDiagnostic | null {
   const min = opts.min ?? 2;
-  const liveMembers = live.members ?? [];
-
-  // Build effective post-apply admin set
-  const postApplyAdmins = computePostApplyAdmins(changeSet, liveMembers);
-  const count = postApplyAdmins.size;
+  const { admins } = postApply ?? computePostApplyMembers(changeSet, live.members ?? []);
+  const count = admins.size;
 
   if (count < min) {
     return {
@@ -115,13 +187,13 @@ export function requiredAdmins(
   changeSet: ChangeSet,
   live: LiveOrgState,
   opts: RequiredAdminsOptions,
+  postApply?: PostApplyMembers,
 ): GuardrailDiagnostic | null {
   if (opts.logins.length === 0) return null;
 
-  const liveMembers = live.members ?? [];
-  const postApplyAdmins = computePostApplyAdmins(changeSet, liveMembers);
+  const { admins } = postApply ?? computePostApplyMembers(changeSet, live.members ?? []);
 
-  const missing = opts.logins.filter((login) => !postApplyAdmins.has(login));
+  const missing = opts.logins.filter((login) => !admins.has(login));
 
   if (missing.length > 0) {
     return {
@@ -145,23 +217,11 @@ export function requireSelf(
   changeSet: ChangeSet,
   live: LiveOrgState,
   opts: RequireSelfOptions,
+  postApply?: PostApplyMembers,
 ): GuardrailDiagnostic | null {
   const { selfLogin } = opts;
-  const liveMembers = live.members ?? [];
-
-  // Compute post-apply membership (any role) for selfLogin
-  const liveByLogin = new Map(liveMembers.map((m) => [m.login, m]));
-  let role: string | null = liveByLogin.get(selfLogin)?.role ?? null;
-
-  for (const e of changeSet.entries) {
-    if (e.resourceType !== "member" || e.key !== selfLogin) continue;
-    if (e.kind === "delete") {
-      role = null;
-    } else if (e.kind === "create" || e.kind === "update") {
-      const after = e.after as { role?: string } | undefined;
-      role = after?.role ?? role;
-    }
-  }
+  const { roles } = postApply ?? computePostApplyMembers(changeSet, live.members ?? []);
+  const role = roles.get(selfLogin) ?? null;
 
   if (role === null) {
     return {
@@ -196,34 +256,47 @@ export function requireSelf(
  * Returns `{ ok: true }` when no guardrail trips, or
  * `{ ok: false, diagnostics }` with every tripped guardrail's message.
  *
+ * Throws on an unknown `config` key: a stale option (e.g. the removed
+ * `removalLiveCap`) must fail closed rather than silently loosen the run.
+ *
  * Rename aliases are resolved ONCE here before any check runs. All individual
  * guardrail functions (`removalDeltaCap`, `adminFloor`, etc.) receive the
  * pre-resolved ChangeSet and MUST NOT call `resolveRenames` themselves.
  * This guarantees a single traversal and a consistent view of renames across
- * all checks — a rename is collapsed to an update exactly once.
+ * all checks — a rename is collapsed to an update exactly once. The post-apply
+ * membership view is likewise computed once and shared by the member-aware
+ * checks.
  *
- * `liveManagedTotal` is the live-entry count for the declared collections of
- * the cycle being checked (see `countLiveManaged` in `diff.ts`); the runner
- * captures it from the diff call that produced `changeSet` and it becomes
- * `removalDeltaCap`'s `managedTotal` denominator. When 0 or omitted, the cap
- * keeps chant's plan-relative behavior.
+ * `config.removalDeltaCap` is forwarded to chant's `removalDeltaCap` verbatim;
+ * with no options the cap reads the change set's own per-type live counts
+ * (`ChangeSet.managedCounts`, stamped by warden's `diff`) and only falls back
+ * to plan-relative counting for a change set carrying none.
  */
 export function runGuardrails(
   changeSet: ChangeSet,
   live: LiveOrgState,
   config: GuardrailConfig = {},
-  liveManagedTotal = 0,
 ): GuardrailResult {
+  for (const key of Object.keys(config)) {
+    if (!KNOWN_GUARDRAIL_CONFIG_KEYS.has(key)) {
+      throw new Error(
+        `runGuardrails: unknown GuardrailConfig key "${key}" ` +
+          `(known keys: ${[...KNOWN_GUARDRAIL_CONFIG_KEYS].join(", ")}). ` +
+          `Refusing to run with an unrecognized guardrail option — a stale key ` +
+          `must not silently weaken the apply.`,
+      );
+    }
+  }
+
   // Resolve renames once; all checks receive the pre-resolved set.
   const resolved = resolveRenames(changeSet);
 
   const diagnostics: GuardrailDiagnostic[] = [];
 
-  const cap = removalDeltaCap(resolved, {
-    maxFraction: config.removalDeltaCap?.maxFraction,
-    managedTotal:
-      liveManagedTotal > 0 ? liveManagedTotal : config.removalDeltaCap?.managedTotal,
-  });
+  // Forward the caller's cap options VERBATIM: chant owns the precedence
+  // (options managedTotals → change-set managedCounts → pooled → plan-relative)
+  // and rebuilding the object field-by-field would drop future options.
+  const cap = removalDeltaCap(resolved, { ...config.removalDeltaCap });
   if (cap) diagnostics.push(cap);
 
   // The member-aware guardrails only make sense for a change set with member
@@ -235,68 +308,22 @@ export function runGuardrails(
     live.members !== undefined || resolved.entries.some((e) => e.resourceType === "member");
 
   if (memberAware) {
-    const floor = adminFloor(resolved, live, config.adminFloor);
+    const postApply = computePostApplyMembers(resolved, live.members ?? []);
+
+    const floor = adminFloor(resolved, live, config.adminFloor, postApply);
     if (floor) diagnostics.push(floor);
 
     if (config.requiredAdmins) {
-      const req = requiredAdmins(resolved, live, config.requiredAdmins);
+      const req = requiredAdmins(resolved, live, config.requiredAdmins, postApply);
       if (req) diagnostics.push(req);
     }
 
     if (config.requireSelf) {
-      const self = requireSelf(resolved, live, config.requireSelf);
+      const self = requireSelf(resolved, live, config.requireSelf, postApply);
       if (self) diagnostics.push(self);
     }
   }
 
   if (diagnostics.length > 0) return { ok: false, diagnostics };
   return { ok: true };
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Compute the set of admin logins that would exist after applying the ChangeSet.
- */
-function computePostApplyAdmins(
-  changeSet: ChangeSet,
-  liveMembers: LiveMemberConfig[],
-): Set<string> {
-  const liveAdmins = new Map<string, string>(
-    liveMembers.filter((m) => m.role === "admin").map((m) => [m.login, m.role]),
-  );
-
-  const result = new Set(liveAdmins.keys());
-
-  for (const e of changeSet.entries) {
-    if (e.resourceType !== "member") continue;
-
-    if (e.kind === "delete") {
-      result.delete(e.key);
-    } else if (e.kind === "create" || e.kind === "update") {
-      const after = e.after as { login?: string; role?: string } | undefined;
-      const login = after?.login ?? e.key;
-
-      // A rename is collapsed into an update whose resulting login differs from
-      // the prior login (carried in `before`/`key`). Drop the prior login so a
-      // renamed-away admin no longer counts as surviving — otherwise the ghost
-      // would keep adminFloor/requiredAdmins fail-open.
-      if (e.kind === "update") {
-        const before = e.before as { login?: string } | undefined;
-        const priorLogin = before?.login ?? e.key;
-        if (priorLogin !== login) result.delete(priorLogin);
-      }
-
-      if (after?.role === "admin") {
-        result.add(login);
-      } else {
-        // create/update to member role → not an admin
-        result.delete(login);
-      }
-    }
-  }
-
-  return result;
 }

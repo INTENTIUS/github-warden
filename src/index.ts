@@ -70,7 +70,7 @@ export type {
   LiveTokenRequest,
   LiveOrgState,
 } from "./reconcile/diff.js";
-export { diff, countLiveManaged, normalizeRulesetConditions, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
+export { diff, normalizeRulesetConditions, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
 
 // Reconcile: guardrails
 export type {
@@ -81,6 +81,7 @@ export type {
   RequiredAdminsOptions,
   RequireSelfOptions,
   GuardrailConfig,
+  PostApplyMembers,
 } from "./reconcile/guardrails.js";
 export {
   resolveRenames,
@@ -88,6 +89,7 @@ export {
   adminFloor,
   requiredAdmins,
   requireSelf,
+  computePostApplyMembers,
   runGuardrails,
 } from "./reconcile/guardrails.js";
 

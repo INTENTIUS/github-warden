@@ -11,7 +11,7 @@
 
 import type { AppClient } from "../auth/app-client.js";
 import type { GovernanceConfig, OrgConfig } from "../config/types.js";
-import { diff, countLiveManaged } from "./diff.js";
+import { diff } from "./diff.js";
 import type { LiveOrgState, DiffOptions } from "./diff.js";
 import { runGuardrails } from "./guardrails.js";
 import type { GuardrailConfig } from "./guardrails.js";
@@ -90,13 +90,6 @@ function ownedPredicate(
 export async function runReconcile<TScope = unknown>(
   opts: RunReconcileOptions<TScope>,
 ): Promise<ReconcileResult> {
-  // Live denominator (removalDeltaCap's managedTotal). The shared loop runs
-  // strictly sequentially per scope×cycle — diff, then guardrails, for the SAME
-  // scope and cycle, before the next pair starts — so capturing the count from
-  // the immediately preceding diff call pairs each change set with its own
-  // live total (a sequencing assumption locked by a runner test).
-  let liveManagedTotal = 0;
-
   // Clear notes a previous (crashed/errored) run may have left behind.
   drainNotes();
 
@@ -106,16 +99,18 @@ export async function runReconcile<TScope = unknown>(
     cycles: opts.cycles,
     scope: opts.scope,
     mode: opts.mode,
-    diff: (scopeId, desired, live, dopts) => {
-      liveManagedTotal = countLiveManaged(desired, live);
-      return diff(scopeId, desired, live, {
+    // The diff stamps `managedCounts` (per-type live denominators for
+    // removalDeltaCap) on each change set it returns, so every guardrail
+    // evaluation carries its own live counts — no side channel between the
+    // diff and guardrail callbacks.
+    diff: (scopeId, desired, live, dopts) =>
+      diff(scopeId, desired, live, {
         ...dopts,
         isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
         nowMs: dopts.nowMs ?? Date.now(),
-      });
-    },
+      }),
     guardrails: (changeSet, live) =>
-      runGuardrails(changeSet, live, opts.guardrails ?? {}, liveManagedTotal),
+      runGuardrails(changeSet, live, opts.guardrails ?? {}),
     diffOptions: opts.diffOptions,
     allowGuardrailOverride: opts.allowGuardrailOverride,
     requestBudget: opts.requestBudget,

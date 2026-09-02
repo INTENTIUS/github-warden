@@ -631,11 +631,12 @@ describe("runReconcile — CLI-loaded config reaches cycle buildDesired", () => 
 });
 
 // ---------------------------------------------------------------------------
-// removalDeltaCap wiring — the runner pairs each cycle×org's change set with
-// the live denominator (managedTotal) computed from the SAME diff invocation.
+// removalDeltaCap wiring — each change set carries its own per-type live
+// denominators (`managedCounts`, stamped by the diff), so the guardrails a
+// cycle×org sees are always measured against that change set's live counts.
 // ---------------------------------------------------------------------------
 
-describe("runReconcile — removalDeltaCap (live denominator)", () => {
+describe("runReconcile — removalDeltaCap (per-type live denominators)", () => {
   /** Live state with `count` members (2 admins + fillers). */
   function liveMembers(count: number): LiveOrgState {
     return {
@@ -699,19 +700,18 @@ describe("runReconcile — removalDeltaCap (live denominator)", () => {
     expect(cr.guardrails.ok).toBe(false);
     if (!cr.guardrails.ok) {
       expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalDeltaCap");
-      expect(cr.guardrails.diagnostics[0]!.message).toContain("4 of 10 live managed entries");
+      expect(cr.guardrails.diagnostics[0]!.message).toContain("4 of 10 live member entries");
     }
     expect(cr.guardrailBlocked).toBe(true);
     expect(cycle.applied).toHaveLength(0);
   });
 
-  it("locks the diff→guardrails sequencing: each org's guardrails see that org's live total", async () => {
+  it("multi-org: each org's guardrails see that org's own live counts", async () => {
     // Two orgs through one cycle. org-a has 10 live members and 1 stale delete
-    // (10% — passes); org-b has 4 live members and 1 stale delete (25%+ with a
-    // tightened threshold — blocks). The runner captures the live denominator
-    // from the diff call immediately preceding each guardrail evaluation, so a
-    // sequencing break (a guardrail seeing the OTHER org's total) would flip
-    // one of these outcomes.
+    // (10% — passes); org-b has 4 live members and 1 stale delete (25% — blocks
+    // at a tightened 20% threshold, which also proves the caller's cap options
+    // reach chant). The denominators travel ON each change set (managedCounts),
+    // so each org's guardrails are measured against that org's own live state.
     const liveByOrg: Record<string, LiveOrgState> = {
       "org-a": liveMembers(10),
       "org-b": liveMembers(4),
@@ -723,7 +723,7 @@ describe("runReconcile — removalDeltaCap (live denominator)", () => {
 
     const applied: string[] = [];
     const cycle: Cycle = {
-      name: "seq-check",
+      name: "per-org-counts",
       async fetchLive(_client, orgLogin) {
         return liveByOrg[orgLogin]!;
       },
@@ -755,7 +755,7 @@ describe("runReconcile — removalDeltaCap (live denominator)", () => {
     expect(byOrg["org-b"]!.guardrailBlocked).toBe(true);
     if (!byOrg["org-b"]!.guardrails.ok) {
       expect(byOrg["org-b"]!.guardrails.diagnostics[0]!.message).toContain(
-        "1 of 4 live managed entries",
+        "1 of 4 live member entries",
       );
     }
     // Only org-a's entries were applied — org-b was blocked.

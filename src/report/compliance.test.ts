@@ -11,6 +11,7 @@ import {
   complianceArtifact,
 } from "./compliance.js";
 import type { ReconcileResult, CycleResult } from "../reconcile/runner.js";
+import { runGuardrails } from "../reconcile/guardrails.js";
 import type { PostureReport } from "../audit/engine.js";
 import { buildIdentityReport } from "./identity.js";
 
@@ -214,6 +215,62 @@ describe("renderComplianceReport", () => {
     const out = renderComplianceReport(buildComplianceReport([]));
     expect(out).toContain("(no cycle results)");
     expect(out).toContain("status: CLEAN");
+  });
+
+  it("keeps the removalDeltaCap id, with messages that tell live from plan-relative trips", () => {
+    // Real guardrail evaluations, not hand-written diagnostics: the same plan
+    // (4 member deletes) tripped once against a change set carrying live
+    // per-type counts and once against one without. The compliance entry keeps
+    // the stable `removalDeltaCap` id for both, and chant's message shape is
+    // what distinguishes them — "live" vs "planned" denominators.
+    const deletes = Array.from({ length: 4 }, (_, i) => ({
+      kind: "delete" as const,
+      resourceType: "member",
+      key: `d${i}`,
+      before: {},
+    }));
+    const roster = {
+      members: [
+        { login: "admin1", role: "admin" as const },
+        { login: "admin2", role: "admin" as const },
+      ],
+    };
+    const live = runGuardrails(
+      { org: "test-org", entries: deletes, managedCounts: { member: 10 } },
+      roster,
+    );
+    const planRelative = runGuardrails({ org: "test-org", entries: deletes }, roster);
+
+    expect(live.ok).toBe(false);
+    expect(planRelative.ok).toBe(false);
+    if (live.ok || planRelative.ok) return;
+    expect(live.diagnostics[0]!.message).toContain("4 of 10 live member entries (40%)");
+    expect(planRelative.diagnostics[0]!.message).toContain("4 of 4 managed entries (100%)");
+
+    const report = buildComplianceReport([
+      reconcileResult({
+        mode: "apply",
+        cycles: [
+          cycleResult({
+            name: "membership",
+            counts: { create: 0, update: 0, delete: 4 },
+            guardrails: live,
+            guardrailBlocked: true,
+          }),
+          cycleResult({
+            name: "membership",
+            org: "org-b",
+            counts: { create: 0, update: 0, delete: 4 },
+            guardrails: planRelative,
+            guardrailBlocked: true,
+          }),
+        ],
+      }),
+    ]);
+    expect(report.cycles[0]!.guardrails.tripped).toEqual(["removalDeltaCap"]);
+    expect(report.cycles[1]!.guardrails.tripped).toEqual(["removalDeltaCap"]);
+    const out = renderComplianceReport(report);
+    expect(out).toContain("GUARDRAIL-BLOCKED[removalDeltaCap]");
   });
 });
 

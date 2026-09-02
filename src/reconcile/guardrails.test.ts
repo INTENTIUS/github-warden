@@ -7,8 +7,10 @@ import {
   requireSelf,
   runGuardrails,
 } from "./guardrails.js";
+import { diff } from "./diff.js";
 import type { ChangeSet } from "./diff.js";
 import type { LiveOrgState } from "./diff.js";
+import type { OrgConfig } from "../config/types.js";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -564,72 +566,128 @@ describe("runGuardrails", () => {
 });
 
 // ---------------------------------------------------------------------------
-// removalDeltaCap — live denominator (managedTotal, chant#2067)
+// removalDeltaCap — per-collection live denominators (warden wiring)
+//
+// These go through warden's own diff() (which stamps `managedCounts` on the
+// change set) and runGuardrails (which forwards cap options to chant
+// verbatim) — not chant's primitives directly — so they lock warden's wiring,
+// not chant's already-tested behavior.
 // ---------------------------------------------------------------------------
 
-describe("removalDeltaCap with managedTotal", () => {
-  it("passes one stale delete against 10 live managed entries (10%)", () => {
-    // The plan-relative cap would read this converged cycle as
-    // 1 delete / 1 non-create entry = 100% and trip; the live denominator
-    // reads it as 1 of 10 = 10% and passes.
-    const cs = makeChangeSet([
-      { kind: "delete", resourceType: "member", key: "stale", before: {} },
-    ]);
-    expect(removalDeltaCap(cs, { managedTotal: 10 })).toBeNull();
+describe("removalDeltaCap — per-collection live denominators via diff() + runGuardrails", () => {
+  /** Live org with 2 admins + `fillers` member fillers. */
+  function liveOrgMembers(fillers: number): LiveOrgState {
+    return {
+      members: [
+        { login: "admin1", role: "admin" as const },
+        { login: "admin2", role: "admin" as const },
+        ...Array.from({ length: fillers }, (_, i) => ({
+          login: `user${i}`,
+          role: "member" as const,
+        })),
+      ],
+    };
+  }
+
+  /** Desired members keeping the admins + the first `keep` fillers. */
+  function desiredMembers(keep: number): OrgConfig {
+    return {
+      members: [
+        { login: "admin1", role: "admin" as const },
+        { login: "admin2", role: "admin" as const },
+        ...Array.from({ length: keep }, (_, i) => ({
+          login: `user${i}`,
+          role: "member" as const,
+        })),
+      ],
+    };
+  }
+
+  const memberOwned = { isOwned: (t: string) => t === "member" };
+
+  it("a converged cycle's one stale delete passes against the type's live count", () => {
+    // 9 of 10 live members declared; the stale 10th is the only plan entry.
+    // Plan-relative that is 1 of 1 = 100%; against the diff-stamped live
+    // member count it is 1 of 10 = 10% and passes.
+    const live = liveOrgMembers(8);
+    const cs = diff("test-org", desiredMembers(7), live, memberOwned);
+    expect(cs.entries).toHaveLength(1);
+    expect(cs.managedCounts).toMatchObject({ member: 10 });
+    expect(runGuardrails(cs, live).ok).toBe(true);
   });
 
-  it("blocks 4 deletes against 10 live managed entries (40%)", () => {
-    const cs = makeChangeSet(
-      Array.from({ length: 4 }, (_, i) => ({
-        kind: "delete" as const,
-        resourceType: "member",
-        key: `d${i}`,
-        before: {},
-      })),
-    );
-    const result = removalDeltaCap(cs, { managedTotal: 10 });
-    expect(result).not.toBeNull();
-    expect(result!.guardrail).toBe("removalDeltaCap");
-    expect(result!.message).toContain("4 of 10 live managed entries (40%)");
-    expect(result!.message).toMatch(/25% threshold/);
+  it("blocks with the per-type denominator and type in the message", () => {
+    // 4 deletes of 10 live members = 40% > 25%.
+    const live = liveOrgMembers(8);
+    const cs = diff("test-org", desiredMembers(4), live, memberOwned);
+    const result = runGuardrails(cs, live);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics[0]!.guardrail).toBe("removalDeltaCap");
+      expect(result.diagnostics[0]!.message).toContain("4 of 10 live member entries (40%)");
+      expect(result.diagnostics[0]!.message).toMatch(/25% threshold/);
+    }
   });
 
-  it("honours a custom maxFraction", () => {
-    const cs = makeChangeSet([
-      { kind: "delete", resourceType: "member", key: "a", before: {} },
-    ]);
-    expect(removalDeltaCap(cs, { managedTotal: 10, maxFraction: 0.05 })).not.toBeNull();
-    expect(removalDeltaCap(cs, { managedTotal: 10, maxFraction: 0.5 })).toBeNull();
+  it("live entries of one type cannot dilute a wipe of another", () => {
+    // 10 live repos (all declared — no repo deletes) and 3 live environments
+    // of which the policy keeps 1: 2 deletes of 3 live environment entries
+    // (67%). The pooled 0.55.0 denominator read this as 2 of 13 (15%) and
+    // waved the wipe through.
+    const repoNames = Array.from({ length: 10 }, (_, i) => `repo${i}`);
+    const desired: OrgConfig = {
+      repos: Object.fromEntries(
+        repoNames.map((name) => [
+          name,
+          name === "repo0" ? { environments: [{ name: "production" }] } : {},
+        ]),
+      ),
+    };
+    const live: LiveOrgState = {
+      repos: Object.fromEntries(
+        repoNames.map((name) => [
+          name,
+          name === "repo0"
+            ? { environments: [{ name: "production" }, { name: "staging" }, { name: "scratch" }] }
+            : {},
+        ]),
+      ),
+    };
+    const cs = diff("test-org", desired, live, { isOwned: (t) => t === "environment" });
+    expect(cs.managedCounts).toMatchObject({ repo: 10, environment: 3 });
+
+    const result = runGuardrails(cs, live);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics[0]!.guardrail).toBe("removalDeltaCap");
+      expect(result.diagnostics[0]!.message).toContain("2 of 3 live environment entries (67%)");
+    }
   });
 
-  it("keeps the plan-relative behavior when managedTotal is 0", () => {
-    // 6 deletes + 2 updates = 75% of the plan denominator. With no live total
-    // the cap must behave exactly like the plan-relative form.
-    const cs = makeChangeSet([
-      ...Array.from({ length: 6 }, (_, i) => ({
-        kind: "delete" as const,
-        resourceType: "member",
-        key: `d${i}`,
-        before: {},
-      })),
-      ...Array.from({ length: 2 }, (_, i) => ({
-        kind: "update" as const,
-        resourceType: "member",
-        key: `u${i}`,
-        before: {},
-        after: {},
-      })),
-    ]);
-    const viaZeroTotal = removalDeltaCap(cs, { managedTotal: 0 });
-    const viaPlanRelative = removalDeltaCap(cs);
-    expect(viaZeroTotal).toEqual(viaPlanRelative);
-    expect(viaZeroTotal!.guardrail).toBe("removalDeltaCap");
-
-    // And an empty plan passes through the fallback too.
-    expect(removalDeltaCap(makeChangeSet([]), { managedTotal: 0 })).toBeNull();
+  it("passes caller cap options through verbatim (maxFraction)", () => {
+    const live = liveOrgMembers(8);
+    const cs = diff("test-org", desiredMembers(7), live, memberOwned); // 1 of 10 = 10%
+    expect(runGuardrails(cs, live, { removalDeltaCap: { maxFraction: 0.05 } }).ok).toBe(false);
+    expect(runGuardrails(cs, live, { removalDeltaCap: { maxFraction: 0.5 } }).ok).toBe(true);
   });
 
-  it("runGuardrails wires the live total through as managedTotal", () => {
+  it("passes caller cap options through verbatim (managedTotals wins over the diff's counts)", () => {
+    // 4 of 10 live members blocks by default; a caller-supplied per-type
+    // total takes precedence over the change set's managedCounts (chant's own
+    // precedence — the option must reach chant unmodified).
+    const live = liveOrgMembers(8);
+    const cs = diff("test-org", desiredMembers(4), live, memberOwned);
+    expect(runGuardrails(cs, live).ok).toBe(false);
+    const overridden = runGuardrails(cs, live, {
+      removalDeltaCap: { managedTotals: { member: 100 } },
+    });
+    expect(overridden.ok).toBe(true);
+  });
+
+  it("config-fallback: a pooled managedTotal from config applies when the change set has no counts", () => {
+    // A hand-built change set (no managedCounts) with 1 delete is 100%
+    // plan-relative and blocks; a caller-supplied pooled total is the only
+    // denominator source and must not be dropped or shadowed.
     const cs = makeChangeSet([
       { kind: "delete", resourceType: "member", key: "stale", before: {} },
     ]);
@@ -637,15 +695,48 @@ describe("removalDeltaCap with managedTotal", () => {
       { login: "admin1", role: "admin" },
       { login: "admin2", role: "admin" },
     ]);
-    // 1 delete of 10 live → passes with the live denominator...
-    expect(runGuardrails(cs, live, {}, 10).ok).toBe(true);
-    // ...but the same plan with liveManagedTotal 0 falls back to the plan
-    // denominator (1 of 1 = 100%) and blocks.
-    const blocked = runGuardrails(cs, live, {}, 0);
-    expect(blocked.ok).toBe(false);
-    // removalDeltaCap options flow through too.
-    const custom = runGuardrails(cs, live, { removalDeltaCap: { maxFraction: 0.05 } }, 10);
-    expect(custom.ok).toBe(false);
+    expect(runGuardrails(cs, live).ok).toBe(false);
+    expect(runGuardrails(cs, live, { removalDeltaCap: { managedTotal: 10 } }).ok).toBe(true);
+  });
+
+  it("a type without a live count falls back to its own plan non-creates", () => {
+    // Membership is the managed slice; the plan also carries a team delete
+    // from a hand-built entry. The team type has no live count in
+    // managedCounts, so its fraction is measured against its own plan
+    // non-creates (1 of 1 = 100%) — never against another type's live pool.
+    const live = liveOrgMembers(8);
+    const cs = diff("test-org", desiredMembers(8), live, memberOwned);
+    const withTeamDelete: ChangeSet = {
+      ...cs,
+      entries: [
+        ...cs.entries,
+        { kind: "delete", resourceType: "team", key: "ghost", before: {} },
+      ],
+    };
+    const result = runGuardrails(withTeamDelete, live);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics[0]!.message).toContain("1 of 1 planned team entries (100%)");
+    }
+  });
+
+  it("throws on a maxFraction outside (0,1] instead of disabling the cap", () => {
+    const live = liveOrgMembers(0);
+    const cs = diff("test-org", desiredMembers(0), live, memberOwned);
+    expect(() => runGuardrails(cs, live, { removalDeltaCap: { maxFraction: 5 } })).toThrow(
+      /maxFraction/,
+    );
+  });
+
+  it("throws on an unknown GuardrailConfig key, naming the key", () => {
+    // A stale 0.4.0-era `removalLiveCap` block must fail closed instead of
+    // being silently ignored (which would loosen the run).
+    const live = liveOrgMembers(0);
+    const cs = diff("test-org", desiredMembers(0), live, memberOwned);
+    const stale = { removalLiveCap: { maxFraction: 1 } } as unknown as Parameters<
+      typeof runGuardrails
+    >[2];
+    expect(() => runGuardrails(cs, live, stale)).toThrow(/removalLiveCap/);
   });
 });
 
@@ -671,11 +762,16 @@ describe("runGuardrails — member-visibility gate", () => {
   });
 
   it("still runs the member guardrails when the plan carries member entries", () => {
-    const cs = makeChangeSet([
-      { kind: "delete", resourceType: "member", key: "only-admin", before: { login: "only-admin", role: "admin" } },
-    ]);
+    const cs: ChangeSet = {
+      ...makeChangeSet([
+        { kind: "delete", resourceType: "member", key: "only-admin", before: { login: "only-admin", role: "admin" } },
+      ]),
+      // A live member count that keeps the removal cap quiet (1 of 10 = 10%),
+      // so the tripped diagnostic below is unambiguously the admin floor.
+      managedCounts: { member: 10 },
+    };
     // No live roster, but the plan touches members → the floor evaluates.
-    const result = runGuardrails(cs, emptyLive(), {}, 10);
+    const result = runGuardrails(cs, emptyLive());
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.diagnostics.map((d) => d.guardrail)).toContain("adminFloor");

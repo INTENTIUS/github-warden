@@ -58,13 +58,13 @@ does not exist for that cycle (the reason is noted). Deletes run under
 |---|---|---|---|---|---|---|
 | org-settings | yes | yes | yes | yes (description) | n/a (singleton) | — |
 | repo-settings | yes | yes | yes | yes (has_issues) | n/a (never deletes repos) | — |
-| membership | yes | yes | yes | yes (role escalation) | yes (1/4 in cap; 1/3 BLOCKED) | — |
-| teams | yes | yes | yes | yes (description) | yes (1/4 in cap) | — |
+| membership | yes | yes | yes | yes (role escalation) | yes (1/4 live members in cap; 1/3 BLOCKED) | — |
+| teams | yes | yes | yes | yes (description) | yes (1/2 live teams, cap raised) | — |
 | branch-protection | yes | yes | yes | yes (re-protect) | n/a (probe reads declared patterns only) | — |
-| rulesets | yes | yes | yes (incl. exclude echo) | yes (enforcement) | yes (1/4 in cap) | — |
+| rulesets | yes | yes | yes (incl. exclude echo) | yes (enforcement) | yes (1/2 live org rulesets, cap raised) | — |
 | security-features | yes | yes | yes | yes (alerts re-enable) | n/a (toggles) | — |
-| environments | yes | yes | yes | yes (wait timer) | yes (1/3, cap raised) | — |
-| secrets-variables | yes | yes | yes | yes (variable value) | yes (1/6 in cap) | yes (injected org-variables 403 → plan NOTE) |
+| environments | yes | yes | yes | yes (wait timer) | yes (1/2 live environments, cap raised) | — |
+| secrets-variables | yes | yes | yes | yes (variable value) | yes (1/2 live org variables, cap raised) | yes (injected org-variables 403 → plan NOTE) |
 | dependency-hygiene | yes | yes | yes | yes (file content, sha-aware) | n/a (never deletes the file) | — |
 | repo-baseline | yes | yes (empty + template) | yes | n/a (existence-only) | n/a | — |
 | token-governance | yes | yes (revoke expired) | yes | n/a (grants are not editable) | n/a (revoke is an update) | — |
@@ -74,8 +74,11 @@ Cross-cutting behaviors, also in the smoke:
 
 - Read-only fetchLive is asserted for all 13 cycles before any apply.
 - The guardrail block path: shrinking the member policy to drop 1 of 3 live
-  members trips `removalDeltaCap` (33% over the 25% cap), blocks the apply,
-  and leaves the member in place.
+  members trips `removalDeltaCap` (33% over the 25% cap, measured against the
+  member type's own live count), blocks the apply, and leaves the member in
+  place. The converged-cleanup path is the flip side: a lone stale member
+  delete passes at 1 of 4 live members with no cap raise, where the
+  plan-relative denominator would have read it as 100%.
 - The permission-gated 403 NOTE path: the mock 403s the org-variables read;
   the cycle plans optimistically and the plan carries the
   `NOTE: org-variables: read was permission-gated (403)` line instead of

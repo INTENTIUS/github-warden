@@ -390,9 +390,10 @@ function fmt(v) {
   return json2.length > 60 ? `${json2.slice(0, 57)}...` : json2;
 }
 function resolveRenames(changeSet) {
+  const typedKey = (resourceType, key) => `${resourceType}\0${key}`;
   const deleteEntries = /* @__PURE__ */ new Map();
   for (const e of changeSet.entries) {
-    if (e.kind === "delete") deleteEntries.set(e.key, e);
+    if (e.kind === "delete") deleteEntries.set(typedKey(e.resourceType, e.key), e);
   }
   const resolvedDeletes = /* @__PURE__ */ new Set();
   const resolvedCreates = /* @__PURE__ */ new Set();
@@ -403,10 +404,10 @@ function resolveRenames(changeSet) {
     if (!after) continue;
     const previously = after["previously"];
     if (typeof previously !== "string") continue;
-    const deleted = deleteEntries.get(previously);
+    const deleted = deleteEntries.get(typedKey(e.resourceType, previously));
     if (!deleted) continue;
-    resolvedDeletes.add(previously);
-    resolvedCreates.add(e.key);
+    resolvedDeletes.add(typedKey(e.resourceType, previously));
+    resolvedCreates.add(typedKey(e.resourceType, e.key));
     syntheticUpdates.push({
       kind: "update",
       resourceType: e.resourceType,
@@ -418,12 +419,21 @@ function resolveRenames(changeSet) {
   }
   if (resolvedDeletes.size === 0) return changeSet;
   const filteredEntries = changeSet.entries.filter(
-    (e) => !(e.kind === "delete" && resolvedDeletes.has(e.key)) && !(e.kind === "create" && resolvedCreates.has(e.key))
+    (e) => !(e.kind === "delete" && resolvedDeletes.has(typedKey(e.resourceType, e.key))) && !(e.kind === "create" && resolvedCreates.has(typedKey(e.resourceType, e.key)))
   );
   return { ...changeSet, entries: [...filteredEntries, ...syntheticUpdates] };
 }
 function removalDeltaCap(changeSet, opts = {}) {
   const maxFraction = opts.maxFraction ?? 0.25;
+  if (!(maxFraction > 0 && maxFraction <= 1)) {
+    throw new Error(
+      `removalDeltaCap: maxFraction must be in (0, 1], got ${String(maxFraction)}`
+    );
+  }
+  const managedTotals = opts.managedTotals ?? changeSet.managedCounts;
+  if (managedTotals !== void 0) {
+    return removalDeltaCapPerType(changeSet, managedTotals, maxFraction);
+  }
   const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
   const managedTotal = opts.managedTotal ?? changeSet.managedCount;
   if (managedTotal !== void 0 && managedTotal > 0) {
@@ -446,6 +456,36 @@ function removalDeltaCap(changeSet, opts = {}) {
     };
   }
   return null;
+}
+function removalDeltaCapPerType(changeSet, managedTotals, maxFraction) {
+  const deletesByType = /* @__PURE__ */ new Map();
+  const nonCreatesByType = /* @__PURE__ */ new Map();
+  for (const e of changeSet.entries) {
+    if (e.kind === "create") continue;
+    nonCreatesByType.set(e.resourceType, (nonCreatesByType.get(e.resourceType) ?? 0) + 1);
+    if (e.kind === "delete") {
+      deletesByType.set(e.resourceType, (deletesByType.get(e.resourceType) ?? 0) + 1);
+    }
+  }
+  const tripping = [];
+  for (const [resourceType, deletes] of deletesByType) {
+    const liveCount = managedTotals[resourceType];
+    const live = liveCount !== void 0 && liveCount > 0;
+    const total = live ? liveCount : nonCreatesByType.get(resourceType);
+    const fraction = deletes / total;
+    if (fraction > maxFraction) tripping.push({ resourceType, deletes, total, fraction, live });
+  }
+  if (tripping.length === 0) return null;
+  tripping.sort(
+    (a, b) => b.fraction - a.fraction || b.deletes - a.deletes || a.resourceType.localeCompare(b.resourceType)
+  );
+  const [worst, ...rest] = tripping;
+  const pct = (f) => Math.round(f * 100);
+  const describe3 = (t) => `${t.deletes} of ${t.total} ${t.live ? "live" : "planned"} ${t.resourceType} entries (${pct(t.fraction)}%)`;
+  return {
+    guardrail: "removalDeltaCap",
+    message: `${describe3(worst)} would be deleted, exceeding the ${pct(maxFraction)}% threshold. ` + (rest.length > 0 ? `Also over the cap: ${rest.map(describe3).join(", ")}. ` : "") + `Check for typos in config or raise maxFraction to proceed.`
+  };
 }
 function errMsg(err) {
   return err instanceof Error ? err.message : String(err);
@@ -581,16 +621,21 @@ var init_core = __esm({
 // src/reconcile/diff.ts
 function diff(org, desired, live, opts = {}) {
   const entries = [];
+  const managedCounts = {};
+  const count = (resourceType, liveCount) => {
+    if (liveCount === void 0) return;
+    managedCounts[resourceType] = (managedCounts[resourceType] ?? 0) + liveCount;
+  };
   diffSettings(desired.settings, live.settings, entries);
-  diffRulesets("", "org-ruleset", desired.rulesets, live.rulesets ?? [], opts, entries);
-  diffSecrets("", "org-secret", desired.secrets, live.secrets ?? [], opts, entries);
-  diffVariables("", "org-variable", desired.variables, live.variables ?? [], opts, entries);
+  count("org-ruleset", diffRulesets("", "org-ruleset", desired.rulesets, live.rulesets ?? [], opts, entries));
+  count("org-secret", diffSecrets("", "org-secret", desired.secrets, live.secrets ?? [], opts, entries));
+  count("org-variable", diffVariables("", "org-variable", desired.variables, live.variables ?? [], opts, entries));
   diffRepoBaselines(desired.repoBaselines, live.repos ?? {}, entries);
   diffTokenGrants(desired.tokenPolicy, live.tokenGrants ?? [], opts, entries);
   diffTokenRequests(desired.tokenApproval, live.tokenRequests ?? [], entries);
-  diffTeams(desired.teams, live.teams ?? {}, opts, entries);
-  diffMembers(desired.members, live.members ?? [], opts, entries);
-  diffRepos(desired.repos, live.repos ?? {}, opts, entries);
+  diffTeams(desired.teams, live.teams ?? {}, opts, entries, count);
+  count("member", diffMembers(desired.members, live.members ?? [], opts, entries));
+  diffRepos(desired.repos, live.repos ?? {}, opts, entries, count);
   const typeIndex = (t) => {
     const i = RESOURCE_TYPE_ORDER.indexOf(t);
     return i === -1 ? RESOURCE_TYPE_ORDER.length : i;
@@ -600,38 +645,7 @@ function diff(org, desired, live, opts = {}) {
     if (ti !== 0) return ti;
     return a.key.localeCompare(b.key);
   });
-  return { org, entries };
-}
-function countLiveManaged(desired, live) {
-  let n = 0;
-  if (desired.rulesets !== void 0) n += (live.rulesets ?? []).length;
-  if (desired.secrets !== void 0) n += (live.secrets ?? []).length;
-  if (desired.variables !== void 0) n += (live.variables ?? []).length;
-  if (desired.members !== void 0) n += (live.members ?? []).length;
-  if (desired.teams !== void 0) {
-    const liveTeams = live.teams ?? {};
-    n += Object.keys(liveTeams).length;
-    for (const [slug2, dt] of Object.entries(desired.teams)) {
-      const lt2 = liveTeams[slug2];
-      if (!lt2) continue;
-      if (dt.members !== void 0) n += (lt2.members ?? []).length;
-      if (dt.repos !== void 0) n += (lt2.repos ?? []).length;
-    }
-  }
-  if (desired.repos !== void 0) {
-    const liveRepos = live.repos ?? {};
-    n += Object.keys(liveRepos).length;
-    for (const [name, dr] of Object.entries(desired.repos)) {
-      const lr = liveRepos[name];
-      if (!lr) continue;
-      if (dr.branchProtection !== void 0) n += (lr.branchProtection ?? []).length;
-      if (dr.rulesets !== void 0) n += (lr.rulesets ?? []).length;
-      if (dr.environments !== void 0) n += (lr.environments ?? []).length;
-      if (dr.secrets !== void 0) n += (lr.secrets ?? []).length;
-      if (dr.variables !== void 0) n += (lr.variables ?? []).length;
-    }
-  }
-  return n;
+  return { org, entries, managedCounts };
 }
 function diffSettings(desired, live, out) {
   if (desired === void 0) return;
@@ -651,8 +665,9 @@ function diffSettings(desired, live, out) {
     });
   }
 }
-function diffTeams(desired, live, opts, out) {
+function diffTeams(desired, live, opts, out, count) {
   if (desired === void 0) return;
+  count("team", Object.keys(live).length);
   for (const [slug2, desiredTeam] of Object.entries(desired)) {
     const liveTeam = live[slug2];
     if (!liveTeam) {
@@ -674,8 +689,8 @@ function diffTeams(desired, live, opts, out) {
         fields: teamFields
       });
     }
-    diffTeamMembers(slug2, desiredTeam.members, liveTeam.members ?? [], opts, out);
-    diffTeamRepos(slug2, desiredTeam.repos, liveTeam.repos ?? [], opts, out);
+    count("team-member", diffTeamMembers(slug2, desiredTeam.members, liveTeam.members ?? [], opts, out));
+    count("team-repo", diffTeamRepos(slug2, desiredTeam.repos, liveTeam.repos ?? [], opts, out));
   }
   for (const slug2 of Object.keys(live)) {
     if (!Object.prototype.hasOwnProperty.call(desired, slug2)) {
@@ -687,9 +702,9 @@ function diffTeams(desired, live, opts, out) {
   }
 }
 function diffTeamMembers(teamSlug, desired, live, opts, out) {
-  if (desired === void 0) return;
+  if (desired === void 0) return void 0;
   const role = (dm) => dm.role ?? "member";
-  diffCollection({
+  return diffCollection({
     resourceType: "team-member",
     keyPrefix: `${teamSlug}/`,
     desired: new Map(desired.map((m) => [m.login, m])),
@@ -702,8 +717,8 @@ function diffTeamMembers(teamSlug, desired, live, opts, out) {
   });
 }
 function diffTeamRepos(teamSlug, desired, live, opts, out) {
-  if (desired === void 0) return;
-  diffCollection({
+  if (desired === void 0) return void 0;
+  return diffCollection({
     resourceType: "team-repo",
     keyPrefix: `${teamSlug}/`,
     desired: new Map(desired.map((r) => [r.name, r])),
@@ -714,9 +729,9 @@ function diffTeamRepos(teamSlug, desired, live, opts, out) {
   });
 }
 function diffMembers(desired, live, opts, out) {
-  if (desired === void 0) return;
+  if (desired === void 0) return void 0;
   const role = (dm) => dm.role ?? "member";
-  diffCollection({
+  return diffCollection({
     resourceType: "member",
     desired: new Map(desired.map((m) => [m.login, m])),
     live: new Map(live.map((m) => [m.login, m])),
@@ -727,8 +742,9 @@ function diffMembers(desired, live, opts, out) {
     out
   });
 }
-function diffRepos(desired, live, opts, out) {
+function diffRepos(desired, live, opts, out, count) {
   if (desired === void 0) return;
+  count("repo", Object.keys(live).length);
   for (const [name, dr] of Object.entries(desired)) {
     const lr = live[name];
     if (!lr) {
@@ -769,12 +785,12 @@ function diffRepos(desired, live, opts, out) {
         fields: repoFields
       });
     }
-    diffBranchProtection(name, dr.branchProtection, lr.branchProtection ?? [], opts, out);
-    diffRulesets(`${name}/`, "repo-ruleset", dr.rulesets, lr.rulesets ?? [], opts, out);
+    count("branch-protection", diffBranchProtection(name, dr.branchProtection, lr.branchProtection ?? [], opts, out));
+    count("repo-ruleset", diffRulesets(`${name}/`, "repo-ruleset", dr.rulesets, lr.rulesets ?? [], opts, out));
     diffRepoSecurity(name, dr.security, lr.security, out);
-    diffEnvironments(name, dr.environments, lr.environments ?? [], opts, out);
-    diffSecrets(`${name}/`, "repo-secret", dr.secrets, lr.secrets ?? [], opts, out);
-    diffVariables(`${name}/`, "repo-variable", dr.variables, lr.variables ?? [], opts, out);
+    count("environment", diffEnvironments(name, dr.environments, lr.environments ?? [], opts, out));
+    count("repo-secret", diffSecrets(`${name}/`, "repo-secret", dr.secrets, lr.secrets ?? [], opts, out));
+    count("repo-variable", diffVariables(`${name}/`, "repo-variable", dr.variables, lr.variables ?? [], opts, out));
     diffDependabot(name, dr.dependabot, lr.dependabot, out);
   }
   for (const name of Object.keys(live)) {
@@ -786,7 +802,7 @@ function diffRepos(desired, live, opts, out) {
   }
 }
 function diffBranchProtection(repoName, desired, live, opts, out) {
-  if (desired === void 0) return;
+  if (desired === void 0) return void 0;
   const desiredByPattern = new Map(desired.map((r) => [r.pattern, r]));
   const liveByPattern = new Map(live.map((r) => [r.pattern, r]));
   const bpFields = [
@@ -843,6 +859,7 @@ function diffBranchProtection(repoName, desired, live, opts, out) {
       }
     }
   }
+  return live.length;
 }
 function dropEmptyValues(value) {
   if (Array.isArray(value)) return value.map(dropEmptyValues);
@@ -866,8 +883,8 @@ function normalizeRulesetConditions(conditions) {
   return Object.keys(normalized).length === 0 ? void 0 : normalized;
 }
 function diffRulesets(keyPrefix, resourceType, desired, live, opts, out) {
-  if (desired === void 0) return;
-  diffCollection({
+  if (desired === void 0) return void 0;
+  return diffCollection({
     resourceType,
     keyPrefix,
     desired: new Map(desired.map((r) => [r.name, r])),
@@ -910,8 +927,8 @@ function diffRepoSecurity(repoName, desired, live, out) {
   }
 }
 function diffEnvironments(repoName, desired, live, opts, out) {
-  if (desired === void 0) return;
-  diffCollection({
+  if (desired === void 0) return void 0;
+  return diffCollection({
     resourceType: "environment",
     keyPrefix: `${repoName}/`,
     desired: new Map(desired.map((e) => [e.name, e])),
@@ -926,8 +943,8 @@ function diffEnvironments(repoName, desired, live, opts, out) {
   });
 }
 function diffSecrets(keyPrefix, resourceType, desired, live, opts, out) {
-  if (desired === void 0) return;
-  diffCollection({
+  if (desired === void 0) return void 0;
+  return diffCollection({
     resourceType,
     keyPrefix,
     desired: new Map(desired.map((s) => [s.name, s])),
@@ -938,8 +955,8 @@ function diffSecrets(keyPrefix, resourceType, desired, live, opts, out) {
   });
 }
 function diffVariables(keyPrefix, resourceType, desired, live, opts, out) {
-  if (desired === void 0) return;
-  diffCollection({
+  if (desired === void 0) return void 0;
+  return diffCollection({
     resourceType,
     keyPrefix,
     desired: new Map(desired.map((v) => [v.name, v])),
@@ -1066,11 +1083,33 @@ var init_diff = __esm({
 });
 
 // src/reconcile/guardrails.ts
-function adminFloor(changeSet, live, opts = {}) {
+function computePostApplyMembers(changeSet, liveMembers) {
+  const roles = new Map(liveMembers.map((m) => [m.login, m.role]));
+  for (const e of changeSet.entries) {
+    if (e.resourceType !== "member") continue;
+    if (e.kind === "delete") {
+      roles.delete(e.key);
+    } else if (e.kind === "create" || e.kind === "update") {
+      const after = e.after;
+      const login = after?.login ?? e.key;
+      if (e.kind === "update") {
+        const before = e.before;
+        const priorLogin = before?.login ?? e.key;
+        if (priorLogin !== login) roles.delete(priorLogin);
+      }
+      roles.set(login, after?.role ?? "member");
+    }
+  }
+  const admins = /* @__PURE__ */ new Set();
+  for (const [login, role] of roles) {
+    if (role === "admin") admins.add(login);
+  }
+  return { roles, admins };
+}
+function adminFloor(changeSet, live, opts = {}, postApply) {
   const min = opts.min ?? 2;
-  const liveMembers = live.members ?? [];
-  const postApplyAdmins = computePostApplyAdmins(changeSet, liveMembers);
-  const count = postApplyAdmins.size;
+  const { admins } = postApply ?? computePostApplyMembers(changeSet, live.members ?? []);
+  const count = admins.size;
   if (count < min) {
     return {
       guardrail: "adminFloor",
@@ -1079,11 +1118,10 @@ function adminFloor(changeSet, live, opts = {}) {
   }
   return null;
 }
-function requiredAdmins(changeSet, live, opts) {
+function requiredAdmins(changeSet, live, opts, postApply) {
   if (opts.logins.length === 0) return null;
-  const liveMembers = live.members ?? [];
-  const postApplyAdmins = computePostApplyAdmins(changeSet, liveMembers);
-  const missing = opts.logins.filter((login) => !postApplyAdmins.has(login));
+  const { admins } = postApply ?? computePostApplyMembers(changeSet, live.members ?? []);
+  const missing = opts.logins.filter((login) => !admins.has(login));
   if (missing.length > 0) {
     return {
       guardrail: "requiredAdmins",
@@ -1092,20 +1130,10 @@ function requiredAdmins(changeSet, live, opts) {
   }
   return null;
 }
-function requireSelf(changeSet, live, opts) {
+function requireSelf(changeSet, live, opts, postApply) {
   const { selfLogin } = opts;
-  const liveMembers = live.members ?? [];
-  const liveByLogin = new Map(liveMembers.map((m) => [m.login, m]));
-  let role = liveByLogin.get(selfLogin)?.role ?? null;
-  for (const e of changeSet.entries) {
-    if (e.resourceType !== "member" || e.key !== selfLogin) continue;
-    if (e.kind === "delete") {
-      role = null;
-    } else if (e.kind === "create" || e.kind === "update") {
-      const after = e.after;
-      role = after?.role ?? role;
-    }
-  }
+  const { roles } = postApply ?? computePostApplyMembers(changeSet, live.members ?? []);
+  const role = roles.get(selfLogin) ?? null;
   if (role === null) {
     return {
       guardrail: "requireSelf",
@@ -1120,61 +1148,47 @@ function requireSelf(changeSet, live, opts) {
   }
   return null;
 }
-function runGuardrails(changeSet, live, config2 = {}, liveManagedTotal = 0) {
+function runGuardrails(changeSet, live, config2 = {}) {
+  for (const key of Object.keys(config2)) {
+    if (!KNOWN_GUARDRAIL_CONFIG_KEYS.has(key)) {
+      throw new Error(
+        `runGuardrails: unknown GuardrailConfig key "${key}" (known keys: ${[...KNOWN_GUARDRAIL_CONFIG_KEYS].join(", ")}). Refusing to run with an unrecognized guardrail option \u2014 a stale key must not silently weaken the apply.`
+      );
+    }
+  }
   const resolved = resolveRenames(changeSet);
   const diagnostics = [];
-  const cap = removalDeltaCap(resolved, {
-    maxFraction: config2.removalDeltaCap?.maxFraction,
-    managedTotal: liveManagedTotal > 0 ? liveManagedTotal : config2.removalDeltaCap?.managedTotal
-  });
+  const cap = removalDeltaCap(resolved, { ...config2.removalDeltaCap });
   if (cap) diagnostics.push(cap);
   const memberAware = live.members !== void 0 || resolved.entries.some((e) => e.resourceType === "member");
   if (memberAware) {
-    const floor = adminFloor(resolved, live, config2.adminFloor);
+    const postApply = computePostApplyMembers(resolved, live.members ?? []);
+    const floor = adminFloor(resolved, live, config2.adminFloor, postApply);
     if (floor) diagnostics.push(floor);
     if (config2.requiredAdmins) {
-      const req = requiredAdmins(resolved, live, config2.requiredAdmins);
+      const req = requiredAdmins(resolved, live, config2.requiredAdmins, postApply);
       if (req) diagnostics.push(req);
     }
     if (config2.requireSelf) {
-      const self = requireSelf(resolved, live, config2.requireSelf);
+      const self = requireSelf(resolved, live, config2.requireSelf, postApply);
       if (self) diagnostics.push(self);
     }
   }
   if (diagnostics.length > 0) return { ok: false, diagnostics };
   return { ok: true };
 }
-function computePostApplyAdmins(changeSet, liveMembers) {
-  const liveAdmins = new Map(
-    liveMembers.filter((m) => m.role === "admin").map((m) => [m.login, m.role])
-  );
-  const result = new Set(liveAdmins.keys());
-  for (const e of changeSet.entries) {
-    if (e.resourceType !== "member") continue;
-    if (e.kind === "delete") {
-      result.delete(e.key);
-    } else if (e.kind === "create" || e.kind === "update") {
-      const after = e.after;
-      const login = after?.login ?? e.key;
-      if (e.kind === "update") {
-        const before = e.before;
-        const priorLogin = before?.login ?? e.key;
-        if (priorLogin !== login) result.delete(priorLogin);
-      }
-      if (after?.role === "admin") {
-        result.add(login);
-      } else {
-        result.delete(login);
-      }
-    }
-  }
-  return result;
-}
+var KNOWN_GUARDRAIL_CONFIG_KEYS;
 var init_guardrails = __esm({
   "src/reconcile/guardrails.ts"() {
     "use strict";
     init_core();
     init_core();
+    KNOWN_GUARDRAIL_CONFIG_KEYS = /* @__PURE__ */ new Set([
+      "removalDeltaCap",
+      "adminFloor",
+      "requiredAdmins",
+      "requireSelf"
+    ]);
   }
 });
 
@@ -1220,7 +1234,6 @@ function ownedPredicate(owned) {
   return (type, _key) => owned === true || Array.isArray(owned) && owned.includes(type);
 }
 async function runReconcile2(opts) {
-  let liveManagedTotal = 0;
   drainNotes();
   const result = await runReconcile({
     client: opts.client,
@@ -1228,15 +1241,16 @@ async function runReconcile2(opts) {
     cycles: opts.cycles,
     scope: opts.scope,
     mode: opts.mode,
-    diff: (scopeId, desired, live, dopts) => {
-      liveManagedTotal = countLiveManaged(desired, live);
-      return diff(scopeId, desired, live, {
-        ...dopts,
-        isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
-        nowMs: dopts.nowMs ?? Date.now()
-      });
-    },
-    guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}, liveManagedTotal),
+    // The diff stamps `managedCounts` (per-type live denominators for
+    // removalDeltaCap) on each change set it returns, so every guardrail
+    // evaluation carries its own live counts — no side channel between the
+    // diff and guardrail callbacks.
+    diff: (scopeId, desired, live, dopts) => diff(scopeId, desired, live, {
+      ...dopts,
+      isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
+      nowMs: dopts.nowMs ?? Date.now()
+    }),
+    guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}),
     diffOptions: opts.diffOptions,
     allowGuardrailOverride: opts.allowGuardrailOverride,
     requestBudget: opts.requestBudget
@@ -238801,8 +238815,8 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.55.0",
-    "@intentius/chant-lexicon-github": "^0.55.0"
+    "@intentius/chant": "^0.56.0",
+    "@intentius/chant-lexicon-github": "^0.56.0"
   },
   devDependencies: {
     "@types/libsodium-wrappers": "^0.7.14",
@@ -240996,7 +241010,8 @@ function parseReconcileArgs(argv) {
     appIdEnv: void 0,
     installationIdEnv: void 0,
     tokenEnv: void 0,
-    allowGuardrailOverride: false
+    allowGuardrailOverride: false,
+    removalCapFraction: void 0
   };
   const knownFlags = /* @__PURE__ */ new Set([
     "--config",
@@ -241005,7 +241020,8 @@ function parseReconcileArgs(argv) {
     "--app-id-env",
     "--installation-id-env",
     "--token-env",
-    "--allow-guardrail-override"
+    "--allow-guardrail-override",
+    "--removal-cap-fraction"
   ]);
   let i = 0;
   while (i < argv.length) {
@@ -241062,6 +241078,20 @@ function parseReconcileArgs(argv) {
       }
       case "--allow-guardrail-override": {
         args.allowGuardrailOverride = true;
+        break;
+      }
+      case "--removal-cap-fraction": {
+        const val = argv[++i];
+        if (val === void 0 || val.startsWith("--"))
+          throw new CliError(2, "--removal-cap-fraction requires a value");
+        const fraction = Number(val);
+        if (!(fraction > 0 && fraction <= 1)) {
+          throw new CliError(
+            2,
+            `--removal-cap-fraction must be a number in (0, 1], got: ${val}`
+          );
+        }
+        args.removalCapFraction = fraction;
         break;
       }
     }
@@ -241369,7 +241399,8 @@ async function main(argv = process.argv.slice(2)) {
       client,
       cycles,
       mode: args.mode,
-      allowGuardrailOverride: args.allowGuardrailOverride
+      allowGuardrailOverride: args.allowGuardrailOverride,
+      guardrails: args.removalCapFraction !== void 0 ? { removalDeltaCap: { maxFraction: args.removalCapFraction } } : void 0
     });
   } catch (err) {
     die(3, `reconcile failed: ${errMsg2(err)}`);
@@ -241777,6 +241808,8 @@ function printUsage() {
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
       "  --allow-guardrail-override    Apply even when guardrails trip.",
+      "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
+      "                                delete per resource type, in (0,1]. Default: 0.25.",
       "",
       "Flags (audit):",
       "  --config <path>               Path to governance config file (YAML or JSON).",

@@ -345,7 +345,12 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(admins.body.map((m) => m.login).sort()).toEqual(["alice", "carol"]);
     });
 
-    it("deletes an undeclared member under `owned` (1 of 4 live = within the cap)", async () => {
+    it("deletes an undeclared member under `owned` (1 of 4 live members = 25%, within the cap)", async () => {
+      // The realistic converged-cleanup case: the stale delete is the ONLY
+      // plan entry, so plan-relative it would read 1 of 1 = 100% and always
+      // block. It passes only because removalDeltaCap divides by the member
+      // type's live count (4) from the change set's managedCounts — no cap
+      // raise needed.
       await raw("PUT", `/orgs/${ORG}/memberships/stray`, { role: "member" });
       const cr = only(await reconcile(["membership"], cfg));
       expect(cr.counts.delete).toBe(1);
@@ -364,7 +369,8 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(cr.guardrails.ok).toBe(false);
       if (!cr.guardrails.ok) {
         expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalDeltaCap");
-        expect(cr.guardrails.diagnostics[0]!.message).toContain("1 of 3 live managed entries");
+        // The per-type message names the offending type and its live denominator.
+        expect(cr.guardrails.diagnostics[0]!.message).toContain("1 of 3 live member entries (33%)");
       }
       // Nothing was removed.
       const members = await raw<Array<{ login: string }>>("GET", `/orgs/${ORG}/members`);
@@ -410,9 +416,17 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(team.body.description).toBe("Platform team");
     });
 
-    it("deletes an undeclared team under `owned` (1 of 4 live = within the cap)", async () => {
+    it("deletes an undeclared team under `owned` once the cap is raised", async () => {
       await raw("POST", `/orgs/${ORG}/teams`, { name: "stray" });
-      const cr = only(await reconcile(["teams"], cfg));
+      // 1 delete of 2 live team entries = 50% — over the default 25% cap now
+      // that the denominator is per type (team members and repo grants no
+      // longer pad it). The cap is not under test here; raise it for the
+      // deliberate cleanup.
+      const cr = only(
+        await reconcile(["teams"], cfg, {
+          guardrails: { removalDeltaCap: { maxFraction: 0.5 } },
+        }),
+      );
       expect(cr.counts.delete).toBe(1);
       const gone = await raw("GET", `/orgs/${ORG}/teams/stray`);
       expect(gone.status).toBe(404);
@@ -489,11 +503,16 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(detail.body.enforcement).toBe("evaluate");
     });
 
-    it("deletes an undeclared ruleset under `owned`", async () => {
+    it("deletes an undeclared ruleset under `owned` once the cap is raised", async () => {
       await raw("POST", `/orgs/${ORG}/rulesets`, { name: "stray", enforcement: "active" });
-      // 1 delete of 4 live managed entries (2 org rulesets + 1 repo ruleset +
-      // the managed repo itself) = 25% — right at the default cap, so it passes.
-      const cr = only(await reconcile(["rulesets"], cfg));
+      // 1 delete of 2 live org-ruleset entries = 50% — the repo ruleset and
+      // the managed repo no longer pad the denominator now that the cap is per
+      // type. The cap is not under test here; raise it for the cleanup.
+      const cr = only(
+        await reconcile(["rulesets"], cfg, {
+          guardrails: { removalDeltaCap: { maxFraction: 0.5 } },
+        }),
+      );
       expect(cr.counts.delete).toBe(1);
       const list = await raw<Array<{ name: string }>>("GET", `/orgs/${ORG}/rulesets`);
       expect(list.body.map((r) => r.name)).toEqual(["org-baseline"]);
@@ -563,8 +582,9 @@ suite("github-warden smoke (mock GitHub)", () => {
 
     it("deletes an undeclared environment under `owned` once the cap is raised", async () => {
       await raw("PUT", `/repos/${ORG}/app/environments/staging`, { wait_timer: 1 });
-      // 1 delete of 3 live managed entries (2 environments + the managed repo)
-      // = 33% — over the default 25% cap, so raise it for the deliberate cleanup.
+      // 1 delete of 2 live environment entries = 50% — over the default 25%
+      // per-type cap (the managed repo no longer pads the denominator). The
+      // cap is not under test here; raise it for the deliberate cleanup.
       const cr = only(
         await reconcile(["environments"], cfg, {
           guardrails: { removalDeltaCap: { maxFraction: 0.5 } },
@@ -620,9 +640,16 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(repoVars.body.variables[0]!.value).toBe("us-east-1");
     });
 
-    it("deletes an undeclared variable under `owned` (1 of 6 live = within the cap)", async () => {
+    it("deletes an undeclared variable under `owned` once the cap is raised", async () => {
       await raw("POST", `/orgs/${ORG}/actions/variables`, { name: "STRAY", value: "x" });
-      const cr = only(await reconcile(["secrets-variables"], cfg));
+      // 1 delete of 2 live org-variable entries = 50% — secrets and repo-level
+      // entries no longer pad the denominator now that the cap is per type.
+      // The cap is not under test here; raise it for the cleanup.
+      const cr = only(
+        await reconcile(["secrets-variables"], cfg, {
+          guardrails: { removalDeltaCap: { maxFraction: 0.5 } },
+        }),
+      );
       expect(cr.counts.delete).toBe(1);
       const orgVars = await raw<{ variables: Array<{ name: string }> }>(
         "GET",
