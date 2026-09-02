@@ -1,0 +1,239 @@
+# Cycles
+
+A cycle is one reconcile domain. Each cycle knows how to read live state from
+GitHub (`fetchLive`), derive the desired slice from the policy
+(`buildDesired`), and apply one change entry back (`apply`). The runner wraps
+every cycle with the same machinery: diff, guardrails, dry-run/apply, and a
+shared API request budget (1000 requests per run; work skipped when it runs
+out is reported as `DEFERRED cycles`).
+
+`--cycles` accepts the names below (from `src/cli/registry.ts`); omitting the
+flag runs all of them, in this order.
+
+Shared behavior, so it isn't repeated thirteen times:
+
+- **Selective-by-omission.** A cycle only acts on the slice of the policy it
+  owns; a repo, team, or field absent from the policy is never read or
+  modified.
+- **Ownership-gated deletes.** The diff proposes deleting a live resource
+  missing from the policy only when an ownership predicate
+  (`diffOptions.isOwned`) marks it owned. The CLI supplies no predicate, so
+  CLI runs create and update but never delete. Deletes require the
+  programmatic API.
+- **Guardrails before apply.** `removalDeltaCap` (deletes capped at 25% of
+  pre-existing managed entries) and `adminFloor` (at least 2 org admins must
+  remain) always run; `requiredAdmins` and `requireSelf` run when configured
+  programmatically. `resolveRenames` collapses a `previously`-marked
+  delete+create pair into an update first, so a rename is not counted as a
+  deletion. A tripped guardrail blocks the apply (exit 1) unless
+  `--allow-guardrail-override` is set.
+- **Live-fetch scope.** Cycles that read per-repo live state do so for repos
+  passed in their scope. The current CLI wiring passes no scope, so those
+  cycles skip the live fetch: every declared entry is planned as a create,
+  and the applies are idempotent writes (PUT/PATCH against the live
+  resource). Accurate drift detection for those cycles needs the programmatic
+  API with `scope: { repos: orgConfig.repos }`.
+
+## branch-protection
+
+Reconciles classic branch protection rules declared under
+`repos.<name>.branchProtection` (one rule per branch pattern).
+
+- Endpoints: `GET`/`PUT`/`DELETE`
+  `/repos/{owner}/{repo}/branches/{branch}/protection`.
+- The PUT is a full replacement, so updates do a read-modify-write: the body
+  is seeded from the live rule (from the diff's `before` snapshot, re-fetched
+  if missing) and only declared fields are overlaid. Undeclared live settings,
+  including `enforce_admins` (not exposed in the schema), are preserved.
+- A 404 on the probe means "no rule" and produces a create, not an error.
+- Known limitation: the protection API resolves literal branch names only. A
+  wildcard rule like `release/*` exists on GitHub but is never returned by
+  the probe, so `dump` omits it and a reconcile with ownership-enabled
+  deletes would propose removing it. Rulesets are the modern fix.
+
+## org-settings
+
+Reconciles org-level settings (`orgs.<org>.settings`): public metadata
+(description, email, website), member repo-creation privileges, default
+repository permission, and the 2FA-requirement flag.
+
+- Endpoints: `GET /orgs/{org}`, `PATCH /orgs/{org}`.
+- The PATCH is partial, so only declared keys are sent; no read-modify-write
+  needed.
+- `requireTwoFactorAuthentication` is surfaced for drift reporting, but
+  GitHub treats the key as read-only on most plans (it is ignored rather than
+  erroring).
+- Single resource per org: creates/updates only, nothing to delete.
+
+## repo-settings
+
+Reconciles per-repo settings under `repos.<name>`: description, website,
+visibility, issues/projects/wiki toggles, merge methods, default branch,
+`deleteBranchOnMerge`, and topics.
+
+- Endpoints: `GET`/`PATCH` `/repos/{owner}/{repo}`, and
+  `PUT /repos/{owner}/{repo}/topics` (topics are replaced as a whole list).
+- The PATCH is partial: only declared fields are sent.
+- Never creates a repo; a PATCH against a nonexistent repo 404s and is
+  recorded as a failed entry. Provisioning belongs to `repo-baseline`.
+- Repo deletion is gated on ownership like everything else, and is never
+  proposed from the CLI.
+
+## membership
+
+Reconciles org membership and roles (`orgs.<org>.members`): who is a member,
+who is an admin.
+
+- Endpoints: `GET /orgs/{org}/members?role=admin|member` (paginated, 100 per
+  page), `PUT`/`DELETE` `/orgs/{org}/memberships/{user}`.
+- With the default CLI wiring this cycle only adds or re-roles declared
+  members; removal of an undeclared live member requires the ownership
+  predicate.
+- When removals are enabled, the member-aware guardrails apply in full:
+  `adminFloor`, `requiredAdmins`, `requireSelf` (the managing identity must
+  stay an org admin, not merely a member), and `removalDeltaCap`.
+- Outside collaborators are a per-repo concept the schema does not model and
+  are out of scope.
+
+## teams
+
+Reconciles the team tree, team membership/roles, and team-to-repo permissions
+(`orgs.<org>.teams`, keyed by slug).
+
+- Endpoints: `GET`/`POST` `/orgs/{org}/teams`,
+  `GET`/`PATCH`/`DELETE` `/orgs/{org}/teams/{slug}`,
+  `GET` `…/{slug}/members?role=…`, `PUT`/`DELETE` `…/{slug}/memberships/{user}`,
+  `GET` `…/{slug}/repos`, `PUT`/`DELETE` `…/{slug}/repos/{owner}/{repo}`.
+- Emits three resource types in order (`team`, `team-member`, `team-repo`) so
+  a new team exists before members and repos are attached.
+- The team list is always fetched; member and repo sub-state only for teams
+  in scope that manage them.
+- Rename-without-loss: a `previously` slug makes the guardrail layer collapse
+  `delete(old)` + `create(new)` into one update, so a rename doesn't count
+  toward `removalDeltaCap`. Without an ownership predicate the delete half is
+  never emitted anyway, so a rename appears purely as a create and the old
+  team is left in place. The runner does not yet perform an atomic
+  GitHub-side rename.
+- Teams are keyed by slug; on create the slug is sent as the name (GitHub
+  re-slugifies), on update the name is not sent, so an existing slug is never
+  disturbed. Team deletes are ownership-gated.
+
+## rulesets
+
+Reconciles org rulesets (`orgs.<org>.rulesets`) and repo rulesets
+(`repos.<name>.rulesets`), the modern replacement for classic branch
+protection.
+
+- Endpoints: `GET`/`POST` `/orgs/{org}/rulesets`,
+  `GET`/`PUT`/`DELETE` `/orgs/{org}/rulesets/{id}`, and the analogous
+  `/repos/{owner}/{repo}/rulesets` endpoints. Rulesets are matched by name;
+  GitHub's numeric id (carried on the live snapshot) addresses
+  updates/deletes.
+- Each live ruleset costs a list page plus one detail GET so the diff can
+  compare full `rules` / `conditions` / `bypassActors` (all in GitHub's
+  native snake_case shape, forwarded verbatim).
+- Selective-by-omission operates at whole-ruleset granularity: a managed
+  ruleset's declared body is the source of truth for that ruleset; undeclared
+  rulesets are never touched. Deletes are ownership-gated.
+
+## security-features
+
+Reconciles the security toggles under `repos.<name>.security`: GHAS, secret
+scanning, push protection, Dependabot alerts, and automated security fixes.
+
+- Endpoints: `GET`/`PATCH` `/repos/{o}/{r}` (the `security_and_analysis`
+  object), `GET`/`PUT`/`DELETE` `/repos/{o}/{r}/vulnerability-alerts`
+  (204 enabled / 404 disabled), and
+  `GET`/`PUT`/`DELETE` `/repos/{o}/{r}/automated-security-fixes`.
+- License-gated graceful degradation: where GHAS (or secret scanning on a
+  private repo) is unavailable, GitHub rejects the enabling write and the
+  cycle records a failed entry instead of crashing, so a mixed org reconciles
+  what it can and reports the rest.
+- One `repo-security` entry per repo: creates/updates only.
+
+## environments
+
+Reconciles deployment environments under `repos.<name>.environments`: wait
+timers, self-review prevention, required reviewers, and deployment branch
+policies.
+
+- Endpoints: `GET /repos/{o}/{r}/environments`,
+  `PUT`/`DELETE` `/repos/{o}/{r}/environments/{env}`.
+- The PUT replaces the environment configuration, so updates do a
+  read-modify-write like branch-protection: seed from live, overlay declared
+  fields. Declaring only `waitTimer` does not wipe reviewers or the branch
+  policy.
+- Reviewers are compared by numeric id (`{ type, id }`), so author the same
+  ids the API returns. Environment deletes are ownership-gated.
+
+## secrets-variables
+
+Reconciles Actions secrets and variables at org level (`orgs.<org>.secrets` /
+`.variables`) and repo level (`repos.<name>.secrets` / `.variables`).
+
+- Endpoints: `GET` `/orgs/{org}/actions/secrets|variables` and
+  `/repos/{o}/{r}/actions/secrets|variables` (paginated),
+  `POST …/actions/variables`, `PATCH …/actions/variables/{name}`,
+  `DELETE …/actions/secrets|variables/{name}`.
+- Secrets are presence-only: warden never reads or writes a secret value. A
+  declared-but-missing secret raises a clear apply error telling you to
+  provision it out-of-band; an undeclared live secret is deleted only when
+  ownership-gated. There are no secret updates.
+- Variables are reconciled fully (name + value); a variable declared without
+  a `value` is presence-only. Deletes are ownership-gated.
+- Environment-level secrets/variables (GitHub's third scope) are a documented
+  follow-up.
+
+## dependency-hygiene
+
+Reconciles each managed repo's `.github/dependabot.yml`
+(`repos.<name>.dependabot`): the file must exist and match the declared
+`content` exactly.
+
+- Endpoints: `GET`/`PUT` `/repos/{o}/{r}/contents/.github/dependabot.yml`
+  (the Contents API; the live blob sha rides along for the update commit).
+- Applies as a direct commit to the default branch. If the default branch
+  requires PRs, the commit is rejected and recorded as a failed entry; a
+  PR-based apply variant is a documented follow-up.
+
+## repo-baseline
+
+Ensures every repo in `orgs.<org>.repoBaselines` exists, creating missing
+ones, optionally from a template. The provisioning backstop for scheduled
+runs.
+
+- Endpoints: `GET /orgs/{org}/repos` (paginated),
+  `POST /orgs/{org}/repos` (empty repo),
+  `POST /repos/{tmplOwner}/{tmplRepo}/generate` (from a template).
+- Existence-only: emits creates for missing declared repos and never updates
+  or deletes a repo. Settings of existing repos belong to the other cycles.
+
+## token-governance
+
+Scheduled sweep over the org's fine-grained PAT grants against `tokenPolicy`:
+expired, over-max-lifetime, or idle grants lose their org access.
+
+- Endpoints: `GET /orgs/{org}/personal-access-tokens` (paginated),
+  `POST /orgs/{org}/personal-access-tokens/{pat_id}` (revoke org access).
+- Callable only by a GitHub App; a PAT cannot drive this cycle. The API
+  cannot create or rotate a user's PAT, so revoking org access is the
+  enforcement lever.
+- Violations are emitted as updates on `token-grant` entries ("revoke org
+  access"), not deletes, so a routine sweep does not trip `removalDeltaCap`.
+  The expiry check uses GitHub's own `expired` flag; lifetime/idle checks
+  compare against the run's clock.
+
+## token-approval
+
+Auto-decides pending fine-grained PAT requests against `tokenApproval`: a
+request whose every permission (flattened to `group:scope`) is in
+`allowedPermissions` is approved; otherwise the policy `default` applies
+(auto-deny, or leave pending for a human).
+
+- Endpoints: `GET /orgs/{org}/personal-access-token-requests` (paginated),
+  `POST /orgs/{org}/personal-access-token-requests/{id}` (approve/deny).
+- Callable only by a GitHub App. Admins can approve or deny but cannot narrow
+  the repo scope the requester chose.
+- Decisions are emitted as updates on `token-request` entries; requests left
+  for manual review produce no entry. The source notes this cycle is
+  mock-tested; verify against a real App and test org before relying on it.

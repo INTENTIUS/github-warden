@@ -6,6 +6,22 @@
 
 **Keep your GitHub org and repos in a declared state — reconcile, guardrails, drift correction.**
 
+Full documentation: [intentius.io/github-warden](https://intentius.io/github-warden/) — [policy authoring](POLICY.md), [CLI](CLI.md), [cycles](CYCLES.md), [CI pipelines](CI.md), [setup](SETUP.md).
+
+## Set up with an agent
+
+This repo ships a Claude skill (`.claude/skills/github-warden/`). From a clone,
+paste this into Claude Code (or any agent that reads repo skills) and it will
+do the setup with you, staying in dry-run:
+
+```text
+Use the github-warden skill in this repo to help me set up governance for my
+GitHub org <ORG>: author a governance policy file covering the settings I care
+about (ask me which), explain whether I need a GitHub App or a token for those
+cycles, then run a dry-run reconcile and walk me through the plan it prints.
+Do not apply anything.
+```
+
 ## Install
 
 ```bash

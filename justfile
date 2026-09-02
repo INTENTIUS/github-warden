@@ -89,3 +89,11 @@ e2e-setup org app_slug pem:
 e2e-run apply="false":
     gh workflow run e2e.yml --repo intentius/github-warden -f apply={{apply}}
     echo "Dispatched e2e.yml — watch with: gh run watch \$(gh run list --repo intentius/github-warden --workflow e2e.yml --limit 1 --json databaseId -q '.[0].databaseId')"
+
+# build the docs site locally (requires `pip install mkdocs-material`)
+docs:
+    ./mkdocs-stage.sh && mkdocs build --strict
+
+# preview the docs site locally
+docs-serve:
+    ./mkdocs-stage.sh && mkdocs serve
