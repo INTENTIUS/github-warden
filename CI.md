@@ -105,9 +105,9 @@ the action and run the CLI directly with `--token-env`, minting the token with
 generates `.github/workflows/governance.yml` through the chant GitHub lexicon
 builders, so the emitted workflow passes the same audit checks chant applies
 to hand-written ones: actions pinned to commit SHAs, least-privilege
-permissions (read-only at workflow level, write scopes on the one job that
-needs them), `timeout-minutes` on every job, and the private key passed via
-`with:` rather than interpolated into a script.
+permissions (read-only at the workflow level with write scopes only on the job
+that needs them), `timeout-minutes` on every job, plus the private key passed
+via `with:` rather than interpolated into a script.
 
 The emitted workflow runs the dry-run job on PRs touching the config (and
 posts a PR comment pointing at the plan), and the apply job on schedule and

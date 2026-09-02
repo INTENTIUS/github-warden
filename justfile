@@ -92,6 +92,7 @@ e2e-run apply="false":
 
 # build the docs site locally (requires `pip install mkdocs-material`)
 docs:
+    npm run lint:prose
     ./mkdocs-stage.sh && mkdocs build --strict
 
 # preview the docs site locally

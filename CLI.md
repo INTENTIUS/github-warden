@@ -43,19 +43,20 @@ Deletes come from the policy, not from a flag: a live resource missing from
 the policy is planned for deletion only in an org whose policy declares
 `owned: true` (or lists that resource type in `owned`). Without an `owned`
 declaration, reconcile creates and updates but never deletes. See
-[POLICY.md](POLICY.md).
+[the policy reference](POLICY.md).
 
 The valid `--cycles` names (from `src/cli/registry.ts`): `branch-protection`,
 `org-settings`, `repo-settings`, `membership`, `teams`, `rulesets`,
 `security-features`, `environments`, `secrets-variables`,
 `dependency-hygiene`, `repo-baseline`, `token-governance`, `token-approval`.
-See [CYCLES.md](CYCLES.md).
+See [the cycles reference](CYCLES.md).
 
-Output: one `=== <cycle> @ <org> ===` block per cycle/org with the plan; a
-`GUARDRAIL BLOCK:` line when a guardrail refused an apply; `Applied: N,
-Failed: N` (plus per-entry `FAILED` lines) in apply mode; `ERROR in <cycle>`
-lines on stderr for errored cycles; and a `DEFERRED cycles` line when the API
-request budget (1000 requests per run) ran out before every cycle finished.
+The output prints one `=== <cycle> @ <org> ===` block per cycle/org with the
+plan; a `GUARDRAIL BLOCK:` line when a guardrail refused an apply;
+`Applied: N, Failed: N` (plus per-entry `FAILED` lines) in apply mode;
+`ERROR in <cycle>` lines on stderr for errored cycles; and a `DEFERRED cycles`
+line when the API request budget (1000 requests per run) ran out before every
+cycle finished.
 
 ## `audit`
 
@@ -70,9 +71,9 @@ github-warden audit --config <path> [auth flags] [--fail-on none|merge-worthy|an
 | `--fail-on` | `merge-worthy` \| `any` \| `none` | `none` | Exit 4 when findings exceed this threshold. |
 | `--help`, `-h` | flag | — | Print audit usage and exit 0. |
 
-Uses chant's audit engine (the same checks as `chant audit`), reading private
-repos with warden's token. With no repos declared it prints "nothing to audit"
-and exits 0.
+The audit subcommand wraps chant's audit engine (the same checks as
+`chant audit`) and reads private repos with warden's token. With no repos
+declared it prints "nothing to audit" and exits 0.
 
 ## `report`
 
@@ -91,12 +92,13 @@ github-warden report --config <path> [auth flags] [--cycles a,b] [--audit]
 | `--identity` | flag | off | Include an identity and service-account hygiene pass (App installations vs seat-consuming `machineUsers`). |
 | `--fail-on` | `none` \| `attention` | `none` | Exit 4 when the report needs attention. |
 
-Detect-and-report only: cycles run in dry-run and nothing is mutated.
+Report is detect-only; cycles run in dry-run and nothing is mutated.
 
 ## Auth
 
-Two mutually exclusive modes; `--token-env` takes precedence when both are
-given. One of them is required (missing auth exits 2).
+Warden authenticates in one of two mutually exclusive modes; `--token-env`
+takes precedence when both are given, and one of them is required (missing
+auth exits 2).
 
 1. **Pre-minted token** (`--token-env GH_TOKEN`): the named env var holds an
    installation token, e.g. minted by `actions/create-github-app-token`. No

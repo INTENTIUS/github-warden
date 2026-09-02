@@ -13,7 +13,7 @@ npx @intentius/github-warden reconcile --config .github/governance.yml \
   --token-env GH_TOKEN --mode dry-run
 ```
 
-Or install the `github-warden` binary:
+Or install the `github-warden` binary globally:
 
 ```bash
 npm install -g @intentius/github-warden     # or add it to a project
@@ -37,11 +37,12 @@ token, so plan on an App for real use.
 
 ### GitHub App
 
-Follow the [App setup checklist](docs/github-app-setup.md): create the App
-(webhook off), grant per-cycle permissions (read is enough for dry-run, write
-for apply), generate a private key, install it on the org, and note the App
-ID and installation ID. A cycle whose read is refused (403) is skipped
-gracefully, so you can start with a narrow grant and widen later.
+Follow the [App setup checklist](docs/github-app-setup.md). It walks you
+through creating the App with the webhook off, granting per-cycle permissions
+(read is enough for dry-run while apply needs write), generating a private
+key, installing it on the org, then noting the App ID plus installation ID.
+A cycle whose read is refused (403) is skipped rather than crashing, so you
+can start with a narrow grant and widen later.
 
 ### Environment variables
 
@@ -56,8 +57,8 @@ warden never takes credentials on the command line, only env var *names*:
 
 ## Write a policy
 
-The governance file is the heart of the tool; [POLICY.md](POLICY.md) documents
-every field. Start from the annotated starter in
+The governance file is the heart of the tool, and [the policy
+reference](POLICY.md) documents every field. Start from the annotated starter in
 [`examples/governance.yml`](examples/governance.yml) and declare only what
 you want warden to own:
 
@@ -88,14 +89,14 @@ npx @intentius/github-warden reconcile \
   --mode dry-run
 ```
 
-Read the plan: one `=== <cycle> @ <org> ===` block per cycle, listing the
+The plan prints one `=== <cycle> @ <org> ===` block per cycle, listing the
 creates and updates warden would perform. Nothing has been changed. Iterate
 on the policy until the plan matches your intent, then run the same command
 with `--mode apply`. Guardrails still stand between the plan and the API: a
 block exits 1 and prints why.
 
-From there, move the same command into CI ([CI.md](CI.md)) so the plan runs
-on every policy change and drift is corrected on a schedule.
+From there, move the same command into [a CI pipeline](CI.md) so the plan
+runs on every policy change and drift is corrected on a schedule.
 
 ## Adopting an existing org
 

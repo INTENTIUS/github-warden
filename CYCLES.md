@@ -3,9 +3,9 @@
 A cycle is one reconcile domain. Each cycle knows how to read live state from
 GitHub (`fetchLive`), derive the desired slice from the policy
 (`buildDesired`), and apply one change entry back (`apply`). The runner wraps
-every cycle with the same machinery: diff, guardrails, dry-run/apply, and a
-shared API request budget (1000 requests per run; work skipped when it runs
-out is reported as `DEFERRED cycles`).
+every cycle with the same diff, guardrail, and dry-run/apply machinery, and it
+enforces a shared API request budget (1000 requests per run; work skipped when
+the budget runs out is reported as `DEFERRED cycles`).
 
 `--cycles` accepts the names below (from `src/cli/registry.ts`); omitting the
 flag runs all of them, in this order.
@@ -54,28 +54,29 @@ Reconciles classic branch protection rules declared under
 
 ## org-settings
 
-Reconciles org-level settings (`orgs.<org>.settings`): public metadata
-(description, email, website), member repo-creation privileges, default
-repository permission, and the 2FA-requirement flag.
+Reconciles org-level settings (`orgs.<org>.settings`): public metadata such as
+the description and website, member repo-creation privileges, the default
+repository permission, plus the 2FA-requirement flag.
 
-- Endpoints: `GET /orgs/{org}`, `PATCH /orgs/{org}`.
+- It reads `GET /orgs/{org}` and writes `PATCH /orgs/{org}`.
 - The PATCH is partial, so only declared keys are sent; no read-modify-write
   needed.
-- `requireTwoFactorAuthentication` is surfaced for drift reporting, but
-  GitHub treats the key as read-only on most plans (it is ignored rather than
-  erroring).
-- Single resource per org: creates/updates only, nothing to delete.
+- GitHub treats `requireTwoFactorAuthentication` as read-only on most plans
+  (the key is ignored rather than erroring), so warden surfaces it for drift
+  reporting only.
+- There is a single settings resource per org, so this cycle creates or
+  updates and has nothing to delete.
 
 ## repo-settings
 
 Reconciles per-repo settings under `repos.<name>`: description, website,
 visibility, issues/projects/wiki toggles, merge methods, default branch,
-`deleteBranchOnMerge`, and topics.
+`deleteBranchOnMerge`, plus topics.
 
-- Endpoints: `GET`/`PATCH` `/repos/{owner}/{repo}`, and
+- The cycle talks to `GET`/`PATCH` `/repos/{owner}/{repo}` plus
   `PUT /repos/{owner}/{repo}/topics` (topics are replaced as a whole list).
-- The PATCH is partial: only declared fields are sent.
-- Never creates a repo; a PATCH against a nonexistent repo 404s and is
+- Only declared fields are sent; the PATCH is partial.
+- A repo is never created here; a PATCH against a nonexistent repo 404s and is
   recorded as a failed entry. Provisioning belongs to `repo-baseline`.
 - Repo deletion is gated on ownership like everything else: it is only
   proposed when `repo` is owned (`owned: true` or `owned: [repo, ...]`).
@@ -85,16 +86,18 @@ visibility, issues/projects/wiki toggles, merge methods, default branch,
 Reconciles org membership and roles (`orgs.<org>.members`): who is a member,
 who is an admin.
 
-- Endpoints: `GET /orgs/{org}/members?role=admin|member` (paginated, 100 per
-  page), `PUT`/`DELETE` `/orgs/{org}/memberships/{user}`.
-- By default this cycle only adds or re-roles declared members; removal of an
+- The member list comes from `GET /orgs/{org}/members?role=admin|member`
+  (paginated, 100 per page); changes go through `PUT`/`DELETE`
+  `/orgs/{org}/memberships/{user}`.
+- The cycle adds or re-roles declared members by default; removal of an
   undeclared live member requires marking `member` owned (`owned: true` or
   `owned: [member, ...]` on the org).
-- When removals are enabled, the member-aware guardrails apply in full:
-  `adminFloor`, `requiredAdmins`, `requireSelf` (the managing identity must
-  stay an org admin, not merely a member), and `removalDeltaCap`.
-- Outside collaborators are a per-repo concept the schema does not model and
-  are out of scope.
+- Removals, once enabled, run the member-aware guardrails in full
+  (`adminFloor`, `requiredAdmins`, `requireSelf`, `removalDeltaCap`);
+  `requireSelf` means the managing identity must stay an org admin, not merely
+  a member.
+- The schema does not model outside collaborators (a per-repo concept), so
+  they are out of scope.
 
 ## teams
 
@@ -117,7 +120,7 @@ Reconciles the team tree, team membership/roles, and team-to-repo permissions
   GitHub-side rename.
 - Teams are keyed by slug; on create the slug is sent as the name (GitHub
   re-slugifies), on update the name is not sent, so an existing slug is never
-  disturbed. Team deletes are ownership-gated.
+  disturbed. Deleting a team still requires ownership.
 
 ## rulesets
 
@@ -135,28 +138,30 @@ protection.
   native snake_case shape, forwarded verbatim).
 - Selective-by-omission operates at whole-ruleset granularity: a managed
   ruleset's declared body is the source of truth for that ruleset; undeclared
-  rulesets are never touched. Deletes are ownership-gated.
+  rulesets are never touched, and removing one requires ownership as usual.
 
 ## security-features
 
-Reconciles the security toggles under `repos.<name>.security`: GHAS, secret
-scanning, push protection, Dependabot alerts, and automated security fixes.
+Reconciles the security toggles under `repos.<name>.security`: GHAS and secret
+scanning (with push protection), plus Dependabot alerts and automated security
+fixes.
 
-- Endpoints: `GET`/`PATCH` `/repos/{o}/{r}` (the `security_and_analysis`
-  object), `GET`/`PUT`/`DELETE` `/repos/{o}/{r}/vulnerability-alerts`
-  (204 enabled / 404 disabled), and
+- Three endpoint groups are involved: `GET`/`PATCH` `/repos/{o}/{r}` (the
+  `security_and_analysis` object), `GET`/`PUT`/`DELETE`
+  `/repos/{o}/{r}/vulnerability-alerts` (204 enabled / 404 disabled), plus
   `GET`/`PUT`/`DELETE` `/repos/{o}/{r}/automated-security-fixes`.
-- License-gated graceful degradation: where GHAS (or secret scanning on a
-  private repo) is unavailable, GitHub rejects the enabling write and the
+- Degradation is license-gated and graceful: where GHAS (or secret scanning on
+  a private repo) is unavailable, GitHub rejects the enabling write and the
   cycle records a failed entry instead of crashing, so a mixed org reconciles
   what it can and reports the rest.
-- One `repo-security` entry per repo: creates/updates only.
+- Each repo maps to one `repo-security` entry, which is only ever created or
+  updated.
 
 ## environments
 
 Reconciles deployment environments under `repos.<name>.environments`: wait
-timers, self-review prevention, required reviewers, and deployment branch
-policies.
+timers, required reviewers, and deployment branch policies, along with
+self-review prevention.
 
 - Endpoints: `GET /repos/{o}/{r}/environments`,
   `PUT`/`DELETE` `/repos/{o}/{r}/environments/{env}`.
@@ -165,7 +170,7 @@ policies.
   fields. Declaring only `waitTimer` does not wipe reviewers or the branch
   policy.
 - Reviewers are compared by numeric id (`{ type, id }`), so author the same
-  ids the API returns. Environment deletes are ownership-gated.
+  ids the API returns. An environment is removed only when the org owns it.
 
 ## secrets-variables
 
@@ -181,7 +186,7 @@ Reconciles Actions secrets and variables at org level (`orgs.<org>.secrets` /
   provision it out-of-band; an undeclared live secret is deleted only when
   ownership-gated. There are no secret updates.
 - Variables are reconciled fully (name + value); a variable declared without
-  a `value` is presence-only. Deletes are ownership-gated.
+  a `value` is presence-only, and deletion follows the ownership gate.
 - Environment-level secrets/variables (GitHub's third scope) are a documented
   follow-up.
 
@@ -233,8 +238,8 @@ request whose every permission (flattened to `group:scope`) is in
 
 - Endpoints: `GET /orgs/{org}/personal-access-token-requests` (paginated),
   `POST /orgs/{org}/personal-access-token-requests/{id}` (approve/deny).
-- Callable only by a GitHub App. Admins can approve or deny but cannot narrow
-  the repo scope the requester chose.
+- Only a GitHub App can reach these request endpoints. Admins can approve or
+  deny but cannot narrow the repo scope the requester chose.
 - Decisions are emitted as updates on `token-request` entries; requests left
   for manual review produce no entry. The source notes this cycle is
   mock-tested; verify against a real App and test org before relying on it.

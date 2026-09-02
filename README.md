@@ -1,17 +1,24 @@
 # github-warden
 
-[![ci](https://github.com/intentius/github-warden/actions/workflows/ci.yml/badge.svg)](https://github.com/intentius/github-warden/actions/workflows/ci.yml)
-[![e2e (nightly)](https://github.com/intentius/github-warden/actions/workflows/e2e.yml/badge.svg)](https://github.com/intentius/github-warden/actions/workflows/e2e.yml)
-[![npm](https://img.shields.io/npm/v/@intentius/github-warden)](https://www.npmjs.com/package/@intentius/github-warden)
+<p>
+  <a href="https://github.com/intentius/github-warden/actions/workflows/ci.yml"><img src="https://github.com/intentius/github-warden/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://github.com/intentius/github-warden/actions/workflows/e2e.yml"><img src="https://github.com/intentius/github-warden/actions/workflows/e2e.yml/badge.svg" alt="e2e (nightly)"></a>
+  <a href="https://www.npmjs.com/package/@intentius/github-warden"><img src="https://img.shields.io/npm/v/@intentius/github-warden" alt="npm"></a>
+</p>
 
-**Keep your GitHub org and repos in a declared state — reconcile, guardrails, drift correction.**
+**Keep your GitHub org and repos in a declared state, with guardrails and drift correction.**
 
-Full documentation: [intentius.io/github-warden](https://intentius.io/github-warden/) — [policy authoring](POLICY.md), [CLI](CLI.md), [cycles](CYCLES.md), [CI pipelines](CI.md), [setup](SETUP.md).
+Full documentation lives at [intentius.io/github-warden](https://intentius.io/github-warden/), with deep dives on these pages.
 
-Terraform-style administration for GitHub: you declare the desired state of
-your org and repos in **one YAML file**; warden diffs it against live GitHub,
-runs **safety guardrails**, and either prints the plan (`dry-run`, the default)
-or applies it. Anything you don't declare is never read, diffed, or touched,
+- [Policy authoring](POLICY.md)
+- [CLI reference](CLI.md)
+- [Cycles](CYCLES.md)
+- [CI pipelines](CI.md)
+- [Setup](SETUP.md)
+
+You declare the desired state of your org and repos in **one YAML file**;
+warden diffs it against live GitHub, runs **safety guardrails**, and either
+prints the plan (`dry-run`, the default) or applies it. Anything you don't declare is never read, diffed, or touched,
 and deletes are planned only in orgs you mark `owned`. Run it locally, on a
 schedule, or as a GitHub Action.
 
@@ -19,13 +26,13 @@ schedule, or as a GitHub Action.
 
 - A clone of this repo (`git clone https://github.com/INTENTIUS/github-warden`).
   The agent skill, the annotated policy examples, and the pipeline templates
-  live in it — and setup ends with a governance pipeline running in your org,
+  live in it, and setup ends with a governance pipeline running in your org,
   so you'll have the repo around anyway. The CLI is published to npm as
   [`@intentius/github-warden`](https://www.npmjs.com/package/@intentius/github-warden)
   for those pipelines.
-- Auth: a **GitHub App** installed on your org (App ID + installation ID +
-  private key) — required for org-level and token cycles — or a pre-minted
-  installation **token** for repo-level reconcile and `audit`. See
+- Auth. Org-level and token cycles need a **GitHub App** installed on your org
+  (App ID plus installation ID plus private key); repo-level reconcile and
+  `audit` can run with a pre-minted installation **token** instead. See
   [Auth](#auth) and the [App setup checklist](docs/github-app-setup.md).
 - Node 22+.
 
@@ -33,7 +40,7 @@ About ten minutes gets you to a first dry-run plan. The quickest probe needs
 no clone at all:
 
 ```bash
-# Dry-run against your org — reads only, prints a plan, changes nothing.
+# Dry-run against your org: reads only, prints a plan, changes nothing.
 npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
 ```
 
@@ -42,7 +49,7 @@ npx @intentius/github-warden reconcile --config .github/governance.yml --token-e
 From a checkout, Claude Code picks up the skill in
 `.claude/skills/github-warden` automatically. Other agents can install it with
 `npx skills add INTENTIUS/github-warden`, or by copying the skill directory
-into `~/.claude/skills`. Then paste:
+into `~/.claude/skills`. Then paste the prompt below.
 
 ```text
 Use the github-warden skill in this repo to help me set up governance for my
@@ -69,10 +76,12 @@ particular require you to declare `owned` in the policy first.
 github-warden reconcile --config <path> [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override]
 ```
 
-- `--config <path>` — governance config (YAML or JSON). Required.
-- `--mode dry-run|apply` — default `dry-run`.
-- `--cycles <name[,name...]>` — subset of cycles to run (default: all).
-- `--allow-guardrail-override` — apply even when guardrails trip.
+| Flag | Meaning |
+|---|---|
+| `--config <path>` | Governance config (YAML or JSON). Required. |
+| `--mode dry-run\|apply` | Default `dry-run`. |
+| `--cycles <name[,name...]>` | Subset of cycles to run (default: all). |
+| `--allow-guardrail-override` | Apply even when guardrails trip. |
 
 ### `audit`
 
@@ -88,10 +97,11 @@ Audits every repo declared in the config. Exits `4` when findings exceed `--fail
 github-warden report --config <path> [auth] [--cycles a,b] [--audit] [--identity] [--out compliance.json] [--fail-on none|attention]
 ```
 
-Runs the selected cycles in **dry-run**, optionally an `--audit` pass and an
-`--identity` (service-account hygiene) pass, prints a unified compliance
-snapshot, optionally writes a committable JSON artifact (`--out`), and exits `4`
-on `--fail-on attention` when anything needs attention. Detect-only — never mutates.
+Runs the selected cycles in **dry-run** and prints a unified compliance
+snapshot. Optional passes add an `--audit` sweep and an `--identity`
+(service-account hygiene) check, while `--out` writes a committable JSON
+artifact. With `--fail-on attention` the command exits `4` when anything needs
+attention; nothing is ever mutated.
 
 ### Exit codes
 
@@ -124,7 +134,7 @@ omit it to run all.
 
 ## Config format
 
-Every field is optional — declare only what you want managed. A ready-to-edit
+Every field is optional; declare only what you want managed. A ready-to-edit
 starter lives in [`examples/governance.yml`](examples/governance.yml).
 
 ```yaml
@@ -204,23 +214,30 @@ orgs:
 Before any apply, warden runs safety checks and refuses dangerous changes
 (override with `--allow-guardrail-override`):
 
-- **removalDeltaCap** — refuses if deletes exceed 25% of pre-existing managed entries (typo protection).
-- **adminFloor** — refuses if fewer than 2 org admins would remain.
-- **requiredAdmins / requireSelf** — keep named admins (and the managing identity) from being removed.
-- **rename-without-loss** — a `previously` alias collapses a delete+create into an update, so a rename doesn't count as a deletion.
+| Guardrail | What it refuses or protects |
+|---|---|
+| `removalDeltaCap` | Refuses if deletes exceed 25% of pre-existing managed entries (typo protection). |
+| `adminFloor` | Refuses if fewer than 2 org admins would remain. |
+| `requiredAdmins` / `requireSelf` | Keep named admins (and the managing identity) from being removed. |
+| rename-without-loss | A `previously` alias collapses a delete+create into an update, so a rename doesn't count as a deletion. |
 
 ## Auth
 
-Two mutually-exclusive modes (token takes precedence):
+Warden supports two mutually exclusive auth modes, and the token takes
+precedence when both are given.
 
-1. **Pre-minted token** — `--token-env GH_TOKEN` (e.g. from `actions/create-github-app-token`).
-2. **GitHub App** — `--app-id-env` + `--installation-id-env`, with the private key in `GOVERNANCE_APP_PRIVATE_KEY` (or `GITHUB_APP_PRIVATE_KEY`).
+1. A **pre-minted token** via `--token-env GH_TOKEN` (e.g. from `actions/create-github-app-token`).
+2. A **GitHub App** via `--app-id-env` plus `--installation-id-env`, with the private key in `GOVERNANCE_APP_PRIVATE_KEY` (or `GITHUB_APP_PRIVATE_KEY`).
 
 A **GitHub App** is required for org-level token policy/approval and several
 org administration APIs. The [App setup checklist](docs/github-app-setup.md)
 walks through creating it, the per-cycle permissions, and installation.
 
 ## Use as a GitHub Action
+
+Warden also ships as a native GitHub Action, so a governance workflow needs no
+npm install step. The snippets below cover the common jobs; every input maps
+onto a CLI flag.
 
 ```yaml
 # Dry-run reconcile on every PR.
@@ -254,7 +271,7 @@ walks through creating it, the per-cycle permissions, and installation.
     private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 ```
 
-Inputs:
+The action accepts these inputs.
 
 | Input | Required | Default | Description |
 |---|---|---|---|
@@ -268,30 +285,29 @@ Inputs:
 | `fail-on` | no | `none` | `none`, `merge-worthy`, or `any` (audit only) |
 | `allow-guardrail-override` | no | `false` | Apply even when guardrails trip (reconcile only) |
 
-## CI workflow generation
+### CI workflow generation
 
-`governancePipeline` (from the package root export) generates a
-`.github/workflows/governance.yml` that runs reconcile (dry-run on PRs, apply on
-main) on a schedule, pinned to a warden Action SHA.
+The `governancePipeline` export (from the package root) generates a
+`.github/workflows/governance.yml` that runs reconcile on a schedule, dry-run
+on PRs and apply on main, pinned to a warden Action SHA; [the CI
+guide](CI.md) covers it in detail.
 
 ## Releasing
 
-`just release [patch|minor|major]` bumps `package.json`, commits `vX.Y.Z`, tags,
-and pushes — which triggers `.github/workflows/publish.yml` (test gate → `npm
-publish --provenance`).
+`just release [patch|minor|major]` bumps `package.json`, tags `vX.Y.Z`, and
+pushes. The pushed tag triggers `.github/workflows/publish.yml`, which gates on
+the test suite and then runs `npm publish --provenance` with `id-token: write`.
 
 The package is published as **`@intentius/github-warden`** (scoped, under the
-`intentius` npm org) via **GitHub OIDC trusted publishing** — no token, the same
-way the chant lexicons publish. `just release [patch|minor|major]` bumps, tags
-`vX.Y.Z`, and pushes; `publish.yml` then publishes with `id-token: write` +
-`--provenance`.
+`intentius` npm org) via **GitHub OIDC trusted publishing**, with no npm token
+involved, the same way the chant lexicons publish.
 
 ## End-to-end tests
 
-Unit tests (`npm test`) are fully mocked. A separate **gated, self-provisioning**
+Unit tests (`npm test`) are fully mocked. A separate gated, self-provisioning
 e2e suite exercises every cycle against a **real GitHub org** via a real App
-installation — the only thing that validates the live API contract (especially
-the App-only token cycles). It's excluded from `npm test` and from PR CI.
+installation; nothing else validates the live API contract (especially the
+App-only token cycles). Neither `npm test` nor PR CI includes the suite.
 
 ```bash
 WARDEN_E2E_APP_ID=… WARDEN_E2E_INSTALLATION_ID=… \
@@ -299,19 +315,21 @@ WARDEN_E2E_PRIVATE_KEY="$(cat key.pem)" WARDEN_E2E_ORG=my-test-org \
 npm run test:e2e
 ```
 
-- **Hermetic:** it **creates** a throwaway repo (`warden-e2e-<run>`) plus one
-  Actions variable and one sealed-box-encrypted secret, and **deletes** the repo
-  on teardown — nothing pre-existing is required. The suite **self-skips** when
-  the `WARDEN_E2E_*` vars are unset.
-- **Phase 1 (always):** per cycle, runs `fetchLive` + `diff` against the
-  provisioned repo/org and asserts every HTTP call was a `GET` (fetchLive never
-  mutates) and the pipeline composes — catches API drift.
-- **Phase 2 (opt-in, `WARDEN_E2E_APPLY=1`):** one apply through a cycle (set a
-  repo topic), verified by re-fetch; cleaned up by the repo teardown.
+The suite provisions everything it needs: a throwaway repo
+(`warden-e2e-<run>`) plus one Actions variable and one sealed-box-encrypted
+secret, with the repo deleted on teardown, so nothing pre-existing is
+required. When the `WARDEN_E2E_*` vars are unset, the whole suite self-skips.
+
+Phase 1 always runs. Per cycle, it runs `fetchLive` + `diff` against the
+provisioned repo/org and asserts that every HTTP call was a `GET` (fetchLive
+never mutates) and that the pipeline composes, which catches API drift.
+Phase 2 is opt-in via `WARDEN_E2E_APPLY=1` and performs one apply through a
+cycle (setting a repo topic), verified by re-fetch and cleaned up by the repo
+teardown.
 
 The App installation needs **repository administration** (create/delete repos)
 and **Actions secrets + variables** read+write, plus the read scopes the cycles
-touch. CI runs it nightly + on demand via `.github/workflows/e2e.yml` using
+touch. CI runs it nightly and on demand via `.github/workflows/e2e.yml` using
 `WARDEN_E2E_*` repo secrets (never on PRs).
 
 Once the App is created, installed on the test org, and its `.pem` downloaded

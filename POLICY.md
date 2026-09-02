@@ -28,7 +28,7 @@ Two authoring notes:
 - **YAML subset.** The CLI ships a small built-in YAML reader: block-style
   mappings and sequences, string/bool/number scalars, comments. No flow style
   (`{ }` / `[ ]`), no multi-line scalars (`|` / `>`), no anchors. For anything
-  richer (notably `dependabot.content`, which is multi-line), use JSON.
+  richer, such as the multi-line `dependabot.content`, use JSON.
 - **Loader coverage (v0.3.x).** The CLI's config loader currently validates and
   forwards these slices: `owned`, `settings`, `members`, `teams` (without
   `previously`), and `repos` (the scalar repo settings, `branchProtection`,
@@ -241,12 +241,13 @@ orgs:
 ```
 
 The smallest useful policy is one org with one managed slice, for example just
-`settings.defaultRepositoryPermission`. Everything else stays unmanaged.
+`settings.defaultRepositoryPermission`; everything else then stays unmanaged.
 
 ## Field reference
 
-Column meanings: **Required / default** is what the loader/cycle enforces;
-**Cycle** is the reconcile cycle (from `--cycles`) that consumes the field.
+In the tables below, **Required / default** describes what the loader or cycle
+enforces, and **Cycle** names the reconcile cycle (from `--cycles`) that
+consumes the field.
 
 ### `orgs` (top level)
 
@@ -255,7 +256,7 @@ Column meanings: **Required / default** is what the loader/cycle enforces;
 | `orgs` | map of org login → org config | **required** | all | Organizations to manage. Each cycle runs once per org. |
 | `orgs.<org>.owned` | bool or list of resource type strings | absent → nothing owned, no deletes planned | all (diff layer) | `true` = every reconciled collection in this org is owned and live resources missing from the policy are planned for deletion; a list (e.g. `[team, repo]`) owns only those change-set resource types. A programmatic `diffOptions.isOwned` overrides it. Guardrails still gate the apply. |
 
-### `orgs.<org>.settings` — org settings
+### `orgs.<org>.settings` (org settings)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -268,14 +269,14 @@ Column meanings: **Required / default** is what the loader/cycle enforces;
 | `defaultRepositoryPermission` | `none` \| `read` \| `write` \| `admin` | not managed | org-settings | Base repo permission for all members. |
 | `requireTwoFactorAuthentication` | bool | not managed | org-settings | Surfaced for drift reporting; GitHub treats the key as read-only on most plans. |
 
-### `orgs.<org>.members[]` — org membership
+### `orgs.<org>.members[]` (org membership)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
 | `login` | string | **required** | membership | GitHub login. |
 | `role` | `member` \| `admin` | `member` | membership | Org role. |
 
-### `orgs.<org>.teams{}` — teams (keyed by slug)
+### `orgs.<org>.teams{}` (teams, keyed by slug)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -286,7 +287,7 @@ Column meanings: **Required / default** is what the loader/cycle enforces;
 | `members[]` | list | absent → membership not managed | teams | `{ login (required), role: member (default) \| maintainer }`. |
 | `repos[]` | list | absent → repo access not managed | teams | `{ name (required), permission (required): pull \| triage \| push \| maintain \| admin }`. |
 
-### `orgs.<org>.repos{}` — repository settings (keyed by repo name)
+### `orgs.<org>.repos{}` (repository settings, keyed by repo name)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -305,7 +306,7 @@ Column meanings: **Required / default** is what the loader/cycle enforces;
 | `secrets[]` / `variables[]` | list | not managed | secrets-variables | Repo-level Actions secrets (presence only) / variables. |
 | `dependabot` | object | not managed | dependency-hygiene | `{ content (required) }` — exact desired text of `.github/dependabot.yml`. |
 
-### `repos.<name>.branchProtection[]` — classic branch protection
+### `repos.<name>.branchProtection[]` (classic branch protection)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -327,7 +328,7 @@ a read-modify-write: it echoes every undeclared live field back (including
 `enforce_admins`, which the schema does not expose) and overlays only what you
 declared.
 
-### `rulesets[]` — org (`orgs.<org>.rulesets`) and repo (`repos.<name>.rulesets`)
+### `rulesets[]` at org (`orgs.<org>.rulesets`) and repo (`repos.<name>.rulesets`) level
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -342,7 +343,7 @@ A managed ruleset is authored as a unit: its declared `rules` / `conditions` /
 `bypassActors` are the source of truth for that ruleset. Undeclared rulesets
 are never touched.
 
-### `repos.<name>.security` — security features
+### `repos.<name>.security` (security features)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -352,7 +353,7 @@ are never touched.
 | `vulnerabilityAlerts` | bool | not managed | security-features | Dependabot alerts (`vulnerability-alerts` endpoint). |
 | `dependabotSecurityUpdates` | bool | not managed | security-features | Automated security fixes (`automated-security-fixes` endpoint). |
 
-### `repos.<name>.environments[]` — deployment environments
+### `repos.<name>.environments[]` (deployment environments)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -362,7 +363,7 @@ are never touched.
 | `reviewers[]` | list | not managed | environments | `{ type: User \| Team, id: <numeric GitHub id> }`. Compared by id, so use the ids the API returns. |
 | `deploymentBranchPolicy` | object or `null` | not managed | environments | `{ protectedBranches, customBranchPolicies }` (at most one true); explicit `null` disables the policy. |
 
-### `secrets[]` — Actions secrets (org and repo level)
+### `secrets[]` (Actions secrets, org and repo level)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -374,7 +375,7 @@ values; a declared-but-missing secret surfaces as an error telling you to
 provision it out-of-band, and an undeclared live secret is removed only when
 ownership-gated.
 
-### `variables[]` — Actions variables (org and repo level)
+### `variables[]` (Actions variables, org and repo level)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -382,7 +383,7 @@ ownership-gated.
 | `value` | string | absent → presence-only | secrets-variables | Reconciled fully (create/update) when declared. |
 | `visibility` | `all` \| `private` \| `selected` | `all` | secrets-variables | Org-level create only; ignored for repo variables. |
 
-### `repoBaselines[]` — repo provisioning
+### `repoBaselines[]` (repo provisioning)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -393,7 +394,7 @@ ownership-gated.
 Existence-only: this cycle creates missing repos and never updates or deletes
 one. Per-repo settings belong under `repos`.
 
-### `tokenPolicy` — fine-grained PAT governance
+### `tokenPolicy` (fine-grained PAT governance)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
@@ -402,20 +403,22 @@ one. Per-repo settings belong under `repos`.
 | `maxIdleDays` | int | not enforced when absent | token-governance | Grants unused for longer than this lose org access. |
 
 Violations are modeled as updates ("revoke org access"), not deletes, so a
-routine sweep does not trip the removal guardrail. GitHub App auth required;
-the API cannot create or rotate a user's PAT, only revoke its org access.
+routine sweep does not trip the removal guardrail; the expiry check uses
+GitHub's own `expired` flag. GitHub App auth is required here. The API cannot
+create or rotate a user's PAT; revoking its org access is the only
+enforcement lever.
 
-### `tokenApproval` — pending PAT requests
+### `tokenApproval` (pending PAT requests)
 
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
 | `allowedPermissions` | list of string | absent → nothing auto-approved | token-approval | Permission names as `group:scope` (e.g. `repository:contents`). A request is approved only when every requested permission is listed. |
 | `default` | `deny` \| `manual` | `manual` | token-approval | What happens to a request that is not auto-approved. |
 
-GitHub App auth required. Admins can only approve or deny; the requested repo
-scope cannot be changed.
+Like the token sweep, this cycle works only with GitHub App auth. Admins can
+only approve or deny; the requested repo scope cannot be changed.
 
-### `machineUsers[]` — service-account inventory
+### `machineUsers[]` (service-account inventory)
 
 | Field | Type | Required / default | Consumer | Meaning |
 |---|---|---|---|---|

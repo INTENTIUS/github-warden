@@ -3,22 +3,26 @@
 warden authenticates either with a **pre-minted installation token**
 (`--token-env`) or as a **GitHub App** (`--app-id-env` + `--installation-id-env`
 + a private key). A token is fine for repo-level reconcile and `audit`; an
-**App is required** for org-level cycles (org settings, members, teams) and the
-token cycles, and is the right choice for unattended/scheduled runs.
+**App is required** for the org-level cycles (org settings / members / teams)
+and the token cycles, and it is the best choice for unattended or scheduled
+runs.
 
 This is a one-time checklist. The org-permission steps are web-only (GitHub has
 no API to set or change an App's permissions).
 
-## 1. Create the App
+## Create the App
 
-Open `https://github.com/organizations/<your-org>/settings/apps/new` and set:
+Open `https://github.com/organizations/<your-org>/settings/apps/new` and fill
+in the form as follows.
 
-- **Name:** e.g. `org-warden` (must be globally unique)
-- **Homepage URL:** anything (e.g. your repo URL)
-- **Webhook → Active:** **uncheck** (warden polls; no webhook needed)
-- **Where can this be installed:** "Only on this account"
+| Form field | What to enter |
+|---|---|
+| Name | e.g. `org-warden` (must be globally unique) |
+| Homepage URL | anything, e.g. your repo URL |
+| Webhook: Active | uncheck it (warden polls; no webhook needed) |
+| Where can this be installed | "Only on this account" |
 
-## 2. Grant permissions
+## Grant permissions
 
 Grant only what the cycles you plan to run need. For a **dry-run** the *read*
 level is enough; **apply** needs *write*.
@@ -35,32 +39,35 @@ level is enough; **apply** needs *write*.
 | token-governance | Organization → **Personal access tokens** | read | write |
 | token-approval | Organization → **Personal access token requests** | read | write |
 
-Repository → **Metadata: read** is mandatory and auto-selected.
+The Repository **Metadata (read)** permission is mandatory and auto-selected.
 
 > A cycle whose read 403s (a permission you didn't grant, or a feature not on
-> your plan) is skipped gracefully rather than crashing — so you can start with
-> a narrow grant and widen later. Re-granting requires re-approving the install
-> (step 4).
+> your plan) is skipped rather than crashing; start with a narrow grant, then
+> widen it later. Re-granting requires re-approving the install (see the
+> install step below).
 
-## 3. Generate a key + note the IDs
+## Generate a key and note the IDs
 
-- **App ID:** shown at the top of the App's settings page.
-- **Private keys → Generate a private key** → downloads a `.pem`. Store it as a
-  secret.
+The **App ID** is shown at the top of the App's settings page. Under
+**Private keys**, click **Generate a private key**, which downloads a `.pem`;
+store it as a secret. Warden reads the PEM from an environment variable at
+runtime, so keep it somewhere your pipeline can reach; nothing else ever
+needs the file.
 
-## 4. Install it
+## Install it
 
-**Install App** → install on your org → **All repositories** (or select the
-repos warden should manage). After any later permission change, return here and
-**approve** the new request.
+Click **Install App**, install on your org, and choose **All repositories**
+(or select the repos warden should manage). After any later permission change,
+return here and **approve** the new request; the pending request shows up on
+this same page.
 
 The **installation ID** is in the install URL
-(`…/settings/installations/<id>`), or via
+(`.../settings/installations/<id>`), or via
 `gh api /orgs/<org>/installations`.
 
-## 5. Wire it up
+## Wire it up
 
-CLI:
+Point the CLI at the env vars like this:
 
 ```bash
 GOVERNANCE_APP_PRIVATE_KEY="$(cat org-warden.pem)" \
@@ -69,10 +76,11 @@ github-warden reconcile --config .github/governance.yml \
   --app-id-env APP_ID --installation-id-env INSTALL_ID --mode dry-run
 ```
 
-GitHub Action — pass `app-id`, `installation-id`, and `private-key` (as a
-secret); see the README "Use as a GitHub Action" section.
+For the GitHub Action, pass `app-id`, `installation-id`, and `private-key`
+(as a secret); the README section "Use as a GitHub Action" shows full
+examples.
 
-## 6. Verify
+## Verify
 
-Run a **dry-run** first — it only reads and prints a plan. When the plan looks
+Run a **dry-run** first; it only reads and prints a plan. When the plan looks
 right, switch to `--mode apply`.
