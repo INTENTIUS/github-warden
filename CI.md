@@ -1,9 +1,9 @@
 # Running warden in CI
 
 The steady state for governance is a pipeline: dry-run the plan on every pull
-request that touches the policy, apply on the default branch and on a
-schedule. This page covers the GitHub Action, a hand-written workflow, and the
-emit pipeline that generates one for you.
+request, apply on the default branch, and a scheduled run to correct drift
+that happens between pushes. This page covers the GitHub Action, a
+hand-written workflow, and the emit pipeline that generates one for you.
 
 ## The GitHub Action
 

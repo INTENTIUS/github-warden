@@ -2,25 +2,47 @@
 
 <p>
   <a href="https://github.com/intentius/github-warden/actions/workflows/ci.yml"><img src="https://github.com/intentius/github-warden/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
-  <a href="https://github.com/intentius/github-warden/actions/workflows/e2e.yml"><img src="https://github.com/intentius/github-warden/actions/workflows/e2e.yml/badge.svg" alt="e2e (nightly)"></a>
+  <a href="https://github.com/intentius/github-warden/actions/workflows/e2e.yml"><img src="https://github.com/intentius/github-warden/actions/workflows/e2e.yml/badge.svg" alt="e2e"></a>
   <a href="https://www.npmjs.com/package/@intentius/github-warden"><img src="https://img.shields.io/npm/v/@intentius/github-warden" alt="npm"></a>
 </p>
 
 **Keep your GitHub org and repos in a declared state, with guardrails and drift correction.**
 
-Full documentation lives at [intentius.io/github-warden](https://intentius.io/github-warden/), with deep dives on these pages.
+Full documentation lives at
+[intentius.io/github-warden](https://intentius.io/github-warden/), with deep
+dives on these pages.
 
-- [Policy authoring](POLICY.md)
-- [CLI reference](CLI.md)
+- [Policy](POLICY.md)
+- [CLI](CLI.md)
 - [Cycles](CYCLES.md)
 - [CI pipelines](CI.md)
 - [Setup](SETUP.md)
+- [GitHub App setup](docs/github-app-setup.md)
 
-You declare the desired state of your org and repos in **one YAML file**;
+You declare the desired state of your org and repos in **one YAML file**
+(selective-by-omission: an absent field is never read, diffed, or touched);
 warden diffs it against live GitHub, runs **safety guardrails**, and either
-prints the plan (`dry-run`, the default) or applies it. Anything you don't declare is never read, diffed, or touched,
-and deletes are planned only in orgs you mark `owned`. Run it locally, on a
-schedule, or as a GitHub Action.
+prints the plan (`dry-run`, the default) or applies it. Deletes are planned
+only in orgs you mark `owned`. Run it locally, on a schedule, or as a GitHub
+Action.
+
+## Set up with an agent
+
+From a checkout, Claude Code picks up the skill in
+`.claude/skills/github-warden` automatically. Other agents can install it with
+`npx skills add INTENTIUS/github-warden`, or by copying the skill directory
+into `~/.claude/skills/`. Then paste this prompt, filling in the placeholders:
+
+```text
+Use the github-warden skill in this repo to help me set up governance for my
+GitHub org <ORG>: author a governance policy file covering the settings I care
+about (ask me which), explain whether I need a GitHub App or a token for those
+cycles, then run a dry-run reconcile and walk me through the plan it prints.
+Do not apply anything.
+```
+
+The skill holds the agent to dry-run until you've reviewed the plan; deletes
+stay off entirely until you mark an org `owned` in the policy.
 
 ## What you need
 
@@ -40,27 +62,9 @@ About ten minutes gets you to a first dry-run plan. The quickest probe needs
 no clone at all:
 
 ```bash
-# Dry-run against your org: reads only, prints a plan, changes nothing.
+# Dry-run: reads only, prints a plan, changes nothing.
 npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
 ```
-
-## Set up with an agent
-
-From a checkout, Claude Code picks up the skill in
-`.claude/skills/github-warden` automatically. Other agents can install it with
-`npx skills add INTENTIUS/github-warden`, or by copying the skill directory
-into `~/.claude/skills`. Then paste the prompt below.
-
-```text
-Use the github-warden skill in this repo to help me set up governance for my
-GitHub org <ORG>: author a governance policy file covering the settings I care
-about (ask me which), explain whether I need a GitHub App or a token for those
-cycles, then run a dry-run reconcile and walk me through the plan it prints.
-Do not apply anything.
-```
-
-The skill stays in dry-run and asks before anything destructive; deletes in
-particular require you to declare `owned` in the policy first.
 
 ## Subcommands
 
@@ -237,7 +241,7 @@ Before any apply, warden runs safety checks and refuses dangerous changes
 
 | Guardrail | What it refuses or protects |
 |---|---|
-| `removalLiveCap` | Refuses if deletes exceed 25% of the live entries in the declared collections (typo protection). With nothing live it falls back to chant's plan-denominator `removalDeltaCap`. |
+| `removalLiveCap` | Refuses an apply whose deletes exceed 25% of the live managed entries in the collections the policy declares (typo protection). With nothing live to measure against it falls back to chant's plan-relative `removalDeltaCap`. |
 | `adminFloor` | Refuses if fewer than 2 org admins would remain. |
 | `requiredAdmins` / `requireSelf` | Keep named admins (and the managing identity) from being removed. |
 | rename-without-loss | A `previously` alias collapses a delete+create into an update, so a rename doesn't count as a deletion. |

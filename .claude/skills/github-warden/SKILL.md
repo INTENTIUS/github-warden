@@ -16,10 +16,11 @@ policy file. This skill is a pointer — read the docs, do not restate them:
   auth selection, exit codes.
 - [CYCLES.md](../../../CYCLES.md) — what each of the 13 cycles reads and writes.
 
-Core rules:
+Safety rules (non-negotiable):
 
-- `--mode dry-run` is the default and is safe to run: it only reads and prints
-  a plan. Start every task with a dry-run and show the operator the plan.
+- `--mode dry-run` is the default and is safe to run: it only reads live
+  state and prints a plan. Start every task with a dry-run and show the
+  operator the plan.
 - Never pass `--mode apply` until a human has reviewed the rendered plan and
   approved the specific change.
 - A guardrail block (exit 1) means stop and ask, not work around. Do not pass

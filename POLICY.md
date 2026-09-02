@@ -9,14 +9,14 @@ It is the one file you must author.
   (`reconcile`, `audit`, `report`). YAML or JSON, decided by file extension.
 - Schema (authoritative): `src/config/types.ts`. Validation: `src/config/load.ts`
   (throws a `GovernanceConfigError` with the exact field path on bad shape).
-- Selective-by-omission at every level: an absent field means "not managed".
-  warden will not read, diff, or modify that aspect of live GitHub state. If
-  `teams` is absent, teams are untouched; if one team's `members` is absent,
-  that team's membership is untouched even though the team itself is managed.
-- Deletes are ownership-gated. The diff only proposes deleting a live resource
-  missing from the policy when that resource is marked owned. By default an
-  org owns nothing, so a run never deletes anything it merely fails to find in
-  the policy. Declaring `owned: true` on an org makes warden own every
+- Selective-by-omission: an absent field or collection is never read for
+  mutation, diffed, or changed. This holds at every level: if `teams` is
+  absent, teams are untouched; if one team's `members` is absent, that team's
+  membership is untouched even though the team itself is managed.
+- Deletes are ownership-gated. The diff proposes deleting a live entry
+  missing from the policy only when that entry's collection is marked owned,
+  and by default nothing is owned: a run creates and updates but never
+  deletes. Declaring `owned: true` on an org makes warden own every
   resource collection it reconciles there; `owned: [team, repo, ...]` limits
   ownership to the listed change-set resource types. A programmatic
   `diffOptions.isOwned` predicate, when supplied, overrides the declaration.
@@ -419,7 +419,8 @@ only approve or deny; the requested repo scope cannot be changed.
 ## What the policy does not declare
 
 - **Guardrail thresholds.** `removalLiveCap` (default: deletes capped at 25%
-  of the live entries in the declared collections), `adminFloor` (default: at least 2 org
+  of the live managed entries in the collections the policy declares),
+  `adminFloor` (default: at least 2 org
   admins must remain), `requiredAdmins`, and `requireSelf` are configured
   programmatically (`runReconcile({ guardrails })`), not in the policy file.
   The CLI runs with the defaults; `--allow-guardrail-override` applies anyway

@@ -21,6 +21,8 @@ npm install -g @intentius/github-warden     # or add it to a project
 
 In CI you can skip both and use the [GitHub Action](CI.md).
 
+Node 22+.
+
 ## Choose your auth
 
 | | Pre-minted token (`--token-env`) | GitHub App (`--app-id-env` + `--installation-id-env`) |
@@ -109,3 +111,14 @@ runs on every policy change and drift is corrected on a schedule.
 starting config so adoption starts from reality rather than a blank file. It
 currently covers branch protection only, and the literal-name probe misses
 wildcard-pattern rules; trim and extend its output by hand before committing.
+
+## A disposable sandbox: the e2e stack
+
+Unlike the sibling wardens, github-warden has no self-hosted instance to
+stand up: the CLI always talks to `api.github.com`, so there is no sandbox
+URL to point it at. The safe first contact with a real org is the dry-run
+above, which only reads. For exercising full apply loops without touching a
+real org, the repo ships a hermetic mock GitHub used by the e2e smoke suite
+(`just e2e-up`, then `GITHUB_WARDEN_E2E_URL=http://localhost:8188
+npm run test:e2e`, then `just e2e-down`); [e2e/README.md](e2e/README.md)
+covers what it exercises.

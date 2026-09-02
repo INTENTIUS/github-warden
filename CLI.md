@@ -10,9 +10,9 @@ with live GitHub state.
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
 
-Run `github-warden` with no arguments (or `--help`, anywhere in the argument
-list) for the built-in usage text; `github-warden --version` prints the version
-(inlined from package.json at build time).
+`github-warden --help` (or no arguments, or `--help` after a subcommand)
+prints usage; `github-warden --version` prints the version (inlined from
+package.json at build time).
 
 ## Config file parsing
 
@@ -29,15 +29,15 @@ github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
 ```
 
-| Flag | Value | Default | Meaning |
-|---|---|---|---|
-| `--config <path>` | file path | **required** | Governance config (YAML or JSON). |
-| `--mode` | `dry-run` \| `apply` | `dry-run` | `dry-run` prints the plan and changes nothing; `apply` executes it after guardrails pass. |
-| `--cycles` | comma-separated cycle names | all | Subset of cycles to run. Unknown names exit 2 and print the known list. |
-| `--token-env <VAR>` | env var name | — | Env var holding a pre-minted installation token (auth mode 1). |
-| `--app-id-env <VAR>` | env var name | — | Env var holding the GitHub App ID (auth mode 2, with the next flag). |
-| `--installation-id-env <VAR>` | env var name | — | Env var holding the installation ID. |
-| `--allow-guardrail-override` | flag | off | Apply even when guardrails trip. |
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config <path>` | **required** | Governance config (YAML or JSON). |
+| `--mode dry-run\|apply` | `dry-run` | `dry-run` prints the plan and changes nothing; `apply` executes it after guardrails pass. |
+| `--cycles <name[,name...]>` | all | Subset of cycles to run. Unknown names exit 2 and print the known list. |
+| `--token-env <VAR>` | — | Env var holding a pre-minted installation token (auth mode 1). |
+| `--app-id-env <VAR>` | — | Env var holding the GitHub App ID (auth mode 2, with the next flag). |
+| `--installation-id-env <VAR>` | — | Env var holding the installation ID. |
+| `--allow-guardrail-override` | off | Apply even when guardrails trip. |
 
 Deletes come from the policy, not from a flag: a live resource missing from
 the policy is planned for deletion only in an org whose policy declares
@@ -64,12 +64,12 @@ cycle finished.
 github-warden audit --config <path> [auth flags] [--fail-on none|merge-worthy|any]
 ```
 
-| Flag | Value | Default | Meaning |
-|---|---|---|---|
-| `--config <path>` | file path | **required** | Governance config. The audit targets every repo declared under `repos`. |
-| `--token-env` / `--app-id-env` / `--installation-id-env` | env var names | — | Auth, same as reconcile. |
-| `--fail-on` | `merge-worthy` \| `any` \| `none` | `none` | Exit 4 when findings exceed this threshold. |
-| `--help`, `-h` | flag | — | Print audit usage and exit 0. |
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config <path>` | **required** | Governance config. The audit targets every repo declared under `repos`. |
+| `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
+| `--fail-on none\|merge-worthy\|any` | `none` | Exit 4 when findings exceed this threshold. |
+| `--help`, `-h` | — | Print audit usage and exit 0. |
 
 The audit subcommand wraps chant's audit engine (the same checks as
 `chant audit`) and reads private repos with warden's token. With no repos
@@ -82,15 +82,15 @@ github-warden report --config <path> [auth flags] [--cycles a,b] [--audit]
                      [--identity] [--out compliance.json] [--fail-on none|attention]
 ```
 
-| Flag | Value | Default | Meaning |
-|---|---|---|---|
-| `--config <path>` | file path | **required** | Governance config. |
-| `--token-env` / `--app-id-env` / `--installation-id-env` | env var names | — | Auth, same as reconcile. |
-| `--cycles` | comma-separated cycle names | all | Cycles to include (always run in dry-run). |
-| `--out <path>` | file path | — | Write the committable JSON compliance artifact here. |
-| `--audit` | flag | off | Include an audit pass over the declared repos. |
-| `--identity` | flag | off | Include an identity and service-account hygiene pass (App installations vs seat-consuming `machineUsers`). |
-| `--fail-on` | `none` \| `attention` | `none` | Exit 4 when the report needs attention. |
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config <path>` | **required** | Governance config. |
+| `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
+| `--cycles <name[,name...]>` | all | Cycles to include (always run in dry-run). |
+| `--out <path>` | — | Write the committable JSON compliance artifact here. |
+| `--audit` | off | Include an audit pass over the declared repos. |
+| `--identity` | off | Include an identity and service-account hygiene pass (App installations vs seat-consuming `machineUsers`). |
+| `--fail-on none\|attention` | `none` | Exit 4 when the report needs attention. |
 
 Report is detect-only; cycles run in dry-run and nothing is mutated.
 
@@ -121,8 +121,8 @@ several org administration endpoints are callable only by a GitHub App. See
 
 | Code | Meaning |
 |---|---|
-| 0 | Success (dry-run always; apply with no errors). |
+| 0 | Success: the plan printed (dry-run), or apply completed with no failures. |
 | 1 | Guardrail block: apply mode, at least one guardrail tripped, and `--allow-guardrail-override` was not set. |
-| 2 | Argument or config error (unknown flag, missing auth, invalid config shape, unknown cycle). |
-| 3 | Runtime error (unreadable config file, network failure, errored cycle, failed apply entry). |
+| 2 | Argument or config error (unknown flag, unknown cycle, invalid config shape, missing auth). |
+| 3 | Runtime error (unreadable config file, API failure, an errored cycle, or failed apply entries). |
 | 4 | `audit`: findings exceed `--fail-on`; `report`: needs attention with `--fail-on attention`. |

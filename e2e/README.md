@@ -48,27 +48,27 @@ other endpoint then requires the minted installation token. Test controls
 (`/__mock/reset`, `/__mock/forbid` for injected 403s, PAT seeding) bypass
 auth.
 
-## Smoke coverage by cycle
+## Coverage
 
-A check means exercised and asserted by the smoke; "n/a" means the behavior
+"yes" means exercised and asserted by the smoke; "n/a" means the behavior
 does not exist for that cycle (the reason is noted). Deletes run under
 `owned`, with the `removalLiveCap` arithmetic spelled out in each test.
 
-| Cycle | read | apply | converged re-plan | drift correction | delete via `owned` |
-|---|---|---|---|---|---|
-| org-settings | ✓ | ✓ | ✓ | ✓ description | n/a (singleton) |
-| repo-settings | ✓ | ✓ | ✓ | ✓ has_issues | n/a (never deletes repos) |
-| membership | ✓ | ✓ | ✓ | ✓ role escalation | ✓ 1/4 in cap; 1/3 BLOCKED |
-| teams | ✓ | ✓ | ✓ | ✓ description | ✓ 1/4 in cap |
-| branch-protection | ✓ | ✓ | ✓ | ✓ re-protect | n/a (probe reads declared patterns only) |
-| rulesets | ✓ | ✓ | ✓ incl. exclude echo | ✓ enforcement | ✓ 1/4 in cap |
-| security-features | ✓ | ✓ | ✓ | ✓ alerts re-enable | n/a (toggles) |
-| environments | ✓ | ✓ | ✓ | ✓ wait timer | ✓ 1/3, cap raised |
-| secrets-variables | ✓ | ✓ | ✓ | ✓ variable value | ✓ 1/6 in cap |
-| dependency-hygiene | ✓ | ✓ | ✓ | ✓ file content, sha-aware | n/a (never deletes the file) |
-| repo-baseline | ✓ | ✓ empty + template | ✓ | n/a (existence-only) | n/a |
-| token-governance | ✓ | ✓ revoke expired | ✓ | n/a (grants are not editable) | n/a (revoke is an update) |
-| token-approval | ✓ | ✓ approve + deny | ✓ | n/a | n/a |
+| Cycle | Read | Apply | Converge | Drift | Delete via `owned` | Gated-read NOTE |
+|---|---|---|---|---|---|---|
+| org-settings | yes | yes | yes | yes (description) | n/a (singleton) | — |
+| repo-settings | yes | yes | yes | yes (has_issues) | n/a (never deletes repos) | — |
+| membership | yes | yes | yes | yes (role escalation) | yes (1/4 in cap; 1/3 BLOCKED) | — |
+| teams | yes | yes | yes | yes (description) | yes (1/4 in cap) | — |
+| branch-protection | yes | yes | yes | yes (re-protect) | n/a (probe reads declared patterns only) | — |
+| rulesets | yes | yes | yes (incl. exclude echo) | yes (enforcement) | yes (1/4 in cap) | — |
+| security-features | yes | yes | yes | yes (alerts re-enable) | n/a (toggles) | — |
+| environments | yes | yes | yes | yes (wait timer) | yes (1/3, cap raised) | — |
+| secrets-variables | yes | yes | yes | yes (variable value) | yes (1/6 in cap) | yes (injected org-variables 403 → plan NOTE) |
+| dependency-hygiene | yes | yes | yes | yes (file content, sha-aware) | n/a (never deletes the file) | — |
+| repo-baseline | yes | yes (empty + template) | yes | n/a (existence-only) | n/a | — |
+| token-governance | yes | yes (revoke expired) | yes | n/a (grants are not editable) | n/a (revoke is an update) | — |
+| token-approval | yes | yes (approve + deny) | yes | n/a | n/a | — |
 
 Cross-cutting behaviors, also in the smoke:
 
