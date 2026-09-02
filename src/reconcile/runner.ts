@@ -62,9 +62,29 @@ export interface RunReconcileOptions<TScope = unknown> {
 }
 
 /**
+ * Derive an ownership predicate from a scope's `owned` declaration.
+ * Absent/`false` → `undefined` (no deletes are planned — the default);
+ * `true` → every resource type warden reconciles in the scope is owned;
+ * a string[] → only the listed change-set resource types are owned.
+ */
+function ownedPredicate(
+  owned: boolean | string[] | undefined,
+): ((resourceType: string, key: string) => boolean) | undefined {
+  if (owned === undefined || owned === false) return undefined;
+  return (type: string, _key: string) =>
+    owned === true || (Array.isArray(owned) && owned.includes(type));
+}
+
+/**
  * Run the GitHub governance reconcile loop by delegating to the shared runner
  * with warden's diff (org login as scope id; `nowMs` defaulted for time-based
  * diffs) and member-aware guardrails wired in.
+ *
+ * Ownership: when the caller supplies `diffOptions.isOwned` it is used
+ * unchanged for every scope. Otherwise each org's `owned` declaration from the
+ * config derives the per-scope predicate (see `OrgConfig.owned`), so deletes
+ * become plannable from a policy file alone. Guardrails (including
+ * `removalDeltaCap`) still apply to owned deletes.
  */
 export async function runReconcile<TScope = unknown>(
   opts: RunReconcileOptions<TScope>,
@@ -76,7 +96,11 @@ export async function runReconcile<TScope = unknown>(
     scope: opts.scope,
     mode: opts.mode,
     diff: (scopeId, desired, live, dopts) =>
-      diff(scopeId, desired, live, { ...dopts, nowMs: dopts.nowMs ?? Date.now() }),
+      diff(scopeId, desired, live, {
+        ...dopts,
+        isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
+        nowMs: dopts.nowMs ?? Date.now(),
+      }),
     guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}),
     diffOptions: opts.diffOptions,
     allowGuardrailOverride: opts.allowGuardrailOverride,

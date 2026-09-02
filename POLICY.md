@@ -14,10 +14,14 @@ It is the one file you must author.
   `teams` is absent, teams are untouched; if one team's `members` is absent,
   that team's membership is untouched even though the team itself is managed.
 - Deletes are ownership-gated. The diff only proposes deleting a live resource
-  missing from the policy when an ownership predicate marks it owned. The CLI
-  supplies no predicate, so a CLI run never deletes anything it merely fails to
-  find in the policy; removal requires wiring `diffOptions.isOwned` through the
-  programmatic API (`runReconcile`).
+  missing from the policy when that resource is marked owned. By default an
+  org owns nothing, so a run never deletes anything it merely fails to find in
+  the policy. Declaring `owned: true` on an org makes warden own every
+  resource collection it reconciles there; `owned: [team, repo, ...]` limits
+  ownership to the listed change-set resource types. A programmatic
+  `diffOptions.isOwned` predicate, when supplied, overrides the declaration.
+  Owned deletes still run the guardrails (`removalDeltaCap` etc.) before any
+  apply.
 
 Two authoring notes:
 
@@ -26,8 +30,9 @@ Two authoring notes:
   (`{ }` / `[ ]`), no multi-line scalars (`|` / `>`), no anchors. For anything
   richer (notably `dependabot.content`, which is multi-line), use JSON.
 - **Loader coverage (v0.3.0).** The CLI's config loader currently validates and
-  forwards these slices: `settings`, `members`, `teams` (without `previously`),
-  and `repos` (the scalar repo settings, `branchProtection`, and `topics`).
+  forwards these slices: `owned`, `settings`, `members`, `teams` (without
+  `previously`), and `repos` (the scalar repo settings, `branchProtection`,
+  and `topics`).
   The remaining slices below are declared in the schema and consumed by their
   cycles, but the v0.3.0 loader does not yet pass them through from a config
   file; they are reachable programmatically via `runReconcile`. Each is marked
@@ -44,6 +49,14 @@ CLI loader passthrough pending, see above).
 ```yaml
 orgs:
   my-org:                                  # keyed by org login; one entry per org
+
+    # ── Ownership ── consumed by the diff of every cycle ── [wired] ─────────
+    # Gates deletes. Absent/false (default): nothing is owned, no deletes are
+    # ever planned. true: every reconciled collection is owned; live resources
+    # missing from this policy are planned for deletion. A list limits
+    # ownership to those change-set resource types (e.g. team, repo, member,
+    # branch-protection, org-variable). Guardrails still apply.
+    owned: false
 
     # ── Org settings ── cycle: org-settings ── [wired] ──────────────────────
     # PATCH /orgs/{org} is a partial update: only declared keys are sent.
@@ -240,6 +253,7 @@ Column meanings: **Required / default** is what the loader/cycle enforces;
 | Field | Type | Required / default | Cycle | Meaning |
 |---|---|---|---|---|
 | `orgs` | map of org login → org config | **required** | all | Organizations to manage. Each cycle runs once per org. |
+| `orgs.<org>.owned` | bool or list of resource type strings | absent → nothing owned, no deletes planned | all (diff layer) | `true` = every reconciled collection in this org is owned and live resources missing from the policy are planned for deletion; a list (e.g. `[team, repo]`) owns only those change-set resource types. A programmatic `diffOptions.isOwned` overrides it. Guardrails still gate the apply. |
 
 ### `orgs.<org>.settings` — org settings
 

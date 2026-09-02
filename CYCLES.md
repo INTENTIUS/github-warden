@@ -16,10 +16,11 @@ Shared behavior, so it isn't repeated thirteen times:
   owns; a repo, team, or field absent from the policy is never read or
   modified.
 - **Ownership-gated deletes.** The diff proposes deleting a live resource
-  missing from the policy only when an ownership predicate
-  (`diffOptions.isOwned`) marks it owned. The CLI supplies no predicate, so
-  CLI runs create and update but never delete. Deletes require the
-  programmatic API.
+  missing from the policy only when it is marked owned. By default nothing
+  is owned and runs create and update but never delete. An org's `owned`
+  declaration in the policy (`true`, or a list of resource types — see
+  [POLICY.md](POLICY.md)) marks resources owned; a programmatic
+  `diffOptions.isOwned` predicate overrides the declaration when supplied.
 - **Guardrails before apply.** `removalDeltaCap` (deletes capped at 25% of
   pre-existing managed entries) and `adminFloor` (at least 2 org admins must
   remain) always run; `requiredAdmins` and `requireSelf` run when configured
@@ -76,8 +77,8 @@ visibility, issues/projects/wiki toggles, merge methods, default branch,
 - The PATCH is partial: only declared fields are sent.
 - Never creates a repo; a PATCH against a nonexistent repo 404s and is
   recorded as a failed entry. Provisioning belongs to `repo-baseline`.
-- Repo deletion is gated on ownership like everything else, and is never
-  proposed from the CLI.
+- Repo deletion is gated on ownership like everything else: it is only
+  proposed when `repo` is owned (`owned: true` or `owned: [repo, ...]`).
 
 ## membership
 
@@ -86,9 +87,9 @@ who is an admin.
 
 - Endpoints: `GET /orgs/{org}/members?role=admin|member` (paginated, 100 per
   page), `PUT`/`DELETE` `/orgs/{org}/memberships/{user}`.
-- With the default CLI wiring this cycle only adds or re-roles declared
-  members; removal of an undeclared live member requires the ownership
-  predicate.
+- By default this cycle only adds or re-roles declared members; removal of an
+  undeclared live member requires marking `member` owned (`owned: true` or
+  `owned: [member, ...]` on the org).
 - When removals are enabled, the member-aware guardrails apply in full:
   `adminFloor`, `requiredAdmins`, `requireSelf` (the managing identity must
   stay an org admin, not merely a member), and `removalDeltaCap`.
@@ -110,7 +111,7 @@ Reconciles the team tree, team membership/roles, and team-to-repo permissions
   in scope that manage them.
 - Rename-without-loss: a `previously` slug makes the guardrail layer collapse
   `delete(old)` + `create(new)` into one update, so a rename doesn't count
-  toward `removalDeltaCap`. Without an ownership predicate the delete half is
+  toward `removalDeltaCap`. When teams are not owned the delete half is
   never emitted anyway, so a rename appears purely as a create and the old
   team is left in place. The runner does not yet perform an atomic
   GitHub-side rename.

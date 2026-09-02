@@ -134,6 +134,111 @@ describe("runReconcile — dry-run (default)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// per-scope ownership (`owned`) → delete planning
+// ---------------------------------------------------------------------------
+
+describe("runReconcile — per-scope ownership", () => {
+  // One live-only team: `teams` is managed (declared, empty) but "ghost" only
+  // exists live. Whether its delete is planned depends purely on `owned`.
+  const liveWithGhostTeam: LiveOrgState = {
+    teams: { ghost: { description: "live-only team" } },
+  };
+
+  it("plans no deletes when `owned` is absent (default)", async () => {
+    const cycle = makeFakeCycle({ live: liveWithGhostTeam });
+
+    const result = await runReconcile({
+      config: { orgs: { "test-org": { teams: {} } } },
+      client: makeMockClient(),
+      cycles: [cycle],
+    });
+
+    expect(result.cycles[0]!.counts.delete).toBe(0);
+    expect(result.cycles[0]!.plan).toContain("No changes.");
+  });
+
+  it("plans deletes for live-only resources when `owned: true`", async () => {
+    const cycle = makeFakeCycle({ live: liveWithGhostTeam });
+
+    const result = await runReconcile({
+      config: { orgs: { "test-org": { owned: true, teams: {} } } },
+      client: makeMockClient(),
+      cycles: [cycle],
+    });
+
+    expect(result.cycles[0]!.counts.delete).toBe(1);
+    expect(result.cycles[0]!.plan).toContain("[team] ghost");
+  });
+
+  it("string[] variant only unlocks the listed resource types", async () => {
+    // Live has a ghost team AND a ghost member; only "member" is owned.
+    const cycle = makeFakeCycle({
+      live: {
+        teams: { ghost: { description: "live-only team" } },
+        members: [
+          { login: "admin1", role: "admin" },
+          { login: "admin2", role: "admin" },
+          { login: "ghost", role: "member" },
+        ],
+      },
+    });
+
+    const result = await runReconcile({
+      config: {
+        orgs: {
+          "test-org": {
+            owned: ["member"],
+            teams: {},
+            members: [
+              { login: "admin1", role: "admin" },
+              { login: "admin2", role: "admin" },
+            ],
+          },
+        },
+      },
+      client: makeMockClient(),
+      cycles: [cycle],
+    });
+
+    const cr = result.cycles[0]!;
+    expect(cr.counts.delete).toBe(1);
+    expect(cr.plan).toContain("[member] ghost");
+    expect(cr.plan).not.toContain("[team] ghost");
+  });
+
+  it("a caller-supplied diffOptions.isOwned wins over the scope's `owned`", async () => {
+    const cycle = makeFakeCycle({ live: liveWithGhostTeam });
+
+    const result = await runReconcile({
+      config: { orgs: { "test-org": { owned: true, teams: {} } } },
+      client: makeMockClient(),
+      cycles: [cycle],
+      diffOptions: { isOwned: () => false },
+    });
+
+    expect(result.cycles[0]!.counts.delete).toBe(0);
+  });
+
+  it("owned deletes still pass through guardrails (removalDeltaCap)", async () => {
+    // Deleting the only pre-existing managed team is a 100% removal delta —
+    // removalDeltaCap (25%) must trip and block the apply.
+    const cycle = makeFakeCycle({ live: liveWithGhostTeam });
+
+    const result = await runReconcile({
+      config: { orgs: { "test-org": { owned: true, teams: {} } } },
+      client: makeMockClient(),
+      cycles: [cycle],
+      mode: "apply",
+    });
+
+    const cr = result.cycles[0]!;
+    expect(cr.guardrails.ok).toBe(false);
+    expect(cr.guardrailBlocked).toBe(true);
+    expect(cycle.applied).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // apply — guardrails pass
 // ---------------------------------------------------------------------------
 

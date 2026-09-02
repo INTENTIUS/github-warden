@@ -437,6 +437,22 @@ export interface RepoConfig {
  */
 export interface OrgConfig {
   /**
+   * Ownership declaration for this org — the gate for planned deletes.
+   *
+   * - absent or `false` (default): warden owns nothing in this org. The diff
+   *   never plans a delete for a live resource missing from the policy.
+   * - `true`: warden owns every resource collection it reconciles in this
+   *   org; live resources missing from the policy are planned for deletion.
+   * - a list of resource type strings: only those types are owned. The
+   *   strings are the change-set `resourceType` values, e.g. `"team"`,
+   *   `"repo"`, `"member"`, `"branch-protection"`, `"org-variable"`.
+   *
+   * A caller-supplied `diffOptions.isOwned` predicate (programmatic API)
+   * takes precedence over this field. Guardrails (`removalDeltaCap`,
+   * `adminFloor`, …) still apply to owned deletes.
+   */
+  owned?: boolean | string[];
+  /**
    * Org-level settings (description, email, default permissions, etc.).
    * Absent means org settings are not managed by chant.
    */

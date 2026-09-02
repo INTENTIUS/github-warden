@@ -113,6 +113,57 @@ describe("loadGovernanceConfig — valid input", () => {
 });
 
 // ---------------------------------------------------------------------------
+// `owned` — per-org ownership declaration
+// ---------------------------------------------------------------------------
+
+describe("loadGovernanceConfig — owned", () => {
+  test("forwards owned: true", () => {
+    const result = loadGovernanceConfig({ orgs: { "my-org": { owned: true } } });
+    expect(result.orgs["my-org"].owned).toBe(true);
+  });
+
+  test("forwards owned: false", () => {
+    const result = loadGovernanceConfig({ orgs: { "my-org": { owned: false } } });
+    expect(result.orgs["my-org"].owned).toBe(false);
+  });
+
+  test("forwards owned as a resource-type list", () => {
+    const result = loadGovernanceConfig({
+      orgs: { "my-org": { owned: ["team", "repo"] } },
+    });
+    expect(result.orgs["my-org"].owned).toEqual(["team", "repo"]);
+  });
+
+  test("absent owned stays undefined (no deletes planned)", () => {
+    const result = loadGovernanceConfig({ orgs: { "my-org": {} } });
+    expect(result.orgs["my-org"].owned).toBeUndefined();
+  });
+
+  test("rejects owned as a string", () => {
+    expect(() =>
+      loadGovernanceConfig({ orgs: { "my-org": { owned: "yes" } } })
+    ).toThrow(GovernanceConfigError);
+  });
+
+  test("rejects owned as an object", () => {
+    expect(() =>
+      loadGovernanceConfig({ orgs: { "my-org": { owned: { team: true } } } })
+    ).toThrow(GovernanceConfigError);
+  });
+
+  test("rejects a non-string entry in the owned list with the field path", () => {
+    let caught: GovernanceConfigError | undefined;
+    try {
+      loadGovernanceConfig({ orgs: { "my-org": { owned: ["team", 42] } } });
+    } catch (err) {
+      caught = err as GovernanceConfigError;
+    }
+    expect(caught).toBeInstanceOf(GovernanceConfigError);
+    expect(caught?.field).toBe("orgs.my-org.owned[1]");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Selective-by-omission: absent fields are not managed
 // ---------------------------------------------------------------------------
 

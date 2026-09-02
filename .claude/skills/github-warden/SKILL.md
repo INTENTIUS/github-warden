@@ -24,4 +24,8 @@ Core rules:
   approved the specific change.
 - A guardrail block (exit 1) means stop and ask, not work around. Do not pass
   `--allow-guardrail-override` without explicit human approval.
+- Deletes happen only in orgs whose policy declares `owned` (`true`, or a
+  list of resource types). Treat adding `owned` as a destructive change: get
+  explicit human approval first, then dry-run and review the planned deletes
+  with the operator before any apply.
 - `audit` and `report` never mutate; they are safe to run.

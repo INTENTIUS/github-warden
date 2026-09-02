@@ -37,6 +37,12 @@ github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
 | `--installation-id-env <VAR>` | env var name | — | Env var holding the installation ID. |
 | `--allow-guardrail-override` | flag | off | Apply even when guardrails trip. |
 
+Deletes come from the policy, not from a flag: a live resource missing from
+the policy is planned for deletion only in an org whose policy declares
+`owned: true` (or lists that resource type in `owned`). Without an `owned`
+declaration, reconcile creates and updates but never deletes. See
+[POLICY.md](POLICY.md).
+
 The valid `--cycles` names (from `src/cli/registry.ts`): `branch-protection`,
 `org-settings`, `repo-settings`, `membership`, `teams`, `rulesets`,
 `security-features`, `environments`, `secrets-variables`,

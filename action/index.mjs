@@ -1101,6 +1101,10 @@ __export(runner_exports, {
   BudgetExhaustedError: () => BudgetExhaustedError,
   runReconcile: () => runReconcile2
 });
+function ownedPredicate(owned) {
+  if (owned === void 0 || owned === false) return void 0;
+  return (type, _key) => owned === true || Array.isArray(owned) && owned.includes(type);
+}
 async function runReconcile2(opts) {
   return runReconcile({
     client: opts.client,
@@ -1108,7 +1112,11 @@ async function runReconcile2(opts) {
     cycles: opts.cycles,
     scope: opts.scope,
     mode: opts.mode,
-    diff: (scopeId, desired, live, dopts) => diff(scopeId, desired, live, { ...dopts, nowMs: dopts.nowMs ?? Date.now() }),
+    diff: (scopeId, desired, live, dopts) => diff(scopeId, desired, live, {
+      ...dopts,
+      isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
+      nowMs: dopts.nowMs ?? Date.now()
+    }),
     guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}),
     diffOptions: opts.diffOptions,
     allowGuardrailOverride: opts.allowGuardrailOverride,
@@ -232952,9 +232960,17 @@ function normalizeRepos(raw, field) {
   }
   return result;
 }
+function normalizeOwned(raw, field) {
+  if (typeof raw === "boolean") return raw;
+  if (Array.isArray(raw)) {
+    return raw.map((t, i) => assertString(t, `${field}[${i}]`));
+  }
+  throw new GovernanceConfigError(field, `expected a boolean or an array of strings, got ${typeof raw}`);
+}
 function normalizeOrgConfig(raw, field) {
   const obj = assertObject(raw, field);
   const org = {};
+  if (obj.owned !== void 0) org.owned = normalizeOwned(obj.owned, `${field}.owned`);
   if (obj.settings !== void 0) org.settings = normalizeOrgSettings(obj.settings, `${field}.settings`);
   if (obj.teams !== void 0) org.teams = normalizeTeams(obj.teams, `${field}.teams`);
   if (obj.members !== void 0) org.members = normalizeMembers(obj.members, `${field}.members`);

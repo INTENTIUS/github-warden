@@ -8,11 +8,41 @@
 
 Full documentation: [intentius.io/github-warden](https://intentius.io/github-warden/) — [policy authoring](POLICY.md), [CLI](CLI.md), [cycles](CYCLES.md), [CI pipelines](CI.md), [setup](SETUP.md).
 
+Terraform-style administration for GitHub: you declare the desired state of
+your org and repos in **one YAML file**; warden diffs it against live GitHub,
+runs **safety guardrails**, and either prints the plan (`dry-run`, the default)
+or applies it. Anything you don't declare is never read, diffed, or touched,
+and deletes are planned only in orgs you mark `owned`. Run it locally, on a
+schedule, or as a GitHub Action.
+
+## What you need
+
+- A clone of this repo (`git clone https://github.com/INTENTIUS/github-warden`).
+  The agent skill, the annotated policy examples, and the pipeline templates
+  live in it — and setup ends with a governance pipeline running in your org,
+  so you'll have the repo around anyway. The CLI is published to npm as
+  [`@intentius/github-warden`](https://www.npmjs.com/package/@intentius/github-warden)
+  for those pipelines.
+- Auth: a **GitHub App** installed on your org (App ID + installation ID +
+  private key) — required for org-level and token cycles — or a pre-minted
+  installation **token** for repo-level reconcile and `audit`. See
+  [Auth](#auth) and the [App setup checklist](docs/github-app-setup.md).
+- Node 22+.
+
+About ten minutes gets you to a first dry-run plan. The quickest probe needs
+no clone at all:
+
+```bash
+# Dry-run against your org — reads only, prints a plan, changes nothing.
+npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
+```
+
 ## Set up with an agent
 
-This repo ships a Claude skill (`.claude/skills/github-warden/`). From a clone,
-paste this into Claude Code (or any agent that reads repo skills) and it will
-do the setup with you, staying in dry-run:
+From a checkout, Claude Code picks up the skill in
+`.claude/skills/github-warden` automatically. Other agents can install it with
+`npx skills add INTENTIUS/github-warden`, or by copying the skill directory
+into `~/.claude/skills`. Then paste:
 
 ```text
 Use the github-warden skill in this repo to help me set up governance for my
@@ -22,40 +52,8 @@ cycles, then run a dry-run reconcile and walk me through the plan it prints.
 Do not apply anything.
 ```
 
-## Install
-
-```bash
-# Dry-run against your org — reads only, prints a plan, changes nothing.
-npx @intentius/github-warden reconcile --config .github/governance.yml --token-env GH_TOKEN --mode dry-run
-```
-
-Installs the `github-warden` CLI; or run it as a
-[GitHub Action](#use-as-a-github-action), no install needed. Org-level cycles
-need a GitHub App — see [what you need](#what-you-need-to-run-it) below.
-
-Think of it as Terraform for GitHub administration. You write desired state for
-your org and repos in **one YAML file**; warden diffs it against live GitHub,
-runs **safety guardrails**, and either prints the plan (`dry-run`, the default)
-or applies it. It is **selective-by-omission** — anything you don't declare is
-never read, diffed, or touched — and deletes are **ownership-gated**, so it
-won't remove a resource unless you mark it owned. Run it locally, on a schedule,
-or as a GitHub Action.
-
-## What you need to run it
-
-Before warden does anything useful you provide two things:
-
-1. **Auth** — either a pre-minted installation **token** (simplest; good for
-   repo-level reconcile and `audit`) **or** a **GitHub App** installed on your
-   org (App ID + installation ID + private key). An App is **required** for
-   org-level cycles (org settings, members, teams) and the token cycles — see
-   [Auth](#auth) and the [App setup checklist](docs/github-app-setup.md).
-2. **A config file** — a YAML/JSON file declaring the desired state you want
-   managed. Start from [`examples/governance.yml`](examples/governance.yml) and
-   see [Config format](#config-format). Declare only what you want warden to own.
-
-Nothing is mutated until you ask: the default mode is `dry-run`, which only
-reads and prints a plan. Start there.
+The skill stays in dry-run and asks before anything destructive; deletes in
+particular require you to declare `owned` in the policy first.
 
 ## Subcommands
 

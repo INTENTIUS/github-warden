@@ -207,10 +207,19 @@ function normalizeRepos(raw: unknown, field: string): Record<string, RepoConfig>
   return result;
 }
 
+function normalizeOwned(raw: unknown, field: string): boolean | string[] {
+  if (typeof raw === "boolean") return raw;
+  if (Array.isArray(raw)) {
+    return raw.map((t, i) => assertString(t, `${field}[${i}]`));
+  }
+  throw new GovernanceConfigError(field, `expected a boolean or an array of strings, got ${typeof raw}`);
+}
+
 function normalizeOrgConfig(raw: unknown, field: string): OrgConfig {
   const obj = assertObject(raw, field);
   const org: OrgConfig = {};
 
+  if (obj.owned !== undefined) org.owned = normalizeOwned(obj.owned, `${field}.owned`);
   if (obj.settings !== undefined) org.settings = normalizeOrgSettings(obj.settings, `${field}.settings`);
   if (obj.teams !== undefined) org.teams = normalizeTeams(obj.teams, `${field}.teams`);
   if (obj.members !== undefined) org.members = normalizeMembers(obj.members, `${field}.members`);
