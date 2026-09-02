@@ -18,6 +18,7 @@ dives on these pages.
 - [CI pipelines](CI.md)
 - [Setup](SETUP.md)
 - [GitHub App setup](docs/github-app-setup.md)
+- [Changelog](CHANGELOG.md)
 
 You declare the desired state of your org and repos in **one YAML file**
 (selective-by-omission: an absent field is never read, diffed, or touched);
@@ -77,7 +78,7 @@ npx @intentius/github-warden reconcile --config .github/governance.yml --token-e
 ### `reconcile`
 
 ```
-github-warden reconcile --config <path> [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override]
+github-warden reconcile --config <path> [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override] [--removal-cap-fraction <value>]
 ```
 
 | Flag | Meaning |
@@ -86,6 +87,7 @@ github-warden reconcile --config <path> [auth] [--mode dry-run|apply] [--cycles 
 | `--mode dry-run\|apply` | Default `dry-run`. |
 | `--cycles <name[,name...]>` | Subset of cycles to run (default: all). |
 | `--allow-guardrail-override` | Apply even when guardrails trip. |
+| `--removal-cap-fraction <value>` | `removalDeltaCap` threshold in (0,1] (default 0.25). |
 
 ### `audit`
 
@@ -241,7 +243,7 @@ Before any apply, warden runs safety checks and refuses dangerous changes
 
 | Guardrail | What it refuses or protects |
 |---|---|
-| `removalDeltaCap` | Refuses an apply whose deletes exceed 25% of the live managed entries in the collections the policy declares (typo protection). With nothing live to measure against it falls back to the plan-relative denominator. |
+| `removalDeltaCap` | Refuses an apply whose deletes of any one resource type exceed 25% (default; `--removal-cap-fraction`) of that type's live managed entries in the declared collections (typo protection). Live entries of one type never dilute another's fraction. See [POLICY.md](POLICY.md#what-the-policy-does-not-declare) for the canonical description. |
 | `adminFloor` | Refuses if fewer than 2 org admins would remain. |
 | `requiredAdmins` / `requireSelf` | Keep named admins (and the managing identity) from being removed. |
 | rename-without-loss | A `previously` alias collapses a delete+create into an update, so a rename doesn't count as a deletion. |

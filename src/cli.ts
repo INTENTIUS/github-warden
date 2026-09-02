@@ -17,6 +17,9 @@
  *   --token-env <VAR>             Env var holding a pre-minted installation token
  *                                 (alternative to App-client auth).
  *   --allow-guardrail-override    Off by default. Applies even when guardrails trip.
+ *   --removal-cap-fraction <v>    Max fraction of live managed entries the plan
+ *                                 may delete per resource type, in (0,1].
+ *                                 Default: 0.25.
  *
  * Auth modes (mutually exclusive, precedence: token-env > app-id-env):
  *   1. --token-env GH_TOKEN
@@ -65,6 +68,8 @@ export interface ReconcileArgs {
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
   allowGuardrailOverride: boolean;
+  /** removalDeltaCap threshold in (0,1]; undefined keeps chant's default. */
+  removalCapFraction: number | undefined;
 }
 
 /**
@@ -100,6 +105,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     installationIdEnv: undefined,
     tokenEnv: undefined,
     allowGuardrailOverride: false,
+    removalCapFraction: undefined,
   };
 
   const knownFlags = new Set([
@@ -110,6 +116,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     "--installation-id-env",
     "--token-env",
     "--allow-guardrail-override",
+    "--removal-cap-fraction",
   ]);
 
   let i = 0;
@@ -173,6 +180,23 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
       }
       case "--allow-guardrail-override": {
         args.allowGuardrailOverride = true;
+        break;
+      }
+      case "--removal-cap-fraction": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--removal-cap-fraction requires a value");
+        const fraction = Number(val);
+        // The negated form also rejects NaN. Mirrors chant's removalDeltaCap
+        // contract: a cap outside (0,1] is a misconfiguration, never a
+        // silently-disabled guardrail.
+        if (!(fraction > 0 && fraction <= 1)) {
+          throw new CliError(
+            2,
+            `--removal-cap-fraction must be a number in (0, 1], got: ${val}`,
+          );
+        }
+        args.removalCapFraction = fraction;
         break;
       }
     }
@@ -609,6 +633,10 @@ async function main(argv: string[] = process.argv.slice(2)) {
       cycles,
       mode: args.mode,
       allowGuardrailOverride: args.allowGuardrailOverride,
+      guardrails:
+        args.removalCapFraction !== undefined
+          ? { removalDeltaCap: { maxFraction: args.removalCapFraction } }
+          : undefined,
     });
   } catch (err) {
     die(3, `reconcile failed: ${errMsg(err)}`);
@@ -1180,6 +1208,8 @@ function printUsage() {
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
       "  --allow-guardrail-override    Apply even when guardrails trip.",
+      "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
+      "                                delete per resource type, in (0,1]. Default: 0.25.",
       "",
       "Flags (audit):",
       "  --config <path>               Path to governance config file (YAML or JSON).",

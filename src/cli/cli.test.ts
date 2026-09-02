@@ -119,6 +119,32 @@ describe("parseReconcileArgs", () => {
       parseReconcileArgs(["--config", "--token-env", "GH_TOKEN"]),
     ).toThrow(expect.objectContaining({ code: 2 }));
   });
+
+  it("parses --removal-cap-fraction, defaulting to undefined", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    expect(parseReconcileArgs(base).removalCapFraction).toBeUndefined();
+    expect(
+      parseReconcileArgs([...base, "--removal-cap-fraction", "0.5"]).removalCapFraction,
+    ).toBe(0.5);
+    // 1 is the inclusive upper bound of (0, 1].
+    expect(
+      parseReconcileArgs([...base, "--removal-cap-fraction", "1"]).removalCapFraction,
+    ).toBe(1);
+  });
+
+  it("throws code 2 for a --removal-cap-fraction outside (0, 1]", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    for (const bad of ["0", "-0.5", "1.5", "abc"]) {
+      expect(
+        () => parseReconcileArgs([...base, "--removal-cap-fraction", bad]),
+        `value ${bad} must be rejected`,
+      ).toThrow(expect.objectContaining({ code: 2 }));
+    }
+    // A missing value is also a parse error, not a silent default.
+    expect(() => parseReconcileArgs([...base, "--removal-cap-fraction"])).toThrow(
+      expect.objectContaining({ code: 2 }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

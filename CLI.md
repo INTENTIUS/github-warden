@@ -27,6 +27,7 @@ shape exits 2 with the offending field path.
 ```
 github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
+                        [--removal-cap-fraction <value>]
 ```
 
 | Flag | Default | Meaning |
@@ -38,6 +39,7 @@ github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
 | `--app-id-env <VAR>` | — | Env var holding the GitHub App ID (auth mode 2, with the next flag). |
 | `--installation-id-env <VAR>` | — | Env var holding the installation ID. |
 | `--allow-guardrail-override` | off | Apply even when guardrails trip. |
+| `--removal-cap-fraction <value>` | `0.25` | `removalDeltaCap` threshold: the max fraction of any one resource type's live managed entries the plan may delete. Must be in (0,1]; anything else exits 2. See [the canonical cap description in POLICY.md](POLICY.md#what-the-policy-does-not-declare). |
 
 Deletes come from the policy, not from a flag: a live resource missing from
 the policy is planned for deletion only in an org whose policy declares
