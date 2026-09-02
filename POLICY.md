@@ -29,12 +29,12 @@ Two authoring notes:
   mappings and sequences, string/bool/number scalars, comments. No flow style
   (`{ }` / `[ ]`), no multi-line scalars (`|` / `>`), no anchors. For anything
   richer (notably `dependabot.content`, which is multi-line), use JSON.
-- **Loader coverage (v0.3.0).** The CLI's config loader currently validates and
+- **Loader coverage (v0.3.x).** The CLI's config loader currently validates and
   forwards these slices: `owned`, `settings`, `members`, `teams` (without
   `previously`), and `repos` (the scalar repo settings, `branchProtection`,
   and `topics`).
   The remaining slices below are declared in the schema and consumed by their
-  cycles, but the v0.3.0 loader does not yet pass them through from a config
+  cycles, but the v0.3.x loader does not yet pass them through from a config
   file; they are reachable programmatically via `runReconcile`. Each is marked
   **[typed]** in the example. Check `src/config/load.ts` in your installed
   version before relying on a [typed] slice from YAML.
@@ -282,7 +282,7 @@ Column meanings: **Required / default** is what the loader/cycle enforces;
 | `description` | string | not managed | teams | Team description. |
 | `privacy` | `secret` \| `closed` | not managed (GitHub default `secret`) | teams | Team visibility. |
 | `parentTeamSlug` | string | not managed | teams | Parent team for nesting. |
-| `previously` | string | not managed | teams | Former slug; a rename hint for the guardrail layer only, never written to GitHub. Not forwarded by the v0.3.0 CLI loader. |
+| `previously` | string | not managed | teams | Former slug; a rename hint for the guardrail layer only, never written to GitHub. Not forwarded by the v0.3.x CLI loader. |
 | `members[]` | list | absent → membership not managed | teams | `{ login (required), role: member (default) \| maintainer }`. |
 | `repos[]` | list | absent → repo access not managed | teams | `{ name (required), permission (required): pull \| triage \| push \| maintain \| admin }`. |
 
