@@ -97,7 +97,7 @@ describe("governancePipeline", () => {
     const yaml = buildYaml();
     // Every `uses:` line must pin to a 40-char commit SHA.
     // The serializer wraps values with special chars in single quotes, and
-    // SHA-pinned warden steps include a `# v0.1.0` inline comment, so we strip
+    // SHA-pinned warden steps include a `# v0.3.1` inline comment, so we strip
     // trailing quote, whitespace, and any `# …` comment before matching.
     const SHA_RE = /^[a-f0-9]{40}$/;
     const usesLines = yaml
@@ -164,17 +164,17 @@ describe("governancePipeline", () => {
 
   // ── Dogfood: github-warden Action reference ────────────────────
 
-  test("warden steps use intentius/github-warden SHA-pinned with # v0.1.0 comment", () => {
+  test("warden steps use intentius/github-warden SHA-pinned with # v0.3.1 comment", () => {
     const yaml = buildYaml();
-    // Both jobs should use the warden action pinned to the v1 commit SHA.
+    // Both jobs should use the warden action pinned to the v0.3.1 tag commit.
     // The serializer quotes the value (special chars), so look for the SHA
     // followed by the inline comment inside single quotes.
     expect(yaml).toContain(
-      "50db522e57c4ccdb36af932062ee38839bc1b88e # v0.1.0"
+      "7e74b49eb59c59068c6b71dd6c6ee1ab66aeaa31 # v0.3.1"
     );
     // Two warden steps (dry-run + apply), each appear once.
     const count = (
-      yaml.match(/intentius\/github-warden@50db522e57c4ccdb36af932062ee38839bc1b88e/g) ?? []
+      yaml.match(/intentius\/github-warden@7e74b49eb59c59068c6b71dd6c6ee1ab66aeaa31/g) ?? []
     ).length;
     expect(count).toBe(2);
   });

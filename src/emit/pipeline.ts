@@ -38,14 +38,15 @@ import { Step, Job, Workflow } from "@intentius/chant-lexicon-github";
 const CHECKOUT_SHA = "11bd71901bbe5b1630ceea73d27597364c9af683";
 
 /**
- * intentius/github-warden v1
- * https://github.com/intentius/github-warden/releases/tag/v1
+ * intentius/github-warden v0.3.1
+ * https://github.com/intentius/github-warden/releases/tag/v0.3.1
  *
- * SHA-pinned to satisfy GHA029. The `# v0.1.0` comment preserves human readability
+ * SHA-pinned to satisfy GHA029. The `# v0.3.1` comment preserves human readability
  * while preventing silent tag-repoint attacks. Warden's own audit (GHA021/029)
- * enforces this pattern — the emitted pipeline dogfoods it.
+ * enforces this pattern — the emitted pipeline dogfoods it. Keep the SHA, this
+ * comment, and the `# vX.Y.Z` step comments in agreement when bumping.
  */
-const GITHUB_WARDEN_SHA = "50db522e57c4ccdb36af932062ee38839bc1b88e"; // v1
+const GITHUB_WARDEN_SHA = "7e74b49eb59c59068c6b71dd6c6ee1ab66aeaa31"; // v0.3.1
 
 // ── Public types ───────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
 
   const dryRunWardenStep = new Step({
     name: "Dry-run reconcile",
-    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.1.0`,
+    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.3.1`,
     with: {
       command: "reconcile",
       config: configPath,
@@ -213,7 +214,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
 
   const applyWardenStep = new Step({
     name: "Apply reconcile",
-    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.1.0`,
+    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.3.1`,
     with: {
       command: "reconcile",
       config: configPath,
