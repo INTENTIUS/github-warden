@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   resolveRenames,
   removalDeltaCap,
-  removalLiveCap,
   adminFloor,
   requiredAdmins,
   requireSelf,
@@ -565,18 +564,18 @@ describe("runGuardrails", () => {
 });
 
 // ---------------------------------------------------------------------------
-// removalLiveCap
+// removalDeltaCap — live denominator (managedTotal, chant#2067)
 // ---------------------------------------------------------------------------
 
-describe("removalLiveCap", () => {
+describe("removalDeltaCap with managedTotal", () => {
   it("passes one stale delete against 10 live managed entries (10%)", () => {
-    // Chant's plan-denominator cap would read this converged cycle as
+    // The plan-relative cap would read this converged cycle as
     // 1 delete / 1 non-create entry = 100% and trip; the live denominator
     // reads it as 1 of 10 = 10% and passes.
     const cs = makeChangeSet([
       { kind: "delete", resourceType: "member", key: "stale", before: {} },
     ]);
-    expect(removalLiveCap(cs, 10)).toBeNull();
+    expect(removalDeltaCap(cs, { managedTotal: 10 })).toBeNull();
   });
 
   it("blocks 4 deletes against 10 live managed entries (40%)", () => {
@@ -588,9 +587,9 @@ describe("removalLiveCap", () => {
         before: {},
       })),
     );
-    const result = removalLiveCap(cs, 10);
+    const result = removalDeltaCap(cs, { managedTotal: 10 });
     expect(result).not.toBeNull();
-    expect(result!.guardrail).toBe("removalLiveCap");
+    expect(result!.guardrail).toBe("removalDeltaCap");
     expect(result!.message).toContain("4 of 10 live managed entries (40%)");
     expect(result!.message).toMatch(/25% threshold/);
   });
@@ -599,13 +598,13 @@ describe("removalLiveCap", () => {
     const cs = makeChangeSet([
       { kind: "delete", resourceType: "member", key: "a", before: {} },
     ]);
-    expect(removalLiveCap(cs, 10, { maxFraction: 0.05 })).not.toBeNull();
-    expect(removalLiveCap(cs, 10, { maxFraction: 0.5 })).toBeNull();
+    expect(removalDeltaCap(cs, { managedTotal: 10, maxFraction: 0.05 })).not.toBeNull();
+    expect(removalDeltaCap(cs, { managedTotal: 10, maxFraction: 0.5 })).toBeNull();
   });
 
-  it("falls back to chant's removalDeltaCap when liveManagedTotal is 0", () => {
+  it("keeps the plan-relative behavior when managedTotal is 0", () => {
     // 6 deletes + 2 updates = 75% of the plan denominator. With no live total
-    // the check must behave exactly like chant's removalDeltaCap.
+    // the cap must behave exactly like the plan-relative form.
     const cs = makeChangeSet([
       ...Array.from({ length: 6 }, (_, i) => ({
         kind: "delete" as const,
@@ -621,16 +620,16 @@ describe("removalLiveCap", () => {
         after: {},
       })),
     ]);
-    const viaLiveCap = removalLiveCap(cs, 0);
-    const viaDeltaCap = removalDeltaCap(cs);
-    expect(viaLiveCap).toEqual(viaDeltaCap);
-    expect(viaLiveCap!.guardrail).toBe("removalDeltaCap");
+    const viaZeroTotal = removalDeltaCap(cs, { managedTotal: 0 });
+    const viaPlanRelative = removalDeltaCap(cs);
+    expect(viaZeroTotal).toEqual(viaPlanRelative);
+    expect(viaZeroTotal!.guardrail).toBe("removalDeltaCap");
 
     // And an empty plan passes through the fallback too.
-    expect(removalLiveCap(makeChangeSet([]), 0)).toBeNull();
+    expect(removalDeltaCap(makeChangeSet([]), { managedTotal: 0 })).toBeNull();
   });
 
-  it("runGuardrails wires the live total through to removalLiveCap", () => {
+  it("runGuardrails wires the live total through as managedTotal", () => {
     const cs = makeChangeSet([
       { kind: "delete", resourceType: "member", key: "stale", before: {} },
     ]);
@@ -644,8 +643,8 @@ describe("removalLiveCap", () => {
     // denominator (1 of 1 = 100%) and blocks.
     const blocked = runGuardrails(cs, live, {}, 0);
     expect(blocked.ok).toBe(false);
-    // removalLiveCap options flow through too.
-    const custom = runGuardrails(cs, live, { removalLiveCap: { maxFraction: 0.05 } }, 10);
+    // removalDeltaCap options flow through too.
+    const custom = runGuardrails(cs, live, { removalDeltaCap: { maxFraction: 0.05 } }, 10);
     expect(custom.ok).toBe(false);
   });
 });

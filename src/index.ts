@@ -77,7 +77,6 @@ export type {
   GuardrailDiagnostic,
   GuardrailResult,
   RemovalDeltaCapOptions,
-  RemovalLiveCapOptions,
   AdminFloorOptions,
   RequiredAdminsOptions,
   RequireSelfOptions,
@@ -86,7 +85,6 @@ export type {
 export {
   resolveRenames,
   removalDeltaCap,
-  removalLiveCap,
   adminFloor,
   requiredAdmins,
   requireSelf,

@@ -349,6 +349,7 @@ function diffCollection(params2) {
       out.push({ kind: "delete", resourceType, key: entryKey, before: l });
     }
   }
+  return live.size;
 }
 function summarizeChangeSet(cs) {
   const counts = { create: 0, update: 0, delete: 0 };
@@ -419,13 +420,24 @@ function resolveRenames(changeSet) {
   const filteredEntries = changeSet.entries.filter(
     (e) => !(e.kind === "delete" && resolvedDeletes.has(e.key)) && !(e.kind === "create" && resolvedCreates.has(e.key))
   );
-  return { org: changeSet.org, entries: [...filteredEntries, ...syntheticUpdates] };
+  return { ...changeSet, entries: [...filteredEntries, ...syntheticUpdates] };
 }
 function removalDeltaCap(changeSet, opts = {}) {
   const maxFraction = opts.maxFraction ?? 0.25;
+  const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
+  const managedTotal = opts.managedTotal ?? changeSet.managedCount;
+  if (managedTotal !== void 0 && managedTotal > 0) {
+    const fraction2 = deletes / managedTotal;
+    if (fraction2 > maxFraction) {
+      return {
+        guardrail: "removalDeltaCap",
+        message: `${deletes} of ${managedTotal} live managed entries (${Math.round(fraction2 * 100)}%) would be deleted, exceeding the ${Math.round(maxFraction * 100)}% threshold. Check for typos in config or raise maxFraction to proceed.`
+      };
+    }
+    return null;
+  }
   const total = changeSet.entries.filter((e) => e.kind !== "create").length;
   if (total === 0) return null;
-  const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
   const fraction = deletes / total;
   if (fraction > maxFraction) {
     return {
@@ -1054,19 +1066,6 @@ var init_diff = __esm({
 });
 
 // src/reconcile/guardrails.ts
-function removalLiveCap(changeSet, liveManagedTotal, opts = {}) {
-  if (liveManagedTotal === 0) return removalDeltaCap(changeSet, opts);
-  const maxFraction = opts.maxFraction ?? 0.25;
-  const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
-  const fraction = deletes / liveManagedTotal;
-  if (liveManagedTotal > 0 && fraction > maxFraction) {
-    return {
-      guardrail: "removalLiveCap",
-      message: `${deletes} of ${liveManagedTotal} live managed entries (${Math.round(fraction * 100)}%) would be deleted, exceeding the ${Math.round(maxFraction * 100)}% threshold. Check for typos in config or raise maxFraction to proceed.`
-    };
-  }
-  return null;
-}
 function adminFloor(changeSet, live, opts = {}) {
   const min = opts.min ?? 2;
   const liveMembers = live.members ?? [];
@@ -1124,11 +1123,10 @@ function requireSelf(changeSet, live, opts) {
 function runGuardrails(changeSet, live, config2 = {}, liveManagedTotal = 0) {
   const resolved = resolveRenames(changeSet);
   const diagnostics = [];
-  const cap = removalLiveCap(
-    resolved,
-    liveManagedTotal,
-    config2.removalLiveCap ?? config2.removalDeltaCap
-  );
+  const cap = removalDeltaCap(resolved, {
+    maxFraction: config2.removalDeltaCap?.maxFraction,
+    managedTotal: liveManagedTotal > 0 ? liveManagedTotal : config2.removalDeltaCap?.managedTotal
+  });
   if (cap) diagnostics.push(cap);
   const memberAware = live.members !== void 0 || resolved.entries.some((e) => e.resourceType === "member");
   if (memberAware) {
@@ -238803,8 +238801,8 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.54.3",
-    "@intentius/chant-lexicon-github": "^0.54.3"
+    "@intentius/chant": "^0.55.0",
+    "@intentius/chant-lexicon-github": "^0.55.0"
   },
   devDependencies: {
     "@types/libsodium-wrappers": "^0.7.14",

@@ -298,12 +298,12 @@ export function diff(
 }
 
 // ---------------------------------------------------------------------------
-// countLiveManaged — live denominator for the removalLiveCap guardrail
+// countLiveManaged — live denominator for the removalDeltaCap guardrail
 // ---------------------------------------------------------------------------
 
 /**
  * Count the LIVE entries in the collections the desired config declares — the
- * denominator for the `removalLiveCap` guardrail.
+ * `managedTotal` denominator for the `removalDeltaCap` guardrail.
  *
  * Uses the same declared-slice conditions as `diff` (a collection absent from
  * `desired` is not managed, so its live entries do not count), and counts only
@@ -937,7 +937,7 @@ export function evaluateTokenViolation(
  * Diff org token grants against the governance policy. A violating grant is
  * emitted as an UPDATE (resource type "token-grant", key = grant id) meaning
  * "revoke org access" — modelled as an update, not a delete, so a routine
- * revocation sweep does not trip the removalLiveCap guardrail.
+ * revocation sweep does not trip the removalDeltaCap guardrail.
  */
 function diffTokenGrants(
   policy: TokenPolicyConfig | undefined,

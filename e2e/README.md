@@ -52,7 +52,7 @@ auth.
 
 "yes" means exercised and asserted by the smoke; "n/a" means the behavior
 does not exist for that cycle (the reason is noted). Deletes run under
-`owned`, with the `removalLiveCap` arithmetic spelled out in each test.
+`owned`, with the `removalDeltaCap` arithmetic spelled out in each test.
 
 | Cycle | Read | Apply | Converge | Drift | Delete via `owned` | Gated-read NOTE |
 |---|---|---|---|---|---|---|
@@ -74,7 +74,7 @@ Cross-cutting behaviors, also in the smoke:
 
 - Read-only fetchLive is asserted for all 13 cycles before any apply.
 - The guardrail block path: shrinking the member policy to drop 1 of 3 live
-  members trips `removalLiveCap` (33% over the 25% cap), blocks the apply,
+  members trips `removalDeltaCap` (33% over the 25% cap), blocks the apply,
   and leaves the member in place.
 - The permission-gated 403 NOTE path: the mock 403s the org-variables read;
   the cycle plans optimistically and the plan carries the

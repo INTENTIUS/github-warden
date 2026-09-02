@@ -241,7 +241,7 @@ Before any apply, warden runs safety checks and refuses dangerous changes
 
 | Guardrail | What it refuses or protects |
 |---|---|
-| `removalLiveCap` | Refuses an apply whose deletes exceed 25% of the live managed entries in the collections the policy declares (typo protection). With nothing live to measure against it falls back to chant's plan-relative `removalDeltaCap`. |
+| `removalDeltaCap` | Refuses an apply whose deletes exceed 25% of the live managed entries in the collections the policy declares (typo protection). With nothing live to measure against it falls back to the plan-relative denominator. |
 | `adminFloor` | Refuses if fewer than 2 org admins would remain. |
 | `requiredAdmins` / `requireSelf` | Keep named admins (and the managing identity) from being removed. |
 | rename-without-loss | A `previously` alias collapses a delete+create into an update, so a rename doesn't count as a deletion. |
@@ -337,7 +337,7 @@ The hermetic compose smoke drives every cycle's full loop against a stateful
 mock GitHub (dependency-free node, run via docker compose or directly). Each
 cycle applies its policy slice and then re-plans to convergence, with
 out-of-band drift corrected and deletes exercised under `owned`. The suite
-also trips the `removalLiveCap` block and walks the permission-gated 403 NOTE
+also trips the `removalDeltaCap` block and walks the permission-gated 403 NOTE
 path, and auth runs the real App JWT and installation-token flow against the
 mock.
 

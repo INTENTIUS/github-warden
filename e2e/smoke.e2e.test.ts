@@ -15,7 +15,7 @@
  * See e2e/README.md for the cycle-by-cycle table. Per cycle: apply from a
  * policy, re-run to a converged (empty) plan, mutate out-of-band and re-run to
  * correct the drift, and (where a delete is plannable) a real delete under
- * `owned`. Plus the guardrail-block path (removalLiveCap trip on a
+ * `owned`. Plus the guardrail-block path (removalDeltaCap trip on a
  * mass-removal policy edit) and the permission-gated 403 NOTE path (the mock
  * 403s one slice). Auth goes through the real App flow: a generated RSA key
  * signs the App JWT, the mock's /app/installations/{id}/access_tokens mints
@@ -353,7 +353,7 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(members.body.map((m) => m.login)).not.toContain("stray");
     });
 
-    it("removalLiveCap blocks dropping 1 of 3 members from the policy (33% > 25%)", async () => {
+    it("removalDeltaCap blocks dropping 1 of 3 members from the policy (33% > 25%)", async () => {
       const shrunk: OrgConfig = {
         owned: ["member"],
         members: POLICY.members!.filter((m) => m.login !== "bob"),
@@ -363,7 +363,7 @@ suite("github-warden smoke (mock GitHub)", () => {
       expect(cr.guardrailBlocked).toBe(true);
       expect(cr.guardrails.ok).toBe(false);
       if (!cr.guardrails.ok) {
-        expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalLiveCap");
+        expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalDeltaCap");
         expect(cr.guardrails.diagnostics[0]!.message).toContain("1 of 3 live managed entries");
       }
       // Nothing was removed.
@@ -567,7 +567,7 @@ suite("github-warden smoke (mock GitHub)", () => {
       // = 33% — over the default 25% cap, so raise it for the deliberate cleanup.
       const cr = only(
         await reconcile(["environments"], cfg, {
-          guardrails: { removalLiveCap: { maxFraction: 0.5 } },
+          guardrails: { removalDeltaCap: { maxFraction: 0.5 } },
         }),
       );
       expect(cr.counts.delete).toBe(1);

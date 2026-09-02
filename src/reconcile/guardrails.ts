@@ -14,8 +14,8 @@
  * rename (update) rather than a mass-deletion signal.
  *
  * ## Configurable thresholds (defaults)
- * - `removalLiveCap.maxFraction` — 0.25 (25 % of live managed entries)
- * - `adminFloor.min`             — 2 (at least 2 admins must remain)
+ * - `removalDeltaCap.maxFraction` — 0.25 (25 % of live managed entries)
+ * - `adminFloor.min`              — 2 (at least 2 admins must remain)
  */
 
 import type { ChangeSet, LiveMemberConfig, LiveOrgState } from "./diff.js";
@@ -27,12 +27,6 @@ import type { GuardrailDiagnostic, GuardrailResult, RemovalDeltaCapOptions } fro
 import { resolveRenames, removalDeltaCap } from "./core.js";
 export type { GuardrailDiagnostic, GuardrailResult, RemovalDeltaCapOptions } from "./core.js";
 export { resolveRenames, removalDeltaCap } from "./core.js";
-
-/** Config for `removalLiveCap`. */
-export interface RemovalLiveCapOptions {
-  /** Max fraction of live managed entries that may be deleted. Must be in (0,1]. Default 0.25. */
-  maxFraction?: number;
-}
 
 /** Config for `adminFloor`. */
 export interface AdminFloorOptions {
@@ -62,11 +56,10 @@ export interface RequireSelfOptions {
 
 /** Full guardrail config passed to `runGuardrails`. */
 export interface GuardrailConfig {
-  /** Options for the live-denominator removal cap. */
-  removalLiveCap?: RemovalLiveCapOptions;
   /**
-   * Legacy alias for `removalLiveCap` (same `maxFraction` shape). Honoured when
-   * `removalLiveCap` is not set, so existing programmatic configs keep working.
+   * Options for chant's removal cap. `managedTotal` is normally supplied by the
+   * runner (the live count from `countLiveManaged`); setting it here only
+   * matters for callers that invoke `runGuardrails` without a live total.
    */
   removalDeltaCap?: RemovalDeltaCapOptions;
   adminFloor?: AdminFloorOptions;
@@ -74,52 +67,11 @@ export interface GuardrailConfig {
   requireSelf?: RequireSelfOptions;
 }
 
-// `resolveRenames` and chant's `removalDeltaCap` are the provider-agnostic
-// guardrails — they live in `core.ts` and are imported + re-exported above. The
-// member-aware guardrails below build on the same change-set model.
-
-// ---------------------------------------------------------------------------
-// removalLiveCap — warden-local removal cap over the LIVE denominator
-// ---------------------------------------------------------------------------
-
-/**
- * Refuse if deletes exceed `maxFraction` of the LIVE managed entries.
- *
- * Chant's `removalDeltaCap` divides deletes by the PLAN's updates+deletes, so
- * one stale delete in an otherwise converged cycle reads as a 100 % removal and
- * trips the cap. This check uses the live denominator instead:
- * `liveManagedTotal` is the count of live entries in the collections the org's
- * policy declares for the cycle (the same declared-slice condition the diff
- * uses — see `countLiveManaged` in `diff.ts`), so one stale delete out of ten
- * live entries is 10 %, not 100 %.
- *
- * When `liveManagedTotal` is 0 (nothing live in any declared collection, or the
- * caller could not compute it) the check delegates to chant's `removalDeltaCap`
- * so the plan-denominator safety net still applies.
- *
- * CONTRACT: pass a RENAME-RESOLVED change set (see `resolveRenames`).
- */
-export function removalLiveCap(
-  changeSet: ChangeSet,
-  liveManagedTotal: number,
-  opts: RemovalLiveCapOptions = {},
-): GuardrailDiagnostic | null {
-  if (liveManagedTotal === 0) return removalDeltaCap(changeSet, opts);
-
-  const maxFraction = opts.maxFraction ?? 0.25;
-  const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
-  const fraction = deletes / liveManagedTotal;
-  if (liveManagedTotal > 0 && fraction > maxFraction) {
-    return {
-      guardrail: "removalLiveCap",
-      message:
-        `${deletes} of ${liveManagedTotal} live managed entries (${Math.round(fraction * 100)}%) would be deleted, ` +
-        `exceeding the ${Math.round(maxFraction * 100)}% threshold. ` +
-        `Check for typos in config or raise maxFraction to proceed.`,
-    };
-  }
-  return null;
-}
+// `resolveRenames` and the removal cap are the provider-agnostic guardrails —
+// chant's `removalDeltaCap` takes a `managedTotal` live denominator (chant
+// #2067), so warden passes the `countLiveManaged` value straight through and
+// carries no removal-cap logic of its own. The member-aware guardrails below
+// build on the same change-set model.
 
 // ---------------------------------------------------------------------------
 // Individual guardrails (member-aware, GitHub-specific)
@@ -245,15 +197,16 @@ export function requireSelf(
  * `{ ok: false, diagnostics }` with every tripped guardrail's message.
  *
  * Rename aliases are resolved ONCE here before any check runs. All individual
- * guardrail functions (`removalLiveCap`, `adminFloor`, etc.) receive the
+ * guardrail functions (`removalDeltaCap`, `adminFloor`, etc.) receive the
  * pre-resolved ChangeSet and MUST NOT call `resolveRenames` themselves.
  * This guarantees a single traversal and a consistent view of renames across
  * all checks — a rename is collapsed to an update exactly once.
  *
  * `liveManagedTotal` is the live-entry count for the declared collections of
  * the cycle being checked (see `countLiveManaged` in `diff.ts`); the runner
- * captures it from the diff call that produced `changeSet`. When 0 or omitted,
- * `removalLiveCap` falls back to chant's plan-denominator `removalDeltaCap`.
+ * captures it from the diff call that produced `changeSet` and it becomes
+ * `removalDeltaCap`'s `managedTotal` denominator. When 0 or omitted, the cap
+ * keeps chant's plan-relative behavior.
  */
 export function runGuardrails(
   changeSet: ChangeSet,
@@ -266,11 +219,11 @@ export function runGuardrails(
 
   const diagnostics: GuardrailDiagnostic[] = [];
 
-  const cap = removalLiveCap(
-    resolved,
-    liveManagedTotal,
-    config.removalLiveCap ?? config.removalDeltaCap,
-  );
+  const cap = removalDeltaCap(resolved, {
+    maxFraction: config.removalDeltaCap?.maxFraction,
+    managedTotal:
+      liveManagedTotal > 0 ? liveManagedTotal : config.removalDeltaCap?.managedTotal,
+  });
   if (cap) diagnostics.push(cap);
 
   // The member-aware guardrails only make sense for a change set with member

@@ -20,11 +20,11 @@ Shared behavior, so it isn't repeated thirteen times:
   resource types; see [POLICY.md](POLICY.md)) marks resources owned; a
   programmatic `diffOptions.isOwned` predicate overrides the declaration when
   supplied.
-- **Guardrails before apply.** `removalLiveCap` refuses an apply whose
+- **Guardrails before apply.** `removalDeltaCap` refuses an apply whose
   deletes exceed 25% of the live managed entries in the collections the
   policy declares; with nothing live to measure against it falls back to
-  chant's plan-relative `removalDeltaCap` (deletes over the plan's updates
-  plus deletes). `adminFloor` (at least 2 org admins must remain) always
+  its plan-relative denominator (deletes over the plan's updates plus
+  deletes). `adminFloor` (at least 2 org admins must remain) always
   runs too; `requiredAdmins` and `requireSelf` run when configured
   programmatically. `resolveRenames` collapses a `previously`-marked
   delete+create pair into an update first, so a rename is not counted as a
@@ -114,7 +114,7 @@ who is an admin.
 - Member entries are keyed by `login`. Removal of an undeclared live member
   requires marking `member` owned (`owned: true` or `owned: [member, ...]`
   on the org). Removals, once enabled, run the member-aware guardrails in
-  full (`adminFloor`, `requiredAdmins`, `requireSelf`, `removalLiveCap`);
+  full (`adminFloor`, `requiredAdmins`, `requireSelf`, `removalDeltaCap`);
   `requireSelf` means the managing identity must remain an org admin rather
   than a plain member.
 - The schema does not model outside collaborators (a per-repo concept), so
@@ -140,7 +140,7 @@ Reconciles the team tree, team membership/roles, and team-to-repo permissions
   disturbed. Deleting a team, team member, or team repo requires ownership.
 - Rename: a `previously` slug makes the guardrail layer collapse
   `delete(old)` + `create(new)` into one update, so a rename doesn't count
-  toward `removalLiveCap`. When teams are not owned the delete half is
+  toward `removalDeltaCap`. When teams are not owned the delete half is
   never emitted anyway, so a rename appears purely as a create and the old
   team is left in place. The runner does not yet perform an atomic
   GitHub-side rename.
@@ -256,7 +256,7 @@ expired, over-max-lifetime, or idle grants lose their org access.
   `POST /orgs/{org}/personal-access-tokens/{pat_id}`, which revokes the
   grant's org access. Violations are emitted as updates ("revoke org
   access") on one `token-grant` entry per grant, rather than deletes, so a
-  routine sweep does not trip `removalLiveCap`.
+  routine sweep does not trip `removalDeltaCap`.
 - Callable only by a GitHub App; a PAT cannot drive this cycle. The API
   cannot create or rotate a user's PAT, so revoking org access is the
   enforcement lever. The expiry check uses GitHub's own `expired` flag;

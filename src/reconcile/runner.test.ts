@@ -631,11 +631,11 @@ describe("runReconcile — CLI-loaded config reaches cycle buildDesired", () => 
 });
 
 // ---------------------------------------------------------------------------
-// removalLiveCap wiring — the runner pairs each cycle×org's change set with the
-// live denominator computed from the SAME diff invocation.
+// removalDeltaCap wiring — the runner pairs each cycle×org's change set with
+// the live denominator (managedTotal) computed from the SAME diff invocation.
 // ---------------------------------------------------------------------------
 
-describe("runReconcile — removalLiveCap (live denominator)", () => {
+describe("runReconcile — removalDeltaCap (live denominator)", () => {
   /** Live state with `count` members (2 admins + fillers). */
   function liveMembers(count: number): LiveOrgState {
     return {
@@ -698,7 +698,7 @@ describe("runReconcile — removalLiveCap (live denominator)", () => {
     expect(cr.counts.delete).toBe(4);
     expect(cr.guardrails.ok).toBe(false);
     if (!cr.guardrails.ok) {
-      expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalLiveCap");
+      expect(cr.guardrails.diagnostics[0]!.guardrail).toBe("removalDeltaCap");
       expect(cr.guardrails.diagnostics[0]!.message).toContain("4 of 10 live managed entries");
     }
     expect(cr.guardrailBlocked).toBe(true);
@@ -745,7 +745,7 @@ describe("runReconcile — removalLiveCap (live denominator)", () => {
       client: makeMockClient(),
       cycles: [cycle],
       mode: "apply",
-      guardrails: { removalLiveCap: { maxFraction: 0.2 } },
+      guardrails: { removalDeltaCap: { maxFraction: 0.2 } },
     });
 
     const byOrg = Object.fromEntries(result.cycles.map((c) => [c.org, c]));

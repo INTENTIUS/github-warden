@@ -26,7 +26,7 @@
  * default runner wiring (no predicate) this cycle only ADDS or re-roles
  * declared members and never removes anyone — the safe default. When removals
  * ARE enabled, the `adminFloor`, `requiredAdmins`, `requireSelf`, and
- * `removalLiveCap` guardrails (all member-aware) gate the apply.
+ * `removalDeltaCap` guardrails gate the apply.
  */
 
 import type { AppClient } from "../auth/app-client.js";

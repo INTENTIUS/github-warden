@@ -85,12 +85,12 @@ function ownedPredicate(
  * unchanged for every scope. Otherwise each org's `owned` declaration from the
  * config derives the per-scope predicate (see `OrgConfig.owned`), so deletes
  * become plannable from a policy file alone. Guardrails (including
- * `removalLiveCap`) still apply to owned deletes.
+ * `removalDeltaCap`) still apply to owned deletes.
  */
 export async function runReconcile<TScope = unknown>(
   opts: RunReconcileOptions<TScope>,
 ): Promise<ReconcileResult> {
-  // Live denominator for the removalLiveCap guardrail. The shared loop runs
+  // Live denominator (removalDeltaCap's managedTotal). The shared loop runs
   // strictly sequentially per scope×cycle — diff, then guardrails, for the SAME
   // scope and cycle, before the next pair starts — so capturing the count from
   // the immediately preceding diff call pairs each change set with its own
