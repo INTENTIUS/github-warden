@@ -134,8 +134,10 @@ orgs:
               ref_name:
                 include:
                   - "~DEFAULT_BRANCH"
-                                           # an empty list (exclude: []) is flow
-                                           # style — author it in JSON
+                                           # omit exclude entirely: the diff
+                                           # treats absent and [] as equal.
+                                           # A non-empty flow-style value
+                                           # still needs JSON.
             rules:
               - type: pull_request
 

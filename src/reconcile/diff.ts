@@ -45,7 +45,7 @@ import type {
   ChangeSet,
   DiffOptions,
 } from "./core.js";
-import { diffFields, diffCollection, summarizeChangeSet, renderChangeSet } from "./core.js";
+import { deepEqual, diffFields, diffCollection, summarizeChangeSet, renderChangeSet } from "./core.js";
 export type { FieldChange, ChangeKind, ChangeSetEntry, ChangeSet, DiffOptions } from "./core.js";
 export { summarizeChangeSet, renderChangeSet } from "./core.js";
 
@@ -660,7 +660,45 @@ function diffBranchProtection(
 // Rulesets (org + repo)
 // ---------------------------------------------------------------------------
 
-const RULESET_FIELDS: string[] = ["target", "enforcement", "bypassActors", "conditions", "rules"];
+const RULESET_FIELDS: string[] = ["target", "enforcement", "bypassActors", "rules"];
+
+/**
+ * Recursively drop empty-array and empty-object values from a conditions tree.
+ * Arrays keep their length; only OBJECT KEYS whose value normalizes to `[]` or
+ * `{}` are removed.
+ */
+function dropEmptyValues(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(dropEmptyValues);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      const nv = dropEmptyValues(v);
+      if (Array.isArray(nv) && nv.length === 0) continue;
+      if (nv !== null && typeof nv === "object" && !Array.isArray(nv) && Object.keys(nv).length === 0) {
+        continue;
+      }
+      out[k] = nv;
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Normalize a ruleset `conditions` object for comparison: an absent key and an
+ * empty array (or empty object) are the same thing. GitHub returns e.g.
+ * `ref_name.exclude: []` for a ruleset authored without `exclude`, so a naive
+ * deep-compare reports a perpetual conditions update; normalizing both sides
+ * makes absent-vs-empty equal while any real difference still diffs.
+ * A conditions object that normalizes to `{}` becomes `undefined`.
+ */
+export function normalizeRulesetConditions(
+  conditions: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (conditions === undefined) return undefined;
+  const normalized = dropEmptyValues(conditions) as Record<string, unknown>;
+  return Object.keys(normalized).length === 0 ? undefined : normalized;
+}
 
 /**
  * Diff a list of rulesets (org-level or repo-level), keyed by ruleset name.
@@ -671,6 +709,10 @@ const RULESET_FIELDS: string[] = ["target", "enforcement", "bypassActors", "cond
  * The live `id` is not part of `RULESET_FIELDS`, so it is never diffed; it is
  * carried on the `before` snapshot for the apply path. Deletes are ownership-
  * gated like every other managed collection.
+ *
+ * `conditions` is compared through `normalizeRulesetConditions`, so a ruleset
+ * authored without `exclude:` does not show a perpetual update against
+ * GitHub's `exclude: []` echo.
  */
 function diffRulesets(
   keyPrefix: string,
@@ -687,12 +729,23 @@ function diffRulesets(
     keyPrefix,
     desired: new Map(desired.map((r) => [r.name, r])),
     live: new Map(live.map((r) => [r.name, r])),
-    compareFields: (dr, lr) =>
-      diffObjectKeys(
+    compareFields: (dr, lr) => {
+      const fields = diffObjectKeys(
         dr as unknown as Record<string, unknown>,
         lr as unknown as Record<string, unknown>,
         RULESET_FIELDS,
-      ),
+      );
+      // Conditions: declared-only (selective-by-omission), compared with
+      // absent-vs-empty normalization on both sides.
+      if (dr.conditions !== undefined) {
+        const dn = normalizeRulesetConditions(dr.conditions);
+        const ln = normalizeRulesetConditions(lr.conditions);
+        if (!deepEqual(dn, ln)) {
+          fields.push({ field: "conditions", before: lr.conditions, after: dr.conditions });
+        }
+      }
+      return fields;
+    },
     opts,
     out,
   });

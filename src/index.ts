@@ -70,7 +70,7 @@ export type {
   LiveTokenRequest,
   LiveOrgState,
 } from "./reconcile/diff.js";
-export { diff, countLiveManaged, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
+export { diff, countLiveManaged, normalizeRulesetConditions, summarizeChangeSet, renderChangeSet, evaluateTokenViolation, evaluateTokenRequest } from "./reconcile/diff.js";
 
 // Reconcile: guardrails
 export type {

@@ -21,7 +21,7 @@ import type { RulesetsScope } from "./rulesets.js";
 import type { AppClient } from "../auth/app-client.js";
 import type { RateBudget } from "../reconcile/runner.js";
 import { runReconcile, BudgetExhaustedError } from "../reconcile/runner.js";
-import { diff } from "../reconcile/diff.js";
+import { diff, normalizeRulesetConditions } from "../reconcile/diff.js";
 import type { LiveOrgState } from "../reconcile/diff.js";
 import type { GovernanceConfig, OrgConfig } from "../config/types.js";
 
@@ -239,6 +239,76 @@ describe("diff integration with rulesets cycle", () => {
     );
     const live: LiveOrgState = { rulesets: [{ id: 9, name: "org-main", enforcement: "active" }] };
     expect(diff("test-org", desired, live).entries).toHaveLength(0);
+  });
+
+  it("treats an absent exclude and GitHub's exclude: [] echo as equal (no perpetual update)", () => {
+    // A ruleset authored without `exclude:` comes back from GitHub with
+    // `exclude: []` inside conditions. The diff must not report a conditions
+    // update for that echo.
+    const desired = rulesetsCycle.buildDesired(
+      {
+        rulesets: [
+          {
+            name: "org-main",
+            enforcement: "active",
+            conditions: { ref_name: { include: ["~DEFAULT_BRANCH"] } },
+          },
+        ],
+      },
+      "test-org",
+      scope,
+    );
+    const live: LiveOrgState = {
+      rulesets: [
+        {
+          id: 9,
+          name: "org-main",
+          enforcement: "active",
+          conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
+        },
+      ],
+    };
+    expect(diff("test-org", desired, live).entries).toHaveLength(0);
+  });
+
+  it("still diffs a genuinely different conditions exclude", () => {
+    const desired = rulesetsCycle.buildDesired(
+      {
+        rulesets: [
+          {
+            name: "org-main",
+            enforcement: "active",
+            conditions: { ref_name: { include: ["~DEFAULT_BRANCH"] } },
+          },
+        ],
+      },
+      "test-org",
+      scope,
+    );
+    const live: LiveOrgState = {
+      rulesets: [
+        {
+          id: 9,
+          name: "org-main",
+          enforcement: "active",
+          conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: ["refs/heads/wip"] } },
+        },
+      ],
+    };
+    const cs = diff("test-org", desired, live);
+    expect(cs.entries).toHaveLength(1);
+    expect(cs.entries[0]!.fields!.map((f) => f.field)).toEqual(["conditions"]);
+  });
+
+  it("normalizeRulesetConditions: absent vs empty object/array equivalences", () => {
+    // Whole-object cases.
+    expect(normalizeRulesetConditions(undefined)).toBeUndefined();
+    expect(normalizeRulesetConditions({})).toBeUndefined();
+    expect(normalizeRulesetConditions({ ref_name: { include: [], exclude: [] } })).toBeUndefined();
+    // Empty nested values drop; real values survive.
+    expect(
+      normalizeRulesetConditions({ ref_name: { include: ["main"], exclude: [] } }),
+    ).toEqual({ ref_name: { include: ["main"] } });
   });
 
   it("emits ownership-gated delete for an unmanaged org ruleset", () => {
