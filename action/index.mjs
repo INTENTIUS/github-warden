@@ -1,3 +1,4 @@
+import { createRequire as __gwCreateRequire } from 'node:module'; import { fileURLToPath as __gwFileURLToPath } from 'node:url'; import { dirname as __gwDirname } from 'node:path'; var require = globalThis.require ?? __gwCreateRequire(import.meta.url); var __filename = __gwFileURLToPath(import.meta.url); var __dirname = __gwDirname(__filename);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -234801,6 +234802,3965 @@ var init_discover3 = __esm({
   }
 });
 
+// node_modules/@intentius/chant/src/audit/fetch.ts
+function parseRepoUrl(url2) {
+  let u;
+  try {
+    u = new URL(url2);
+  } catch {
+    throw new FetchError(`Invalid URL: ${url2}`);
+  }
+  if (u.protocol !== "https:") {
+    throw new FetchError(`Only https:// URLs are allowed (got ${u.protocol}).`);
+  }
+  const host = ALLOWED_HOSTS[u.hostname];
+  if (!host) {
+    throw new FetchError(
+      `Host not allowed: ${u.hostname}. Allowed: ${Object.keys(ALLOWED_HOSTS).join(", ")}.`
+    );
+  }
+  const parts = u.pathname.replace(/^\/+/, "").split("/");
+  if (parts.length < 2 || !parts[0] || !parts[1]) {
+    throw new FetchError(`URL must be https://${u.hostname}/<owner>/<repo>.`);
+  }
+  return { host, owner: parts[0], repo: parts[1].replace(/\.git$/, "") };
+}
+function authHeaders(kind, token) {
+  const base = { "User-Agent": USER_AGENT2 };
+  if (!token) return base;
+  if (kind === "github") return { ...base, Authorization: `Bearer ${token}` };
+  if (kind === "forgejo") return { ...base, Authorization: `token ${token}` };
+  return { ...base, "PRIVATE-TOKEN": token };
+}
+function timeoutSignal(ms) {
+  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(ms) : void 0;
+}
+async function getJsonAt(url2, headers, doFetch, timeoutMs) {
+  let res;
+  try {
+    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(timeoutMs) });
+  } catch (err) {
+    throw new FetchError(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (res.status >= 300 && res.status < 400) throw new FetchError(`Refusing to follow redirect from ${url2}`);
+  if (res.status === 404) return { status: 404, body: null };
+  if (!res.ok) throw new FetchError(`${url2} returned ${res.status}`);
+  return { status: res.status, body: await res.json() };
+}
+async function getSearchJsonAt(url2, headers, doFetch, timeoutMs) {
+  let res;
+  try {
+    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(timeoutMs) });
+  } catch (err) {
+    throw new FetchError(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (res.status >= 300 && res.status < 400) throw new FetchError(`Refusing to follow redirect from ${url2}`);
+  if (!res.ok) throw new FetchError(`${url2} returned ${res.status}`);
+  return res.json();
+}
+function projectId(owner, repo) {
+  return encodeURIComponent(`${owner}/${repo}`);
+}
+async function defaultBranch(host, owner, repo, doFetch, headers, ms) {
+  const url2 = host.kind === "gitlab" ? `${host.api}/projects/${projectId(owner, repo)}` : `${host.api}/repos/${owner}/${repo}`;
+  const { body } = await getJsonAt(url2, headers, doFetch, ms);
+  const branch = body?.default_branch;
+  return branch && typeof branch === "string" ? branch : "HEAD";
+}
+async function gitlabSearchPage(host, owner, repo, ref, term, page, doFetch, headers, ms) {
+  const url2 = `${host.api}/projects/${projectId(owner, repo)}/search?scope=blobs&search=${encodeURIComponent(term)}&per_page=100&page=${page}&ref=${encodeURIComponent(ref)}`;
+  const body = await getSearchJsonAt(url2, headers, doFetch, ms);
+  if (!Array.isArray(body)) return [];
+  return body.map((e) => e.path).filter((p) => typeof p === "string");
+}
+async function gitlabSearch(host, owner, repo, ref, doFetch, headers, ms) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const terms = [GITLAB_CI_TERM, ...CONTENT_SEARCH_TERMS.map((t) => t.term)];
+  for (const term of terms) {
+    for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
+      const hits = await gitlabSearchPage(host, owner, repo, ref, term, page, doFetch, headers, ms);
+      if (hits.length === 0) break;
+      for (const p of hits) if (!seen.has(p)) {
+        seen.add(p);
+        out.push({ path: p, type: "blob" });
+      }
+      if (hits.length < 100) break;
+    }
+  }
+  return out;
+}
+async function gitlabBfsWalk(host, owner, repo, ref, doFetch, headers, ms, seedRootPage1) {
+  const out = [];
+  const queue = [""];
+  const MAX_DIRS = 30;
+  const MAX_BLOBS = 200;
+  let dirs = 0;
+  while (queue.length > 0 && dirs < MAX_DIRS && out.length < MAX_BLOBS) {
+    const dir = queue.shift();
+    dirs++;
+    const pathParam = dir ? `&path=${encodeURIComponent(dir)}` : "";
+    for (let page = 1; page <= 5; page++) {
+      let body;
+      if (dir === "" && page === 1 && seedRootPage1) {
+        body = seedRootPage1;
+      } else {
+        const url2 = `${host.api}/projects/${projectId(owner, repo)}/repository/tree?per_page=100&page=${page}&ref=${encodeURIComponent(ref)}${pathParam}`;
+        ({ body } = await getJsonAt(url2, headers, doFetch, ms));
+      }
+      if (!Array.isArray(body) || body.length === 0) break;
+      for (const e of body) {
+        if (e.type === "blob") out.push({ path: e.path, type: "blob" });
+        else if (e.type === "tree") queue.push(e.path);
+      }
+      if (body.length < 100) break;
+    }
+  }
+  return out;
+}
+async function listTreeGitLab(host, owner, repo, ref, doFetch, headers, ms) {
+  const rootUrl = `${host.api}/projects/${projectId(owner, repo)}/repository/tree?per_page=100&page=1&ref=${encodeURIComponent(ref)}`;
+  const { body: rootBody } = await getJsonAt(rootUrl, headers, doFetch, ms);
+  const rootPage1 = Array.isArray(rootBody) ? rootBody : [];
+  const isLarge = rootPage1.length >= 100;
+  if (isLarge && "PRIVATE-TOKEN" in headers) {
+    try {
+      return await gitlabSearch(host, owner, repo, ref, doFetch, headers, ms);
+    } catch {
+    }
+  }
+  return gitlabBfsWalk(host, owner, repo, ref, doFetch, headers, ms, rootPage1);
+}
+async function githubSearchPage(host, owner, repo, term, page, doFetch, headers, ms) {
+  const q3 = encodeURIComponent(`${term} repo:${owner}/${repo}`);
+  const url2 = `${host.api}/search/code?q=${q3}&per_page=100&page=${page}`;
+  const body = await getSearchJsonAt(url2, { ...headers, Accept: "application/vnd.github+json" }, doFetch, ms);
+  const items = body?.items;
+  if (!Array.isArray(items)) return [];
+  return items.map((e) => e.path).filter((p) => typeof p === "string");
+}
+async function githubCodeSearch(host, owner, repo, doFetch, headers, ms) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const { term } of CONTENT_SEARCH_TERMS) {
+    for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
+      const hits = await githubSearchPage(host, owner, repo, term, page, doFetch, headers, ms);
+      if (hits.length === 0) break;
+      for (const p of hits) if (!seen.has(p)) {
+        seen.add(p);
+        out.push({ path: p, type: "blob" });
+      }
+      if (hits.length < 100) break;
+    }
+  }
+  return out;
+}
+async function forgejoSearchPage(host, owner, repo, term, page, doFetch, headers, ms) {
+  const url2 = `${host.api}/repos/${owner}/${repo}/search?q=${encodeURIComponent(term)}&page=${page}&limit=100`;
+  const body = await getSearchJsonAt(url2, headers, doFetch, ms);
+  const data = Array.isArray(body) ? body : body?.data;
+  if (!Array.isArray(data)) return [];
+  return data.map((e) => e.path).filter((p) => typeof p === "string");
+}
+async function forgejoCodeSearch(host, owner, repo, doFetch, headers, ms) {
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const { term } of CONTENT_SEARCH_TERMS) {
+    for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
+      const hits = await forgejoSearchPage(host, owner, repo, term, page, doFetch, headers, ms);
+      if (hits.length === 0) break;
+      for (const p of hits) if (!seen.has(p)) {
+        seen.add(p);
+        out.push({ path: p, type: "blob" });
+      }
+      if (hits.length < 100) break;
+    }
+  }
+  return out;
+}
+async function listTreeGitHubLike(host, owner, repo, ref, doFetch, headers, ms) {
+  const url2 = `${host.api}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
+  const { body } = await getJsonAt(url2, headers, doFetch, ms);
+  const treeBody = body;
+  const tree = treeBody?.tree;
+  if (!Array.isArray(tree)) return [];
+  const blobs = tree.filter((e) => e.type === "blob").map((e) => ({ path: e.path, type: "blob", size: e.size }));
+  const isLarge = blobs.length > LARGE_REPO_TREE_ENTRIES || treeBody?.truncated === true;
+  if (!isLarge) return blobs;
+  const { ciLexiconForPath: ciLexiconForPath2 } = await Promise.resolve().then(() => (init_discover3(), discover_exports));
+  const known = blobs.filter((e) => ciLexiconForPath2(e.path));
+  try {
+    const hits = host.kind === "github" ? await githubCodeSearch(host, owner, repo, doFetch, headers, ms) : await forgejoCodeSearch(host, owner, repo, doFetch, headers, ms);
+    const knownPaths = new Set(known.map((e) => e.path));
+    return [...known, ...hits.filter((h) => !knownPaths.has(h.path))];
+  } catch {
+    return blobs;
+  }
+}
+async function listTree(host, owner, repo, ref, doFetch, headers, ms) {
+  if (host.kind === "gitlab") return listTreeGitLab(host, owner, repo, ref, doFetch, headers, ms);
+  return listTreeGitHubLike(host, owner, repo, ref, doFetch, headers, ms);
+}
+async function fetchText(url2, headers, doFetch, ms) {
+  let res;
+  try {
+    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(ms) });
+  } catch {
+    return void 0;
+  }
+  if (!res.ok) return void 0;
+  try {
+    return await res.text();
+  } catch {
+    return void 0;
+  }
+}
+async function fetchFileContent(host, owner, repo, path, ref, doFetch, headers, ms) {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  if (host.kind === "gitlab") {
+    const url3 = `${host.api}/projects/${projectId(owner, repo)}/repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(ref)}`;
+    return fetchText(url3, headers, doFetch, ms);
+  }
+  if (host.kind === "github") {
+    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${encodedPath}`;
+    const raw = await fetchText(rawUrl, { "User-Agent": USER_AGENT2 }, doFetch, ms);
+    if (raw !== void 0) return raw;
+  }
+  const url2 = `${host.api}/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`;
+  let res;
+  try {
+    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(ms) });
+  } catch {
+    return void 0;
+  }
+  if (!res.ok) return void 0;
+  let file2;
+  try {
+    file2 = await res.json();
+  } catch {
+    return void 0;
+  }
+  if (!file2?.content) return void 0;
+  return Buffer.from(file2.content, file2.encoding ?? "base64").toString("utf-8");
+}
+async function fetchRepoFiles(url2, opts = {}) {
+  const { isCandidatePath: isCandidatePath2 } = await Promise.resolve().then(() => (init_discover3(), discover_exports));
+  const { host, owner, repo } = parseRepoUrl(url2);
+  const doFetch = opts.fetchImpl ?? fetch;
+  const cfg = {
+    maxFiles: opts.maxFiles ?? DEFAULTS.maxFiles,
+    maxBytesPerFile: opts.maxBytesPerFile ?? DEFAULTS.maxBytesPerFile,
+    maxTotalBytes: opts.maxTotalBytes ?? DEFAULTS.maxTotalBytes,
+    timeoutMs: opts.timeoutMs ?? DEFAULTS.timeoutMs
+  };
+  const headers = authHeaders(host.kind, opts.token);
+  const ref = opts.ref ?? await defaultBranch(host, owner, repo, doFetch, headers, cfg.timeoutMs);
+  const tree = await listTree(host, owner, repo, ref, doFetch, headers, cfg.timeoutMs);
+  const candidates = tree.filter((e) => isCandidatePath2(e.path));
+  const files = [];
+  let total = 0;
+  for (const entry of candidates) {
+    if (files.length >= cfg.maxFiles) break;
+    if ((entry.size ?? 0) > cfg.maxBytesPerFile) continue;
+    const content = await fetchFileContent(host, owner, repo, entry.path, ref, doFetch, headers, cfg.timeoutMs);
+    if (content === void 0) continue;
+    if (content.length > cfg.maxBytesPerFile) continue;
+    total += content.length;
+    if (total > cfg.maxTotalBytes) throw new FetchError("Repository files exceed the total size cap.");
+    files.push({ path: entry.path, content });
+  }
+  return files;
+}
+var DEFAULTS, ALLOWED_HOSTS, FetchError, USER_AGENT2, LARGE_REPO_TREE_ENTRIES, MAX_SEARCH_PAGES, CONTENT_SEARCH_TERMS, GITLAB_CI_TERM;
+var init_fetch2 = __esm({
+  "node_modules/@intentius/chant/src/audit/fetch.ts"() {
+    DEFAULTS = {
+      maxFiles: 50,
+      maxBytesPerFile: 256 * 1024,
+      maxTotalBytes: 2 * 1024 * 1024,
+      timeoutMs: 1e4
+    };
+    ALLOWED_HOSTS = {
+      "github.com": { kind: "github", api: "https://api.github.com", lexicon: "github" },
+      "codeberg.org": { kind: "forgejo", api: "https://codeberg.org/api/v1", lexicon: "forgejo" },
+      "gitlab.com": { kind: "gitlab", api: "https://gitlab.com/api/v4", lexicon: "gitlab" }
+    };
+    FetchError = class extends Error {
+    };
+    USER_AGENT2 = "chant-audit (+https://github.com/intentius/chant)";
+    LARGE_REPO_TREE_ENTRIES = 500;
+    MAX_SEARCH_PAGES = 3;
+    CONTENT_SEARCH_TERMS = [
+      { lexicon: "aws", term: "AWSTemplateFormatVersion" },
+      // CloudFormation
+      { lexicon: "azure", term: "deploymentTemplate" },
+      // ARM $schema substring
+      { lexicon: "gcp", term: "cnrm.cloud.google.com" },
+      // GCP Config Connector
+      { lexicon: "helm", term: "apiVersion: v2" },
+      // Chart.yaml
+      { lexicon: "docker", term: "FROM " },
+      // Dockerfiles (space avoids false hits)
+      { lexicon: "docker", term: "services:" },
+      // Docker Compose
+      { lexicon: "k8s", term: "apiVersion" }
+      // any k8s resource (broad; runs last)
+    ];
+    GITLAB_CI_TERM = "stages:";
+  }
+});
+
+// node_modules/@intentius/chant/src/audit/core.ts
+import { basename as basename3 } from "path";
+function dedupeById(checks) {
+  const byId = /* @__PURE__ */ new Map();
+  for (const check2 of checks) {
+    if (!byId.has(check2.id)) byId.set(check2.id, check2);
+  }
+  return [...byId.values()];
+}
+async function load(names) {
+  try {
+    const { loadPlugins: loadPlugins2 } = await Promise.resolve().then(() => (init_plugins(), plugins_exports));
+    return await loadPlugins2(names);
+  } catch (err) {
+    const pkgs = names.map((n) => `@intentius/chant-lexicon-${n}`).join(" ");
+    throw new MissingLexiconError(
+      `Missing lexicon package needed to audit ${names.join("/")} workflows. Install it with: npm i ${pkgs}
+(${err instanceof Error ? err.message : String(err)})`
+    );
+  }
+}
+async function defaultChecksProvider(lexicon) {
+  const cached2 = checksCache.get(lexicon);
+  if (cached2) return cached2;
+  let checks;
+  if (lexicon === "forgejo") {
+    const [forgejo, github] = await load(["forgejo", "github"]);
+    checks = dedupeById([
+      ...forgejo?.postSynthChecks?.() ?? [],
+      ...github?.postSynthChecks?.() ?? []
+    ]);
+  } else {
+    const [plugin] = await load([lexicon]);
+    checks = plugin?.postSynthChecks?.() ?? [];
+  }
+  checksCache.set(lexicon, checks);
+  return checks;
+}
+async function defaultEntitiesProvider(lexicon) {
+  if (entitiesParserCache.has(lexicon)) return entitiesParserCache.get(lexicon);
+  let parser;
+  try {
+    const [plugin] = await load([lexicon]);
+    const parse3 = plugin?.auditEntities?.bind(plugin);
+    if (parse3) parser = parse3;
+  } catch {
+    parser = void 0;
+  }
+  entitiesParserCache.set(lexicon, parser);
+  return parser;
+}
+async function auditFiles(inputs, opts = {}) {
+  const provider = opts.checksProvider ?? defaultChecksProvider;
+  const entitiesProvider = opts.entitiesProvider ?? defaultEntitiesProvider;
+  const findings = [];
+  const byLexicon = /* @__PURE__ */ new Map();
+  for (const input of inputs) {
+    const list = byLexicon.get(input.lexicon) ?? [];
+    list.push(input);
+    byLexicon.set(input.lexicon, list);
+  }
+  for (const [lexicon, files] of byLexicon) {
+    const checks = await provider(lexicon);
+    if (checks.length === 0) continue;
+    const parseEntities = await entitiesProvider(lexicon);
+    findings.push(...auditLexicon(lexicon, files, checks, parseEntities));
+  }
+  return findings;
+}
+function toOutput(file2) {
+  if (file2.files) return { primary: file2.content, files: file2.files };
+  if (file2.lexicon === "gcp") return file2.content;
+  return { primary: file2.content, files: { [basename3(file2.path)]: file2.content } };
+}
+function runChecks(checks, outputs, entities = /* @__PURE__ */ new Map()) {
+  const buildResult = { outputs, entities, warnings: [], errors: [], sourceFileCount: outputs.size };
+  const ctx = { outputs, entities: buildResult.entities, buildResult };
+  const diags = [];
+  for (const check2 of checks) {
+    try {
+      diags.push(...check2.check(ctx));
+    } catch {
+    }
+  }
+  return diags;
+}
+function diagKey(d) {
+  return `${d.checkId}\0${d.entity ?? ""}\0${d.message}`;
+}
+function mergeEntities(maps) {
+  const merged = /* @__PURE__ */ new Map();
+  for (const m of maps) {
+    for (const [key, entity] of m) {
+      let k = key;
+      for (let n = 2; merged.has(k); n++) k = `${key}#${n}`;
+      merged.set(k, entity);
+    }
+  }
+  return merged;
+}
+function auditLexicon(lexicon, files, checks, parseEntities) {
+  const entitiesFor = (file2) => {
+    if (!parseEntities) return /* @__PURE__ */ new Map();
+    try {
+      return parseEntities(file2.content);
+    } catch {
+      return /* @__PURE__ */ new Map();
+    }
+  };
+  const perEntities = new Map(files.map((f) => [f.path, entitiesFor(f)]));
+  const perFindings = [];
+  const perKeys = /* @__PURE__ */ new Set();
+  for (const file2 of files) {
+    const diags = runChecks(checks, /* @__PURE__ */ new Map([[file2.path, toOutput(file2)]]), perEntities.get(file2.path));
+    for (const d of diags) {
+      perFindings.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: file2.path, lexicon: d.lexicon ?? lexicon, entity: d.entity });
+      perKeys.add(diagKey(d));
+    }
+  }
+  const allOutputs = new Map(files.map((f) => [f.path, toOutput(f)]));
+  const allDiags = runChecks(checks, allOutputs, mergeEntities([...perEntities.values()]));
+  const allKeys = new Set(allDiags.map(diagKey));
+  const out = perFindings.filter((f) => allKeys.has(diagKey(f)));
+  for (const d of allDiags) {
+    if (!perKeys.has(diagKey(d))) {
+      out.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: CROSS_FILE, lexicon: d.lexicon ?? lexicon, entity: d.entity });
+    }
+  }
+  return out;
+}
+var checksCache, entitiesParserCache, MissingLexiconError, CROSS_FILE;
+var init_core4 = __esm({
+  "node_modules/@intentius/chant/src/audit/core.ts"() {
+    checksCache = /* @__PURE__ */ new Map();
+    entitiesParserCache = /* @__PURE__ */ new Map();
+    MissingLexiconError = class extends Error {
+    };
+    CROSS_FILE = "(cross-file)";
+  }
+});
+
+// node_modules/@intentius/chant/src/audit/catalog.ts
+function meta3(id, tier, fixKind, title, remediation, authority) {
+  const category = authority && authority.length > 0 ? "security" : RULE_CATEGORY[id] ?? "best-practice";
+  return { id, tier, fixKind, category, title, remediation, authority, yamlBased: true };
+}
+function agentMeta(id, tier, title, remediation, authority) {
+  const category = authority && authority.length > 0 ? "security" : RULE_CATEGORY[id] ?? "best-practice";
+  return { id, tier, fixKind: G, category, title, remediation, authority, yamlBased: false };
+}
+var SCORECARD_PINNED, GH_SECRET_SCANNING, CF_WORKERS_DEV, CF_SECRETS, CF_ROUTES, CF_ENVIRONMENTS, CF_STATIC_ASSETS, MOZILLA_TLS, CWE_DIR_LISTING, GIXY_ALIAS, NGINX_STUB_STATUS, CWE_HARDCODED_CREDS, CWE_CLEARTEXT, M, R, G, RULE_CATEGORY, RULE_CATALOG;
+var init_catalog = __esm({
+  "node_modules/@intentius/chant/src/audit/catalog.ts"() {
+    SCORECARD_PINNED = {
+      name: "OSSF Scorecard \u2014 Pinned-Dependencies",
+      url: "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies"
+    };
+    GH_SECRET_SCANNING = {
+      name: "GitHub \u2014 About secret scanning",
+      url: "https://docs.github.com/en/code-security/secret-scanning/introduction/about-secret-scanning"
+    };
+    CF_WORKERS_DEV = {
+      name: "Cloudflare Workers \u2014 workers.dev",
+      url: "https://developers.cloudflare.com/workers/configuration/routing/workers-dev/"
+    };
+    CF_SECRETS = {
+      name: "Cloudflare Workers \u2014 Secrets",
+      url: "https://developers.cloudflare.com/workers/configuration/secrets/"
+    };
+    CF_ROUTES = {
+      name: "Cloudflare Workers \u2014 Routes",
+      url: "https://developers.cloudflare.com/workers/configuration/routing/routes/"
+    };
+    CF_ENVIRONMENTS = {
+      name: "Cloudflare Workers \u2014 Wrangler environments",
+      url: "https://developers.cloudflare.com/workers/wrangler/configuration/#environments"
+    };
+    CF_STATIC_ASSETS = {
+      name: "Cloudflare Workers \u2014 Static assets",
+      url: "https://developers.cloudflare.com/workers/static-assets/"
+    };
+    MOZILLA_TLS = {
+      name: "Mozilla \u2014 Server Side TLS",
+      url: "https://wiki.mozilla.org/Security/Server_Side_TLS"
+    };
+    CWE_DIR_LISTING = {
+      name: "CWE-548 \u2014 Exposure of Information Through Directory Listing",
+      url: "https://cwe.mitre.org/data/definitions/548.html"
+    };
+    GIXY_ALIAS = {
+      name: "Gixy \u2014 alias traversal",
+      url: "https://github.com/yandex/gixy/blob/master/docs/en/plugins/aliastraversal.md"
+    };
+    NGINX_STUB_STATUS = {
+      name: "nginx \u2014 ngx_http_stub_status_module",
+      url: "https://nginx.org/en/docs/http/ngx_http_stub_status_module.html"
+    };
+    CWE_HARDCODED_CREDS = {
+      name: "CWE-798 \u2014 Use of Hard-coded Credentials",
+      url: "https://cwe.mitre.org/data/definitions/798.html"
+    };
+    CWE_CLEARTEXT = {
+      name: "CWE-319 \u2014 Cleartext Transmission of Sensitive Information",
+      url: "https://cwe.mitre.org/data/definitions/319.html"
+    };
+    M = "merge-worthy";
+    R = "report-only";
+    G = "guidance";
+    RULE_CATEGORY = {
+      COR020: "correctness",
+      EXT001: "correctness",
+      SEC001: "security",
+      SEC002: "security",
+      SEC003: "security",
+      SEC004: "security",
+      SEC005: "security",
+      SEC006: "security",
+      SEC007: "security",
+      SEC008: "security",
+      SEC009: "security",
+      SEC010: "security",
+      WRG001: "security",
+      WRG002: "security",
+      WRG003: "best-practice",
+      WRG004: "security",
+      WRG005: "security",
+      WRG006: "security",
+      // NGX — nginx config audit (#1979), lexicon-independent like SEC/WRG.
+      NGX001: "security",
+      NGX002: "security",
+      NGX003: "security",
+      NGX004: "security",
+      NGX005: "security",
+      NGX006: "best-practice",
+      NGX007: "best-practice",
+      // AGT — agent configuration (`chant audit --agents`). Core-owned like COR/EXT:
+      // these run against the machine's own agent config, not against any one
+      // lexicon's emitted output, so no lexicon ships them.
+      AGT001: "security",
+      AGT002: "security",
+      AGT003: "security",
+      AGT004: "security",
+      AGT005: "security",
+      AGT006: "best-practice",
+      AGT007: "correctness",
+      AGT008: "best-practice"
+    };
+    RULE_CATALOG = {
+      COR020: meta3("COR020", M, G, "Circular resource dependency", "Break the dependency cycle between resources."),
+      EXT001: meta3("EXT001", M, G, "Extension constraint violation", "Fix the cross-property constraint flagged by the cfn-lint extension schema."),
+      // Secrets & credentials (#443) — lexicon-independent: `secrets.ts` scans the
+      // raw text of every candidate file, so these ids apply regardless of which
+      // (if any) audit lexicons are installed. `fixKind` is `guidance`: removing
+      // a hardcoded credential and rotating it needs a human, never an auto-fix.
+      SEC001: meta3("SEC001", M, G, "AWS access key ID found", "Remove the key from source, rotate it in IAM, and load it from a secret store or environment variable instead.", [GH_SECRET_SCANNING]),
+      SEC002: meta3("SEC002", M, G, "AWS secret access key found", "Remove the key from source, rotate it in IAM, and load it from a secret store or environment variable instead.", [GH_SECRET_SCANNING]),
+      SEC003: meta3("SEC003", M, G, "GitHub token found", "Remove the token from source and revoke it at github.com/settings/tokens; use a GitHub Actions secret instead.", [GH_SECRET_SCANNING]),
+      SEC004: meta3("SEC004", M, G, "Slack token found", "Remove the token from source and revoke it in the Slack app's OAuth settings.", [GH_SECRET_SCANNING]),
+      SEC005: meta3("SEC005", M, G, "Google API key found", "Remove the key from source and regenerate it in the Google Cloud Console credentials page.", [GH_SECRET_SCANNING]),
+      SEC006: meta3("SEC006", M, G, "Stripe live secret key found", "Remove the key from source and roll it in the Stripe dashboard immediately \u2014 this is a live-mode key.", [GH_SECRET_SCANNING]),
+      SEC007: meta3("SEC007", M, G, "Private key block found", "Remove the private key from source, rotate the keypair, and load the key from a secret store instead.", [GH_SECRET_SCANNING]),
+      SEC008: meta3("SEC008", M, G, "Bearer/authorization token found", "Remove the token from source; if it's long-lived, revoke and reissue it via the issuing service.", [GH_SECRET_SCANNING]),
+      SEC009: meta3("SEC009", M, G, "Credentials embedded in a connection string", "Move the username/password out of the URI into a secret store, and rotate the credential.", [GH_SECRET_SCANNING]),
+      SEC010: meta3("SEC010", M, G, "High-entropy string \u2014 possible secret", "Confirm whether this is a live credential; if so, remove it from source and rotate it. If it's a false positive, suppress with a `chant-audit-ignore` comment or an allowlist entry.", [GH_SECRET_SCANNING]),
+      // Wrangler config audit (#446) — lexicon-independent, same shape as the SEC
+      // family above: `wrangler.ts` scans every `wrangler.toml` it finds
+      // regardless of which (if any) audit lexicons are installed.
+      WRG001: meta3("WRG001", M, G, "Production environment exposed on *.workers.dev", "Remove workers_dev (or set it to false) for this environment and rely on its custom domain/route instead of the shared public subdomain.", [CF_WORKERS_DEV]),
+      WRG002: meta3("WRG002", M, G, "Credential-shaped key stored in [vars]", "Move the value out of [vars] and into `wrangler secret put <name>` so it isn't committed to source or visible in `wrangler dev`/the dashboard.", [CF_SECRETS]),
+      WRG003: meta3("WRG003", R, G, "Observability explicitly disabled", "Set observability.enabled = true (or remove the override) so Workers Logs are recorded for this deployment."),
+      WRG004: meta3("WRG004", M, G, "Unscoped wildcard route", 'Scope the route pattern to the intended zone (e.g. "example.com/*") instead of a bare "*" or "*/*" that matches every zone on the account.', [CF_ROUTES]),
+      WRG005: meta3("WRG005", M, G, "Non-production environment shares a data store with production", "Give the non-production environment its own KV namespace/R2 bucket/D1 database id instead of reusing production's.", [CF_ENVIRONMENTS]),
+      WRG006: meta3("WRG006", M, G, "Static assets served from the project root", "Point [site].bucket / [assets].directory at a dedicated public output folder, not the project root, so non-public files (config, source maps, .git) aren't served.", [CF_STATIC_ASSETS]),
+      // nginx config audit (#1979, the #446 follow-up) — lexicon-independent,
+      // same shape as SEC/WRG: `nginx.ts` scans every nginx config it detects
+      // regardless of which (if any) audit lexicons are installed.
+      NGX001: meta3("NGX001", M, G, "Deprecated TLS protocol enabled", "Remove SSLv2/SSLv3/TLSv1/TLSv1.1 from ssl_protocols and serve TLSv1.2 and TLSv1.3 only.", [MOZILLA_TLS]),
+      NGX002: meta3("NGX002", M, G, "Weak cipher suite enabled", "Remove the RC4/DES/MD5/NULL/EXPORT-class entries from ssl_ciphers and use a modern cipher list (e.g. Mozilla's intermediate configuration).", [MOZILLA_TLS]),
+      NGX003: meta3("NGX003", M, G, "Directory listing enabled", "Remove `autoindex on` (or scope it to a directory that is genuinely meant to be enumerated) so file listings aren't served to anyone who asks.", [CWE_DIR_LISTING]),
+      NGX004: meta3("NGX004", M, G, "alias path traversal", 'End the location prefix with "/" so it matches the trailing slash of the alias target \u2014 without it, a request for "<prefix>../" escapes the aliased directory.', [GIXY_ALIAS]),
+      NGX005: meta3("NGX005", M, G, "Status endpoint with no access restriction", "Restrict the stub_status location with allow/deny (or auth_basic/auth_request) so connection metrics aren't public reconnaissance.", [NGINX_STUB_STATUS]),
+      NGX006: meta3("NGX006", R, G, "Server version disclosure", "Add `server_tokens off;` in the http block so nginx stops advertising its exact version in the Server header and error pages."),
+      NGX007: meta3("NGX007", R, G, "Access logging disabled at server scope", "Re-enable access_log at http/server scope (silencing a single noisy location is fine) so requests are recorded for incident investigation."),
+      // ── Agent configuration (`chant audit --agents`) ──────────────────
+      AGT001: agentMeta(
+        "AGT001",
+        M,
+        "MCP server runs an unpinned package",
+        "Pin the package spec to an exact version (`server@1.2.3`), so a new upstream release can't execute on this machine unreviewed.",
+        [SCORECARD_PINNED]
+      ),
+      AGT002: agentMeta(
+        "AGT002",
+        M,
+        "Literal credential in agent config",
+        "Replace the value with an environment reference (`${TOKEN}`) and keep the secret in a secret store \u2014 agent config files sync, back up, and get shared.",
+        [CWE_HARDCODED_CREDS]
+      ),
+      AGT003: agentMeta(
+        "AGT003",
+        M,
+        "MCP server reached over cleartext HTTP",
+        "Use an https:// endpoint. Tool arguments and results \u2014 including data the agent read locally \u2014 otherwise cross the network in the clear.",
+        [CWE_CLEARTEXT]
+      ),
+      AGT004: agentMeta(
+        "AGT004",
+        M,
+        "Remote skill or plugin is unpinned",
+        "Pin the source to a tag or commit sha, so the instructions the agent follows can't change upstream without a local edit.",
+        [SCORECARD_PINNED]
+      ),
+      AGT005: agentMeta(
+        "AGT005",
+        M,
+        "Tool permission granted without constraint",
+        "Scope the grant to the specific commands you run (`Bash(git status:*)`), and re-enable the confirmation prompt for dangerous operations."
+      ),
+      AGT006: agentMeta(
+        "AGT006",
+        R,
+        "User-scope config applies to every project",
+        "Move project-specific instructions, MCP servers, and skills to that project's own config so they don't follow you into unrelated repos."
+      ),
+      AGT007: agentMeta(
+        "AGT007",
+        R,
+        "MCP server declared in multiple files",
+        "Delete the shadowed declarations. The harness silently picks one, so the file you read may not be the one that decides what runs."
+      ),
+      AGT008: agentMeta(
+        "AGT008",
+        R,
+        "Instruction file exceeds the attention budget",
+        "Move situational guidance into skills that load on demand, so the always-on instructions stay short enough to be followed reliably."
+      )
+    };
+  }
+});
+
+// node_modules/@intentius/chant/src/audit/proof.ts
+function notApplied(checkId, reason, note) {
+  return { checkId, applied: false, reason, note };
+}
+function pinActions(content, opts) {
+  const lines = content.split("\n");
+  let changed = false;
+  let needsSha = false;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(USES_RE);
+    if (!m) continue;
+    const [, prefix, action, ref, rest] = m;
+    if (SHA_RE.test(ref)) continue;
+    const sha = opts.resolveSha?.(action, ref);
+    if (!sha) {
+      needsSha = true;
+      continue;
+    }
+    lines[i] = `${prefix}${action}@${sha}  # ${ref}${rest.replace(/\s*#.*$/, "")}`;
+    changed = true;
+  }
+  return { patched: lines.join("\n"), changed, needsSha };
+}
+function isPinnableImage(ref) {
+  return !ref.includes("@sha256:") && !ref.includes("$");
+}
+function pinImages(content, opts) {
+  const lines = content.split("\n");
+  let changed = false;
+  let needsValue = false;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(IMAGE_RE);
+    if (!m) continue;
+    const [, prefix, , ref, rest] = m;
+    if (!isPinnableImage(ref)) continue;
+    const digest = opts.resolveDigest?.(ref);
+    if (!digest) {
+      needsValue = true;
+      continue;
+    }
+    lines[i] = `${prefix}${ref}@${digest}${rest.replace(/\s*#.*$/, "")}`;
+    changed = true;
+  }
+  return { patched: lines.join("\n"), changed, needsValue };
+}
+function addPermissions(content) {
+  if (/^permissions:/m.test(content)) return { patched: content, changed: false };
+  const lines = content.split("\n");
+  const jobsIdx = lines.findIndex((l) => /^jobs:\s*$/.test(l));
+  if (jobsIdx === -1) return { patched: content, changed: false };
+  lines.splice(jobsIdx, 0, "permissions:", "  contents: read");
+  return { patched: lines.join("\n"), changed: true };
+}
+function narrowWriteAll(content) {
+  const re = /^permissions:[ \t]+write-all[ \t]*$/m;
+  if (!re.test(content)) return { patched: content, changed: false };
+  return { patched: content.replace(re, "permissions:\n  contents: read"), changed: true };
+}
+function proveFix(checkId, content, opts = {}) {
+  const cat = (opts.catalog ?? RULE_CATALOG)[checkId];
+  if (cat && cat.fixKind !== "deterministic") {
+    return notApplied(checkId, "guidance", cat.remediation || "Manual fix required.");
+  }
+  let result;
+  switch (checkId) {
+    case "GHA021":
+    case "GHA029":
+      result = pinActions(content, opts);
+      if (!result.changed && result.needsSha) {
+        return notApplied(checkId, "needs-input", "A commit SHA is required to pin; resolve it (e.g. via the fetch layer) and re-run.");
+      }
+      break;
+    case "GHA030":
+    case "WGL031": {
+      const r = pinImages(content, opts);
+      if (!r.changed && r.needsValue) {
+        return notApplied(checkId, "needs-input", "A registry digest is required to pin the image; resolve it (e.g. via the fetch layer) and re-run.");
+      }
+      result = r;
+      break;
+    }
+    case "GHA017":
+      result = addPermissions(content);
+      break;
+    case "GHA033":
+      result = narrowWriteAll(content);
+      break;
+    default:
+      return notApplied(checkId, "needs-input", cat?.remediation || "No deterministic fix implemented for this rule yet.");
+  }
+  if (!result.changed) {
+    return notApplied(checkId, "noop", "Nothing to fix \u2014 the issue is not present (no-op).");
+  }
+  return {
+    checkId,
+    applied: true,
+    reason: "applied",
+    patched: result.patched,
+    diff: unifiedDiff(content, result.patched)
+  };
+}
+function diffOps(a, b) {
+  const n = a.length;
+  const m = b.length;
+  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i2 = n - 1; i2 >= 0; i2--) {
+    for (let j2 = m - 1; j2 >= 0; j2--) {
+      lcs[i2][j2] = a[i2] === b[j2] ? lcs[i2 + 1][j2 + 1] + 1 : Math.max(lcs[i2 + 1][j2], lcs[i2][j2 + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ type: "eq", line: a[i] });
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      ops.push({ type: "del", line: a[i] });
+      i++;
+    } else {
+      ops.push({ type: "add", line: b[j] });
+      j++;
+    }
+  }
+  while (i < n) ops.push({ type: "del", line: a[i++] });
+  while (j < m) ops.push({ type: "add", line: b[j++] });
+  return ops;
+}
+function unifiedDiff(oldStr, newStr, context = 3) {
+  const a = oldStr.split("\n");
+  const b = newStr.split("\n");
+  const ops = diffOps(a, b);
+  const keep = new Array(ops.length).fill(false);
+  for (let k2 = 0; k2 < ops.length; k2++) {
+    if (ops[k2].type !== "eq") {
+      for (let d = -context; d <= context; d++) {
+        const idx = k2 + d;
+        if (idx >= 0 && idx < ops.length) keep[idx] = true;
+      }
+    }
+  }
+  const lines = [];
+  let oldLine = 1;
+  let newLine = 1;
+  let k = 0;
+  while (k < ops.length) {
+    if (!keep[k]) {
+      if (ops[k].type !== "add") oldLine++;
+      if (ops[k].type !== "del") newLine++;
+      k++;
+      continue;
+    }
+    const hunk = [];
+    const oldStart = oldLine;
+    const newStart = newLine;
+    let oldCount = 0;
+    let newCount = 0;
+    while (k < ops.length && keep[k]) {
+      const op = ops[k];
+      if (op.type === "eq") {
+        hunk.push(` ${op.line}`);
+        oldCount++;
+        newCount++;
+        oldLine++;
+        newLine++;
+      } else if (op.type === "del") {
+        hunk.push(`-${op.line}`);
+        oldCount++;
+        oldLine++;
+      } else {
+        hunk.push(`+${op.line}`);
+        newCount++;
+        newLine++;
+      }
+      k++;
+    }
+    lines.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+    lines.push(...hunk);
+  }
+  return lines.join("\n");
+}
+var SHA_RE, USES_RE, IMAGE_RE;
+var init_proof = __esm({
+  "node_modules/@intentius/chant/src/audit/proof.ts"() {
+    init_catalog();
+    SHA_RE = /^[0-9a-f]{40}$/;
+    USES_RE = /^(\s*-?\s*uses:\s*)([^@\s'"]+)@([^\s'"#]+)(.*)$/;
+    IMAGE_RE = /^(\s*image:\s*)(["']?)([^\s"'#]+)\2(.*)$/;
+  }
+});
+
+// node_modules/@intentius/chant/src/audit/report-model.ts
+function metaFor(id, catalog = RULE_CATALOG) {
+  return catalog[id] ?? {
+    id,
+    tier: "report-only",
+    fixKind: "guidance",
+    title: id,
+    remediation: "",
+    yamlBased: true
+  };
+}
+function sortFindings(a, b) {
+  const sev = SEVERITY_WEIGHT[a.severity] - SEVERITY_WEIGHT[b.severity];
+  if (sev !== 0) return sev;
+  if (a.checkId !== b.checkId) return a.checkId < b.checkId ? -1 : 1;
+  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
+}
+function byFile(items) {
+  const map2 = /* @__PURE__ */ new Map();
+  for (const it of [...items].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)) {
+    const list = map2.get(it.file) ?? [];
+    list.push(it);
+    map2.set(it.file, list);
+  }
+  return map2;
+}
+function clusterName(m) {
+  return m.authority?.[0]?.name ?? "General hardening";
+}
+function buildQuickWins(findings, contents, proveOpts, catalog = RULE_CATALOG) {
+  const out = [];
+  for (const [file2, group] of byFile(findings)) {
+    const ids = [...new Set(group.map((f) => f.checkId))].sort();
+    const original = contents.get(file2);
+    const addressed = [];
+    const needsInput = [];
+    let patched = original;
+    if (original !== void 0) {
+      for (const id of ids) {
+        const res = proveFix(id, patched ?? original, { ...proveOpts, catalog });
+        if (res.applied && res.patched !== void 0) {
+          patched = res.patched;
+          addressed.push(metaFor(id, catalog));
+        } else if (res.reason === "needs-input") {
+          needsInput.push(...group.filter((f) => f.checkId === id));
+        }
+      }
+    } else {
+      for (const f of group) needsInput.push(f);
+    }
+    const diff2 = original !== void 0 && patched !== void 0 && patched !== original ? unifiedDiff(original, patched) : void 0;
+    const seen = /* @__PURE__ */ new Set();
+    const deduped = needsInput.filter((f) => {
+      const k = `${f.checkId}:${f.entity ?? ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    out.push({ file: file2, diff: diff2, addressed, needsInput: deduped });
+  }
+  return out;
+}
+function buildClusters(findings) {
+  const clusters = /* @__PURE__ */ new Map();
+  for (const f of [...findings].sort(sortFindings)) {
+    const key = clusterName(f.meta);
+    const list = clusters.get(key) ?? [];
+    list.push(f);
+    clusters.set(key, list);
+  }
+  return [...clusters.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([name, group]) => {
+    const byRule = /* @__PURE__ */ new Map();
+    for (const f of group) {
+      const list = byRule.get(f.checkId) ?? [];
+      list.push(f);
+      byRule.set(f.checkId, list);
+    }
+    return {
+      name,
+      url: group[0].meta.authority?.[0]?.url,
+      rules: [...byRule.values()].map((findings2) => ({ meta: findings2[0].meta, findings: findings2 }))
+    };
+  });
+}
+function buildReportModel(findings, opts = {}) {
+  const catalog = opts.catalog ?? RULE_CATALOG;
+  const enriched = findings.map((f) => ({ ...f, meta: metaFor(f.checkId, catalog) }));
+  const contents = new Map((opts.files ?? []).map((f) => [f.path, f.content]));
+  const mergeWorthy = enriched.filter((f) => f.meta.tier === "merge-worthy");
+  const quickWinFindings = mergeWorthy.filter((f) => f.meta.fixKind === "deterministic");
+  const needsReviewFindings = mergeWorthy.filter((f) => f.meta.fixKind === "guidance");
+  const mwOnEntity = new Set(mergeWorthy.filter((f) => f.entity).map((f) => `${f.file}:${f.entity}:${f.checkId}`));
+  const reportOnly = enriched.filter((f) => {
+    if (f.meta.tier !== "report-only") return false;
+    const supers = SUPERSEDED_BY[f.checkId];
+    if (supers && f.entity && supers.some((id) => mwOnEntity.has(`${f.file}:${f.entity}:${id}`))) return false;
+    return true;
+  });
+  const shown = [...quickWinFindings, ...needsReviewFindings, ...reportOnly];
+  const counts = {
+    total: shown.length,
+    quickWin: quickWinFindings.length,
+    needsReview: needsReviewFindings.length,
+    reportOnly: reportOnly.length,
+    errors: shown.filter((f) => f.severity === "error").length,
+    warnings: shown.filter((f) => f.severity === "warning").length,
+    infos: shown.filter((f) => f.severity === "info").length,
+    security: shown.filter((f) => f.meta.category === "security").length,
+    correctness: shown.filter((f) => f.meta.category === "correctness").length,
+    bestPractice: shown.filter((f) => f.meta.category === "best-practice").length,
+    efficiency: shown.filter((f) => f.meta.category === "efficiency").length
+  };
+  return {
+    counts,
+    quickWins: buildQuickWins(quickWinFindings, contents, { resolveSha: opts.resolveSha, resolveDigest: opts.resolveDigest }, catalog),
+    needsReview: buildClusters(needsReviewFindings),
+    reportOnly: [...reportOnly].sort(sortFindings),
+    findings: [...shown].sort(sortFindings)
+  };
+}
+var SEVERITY_WEIGHT, SUPERSEDED_BY;
+var init_report_model = __esm({
+  "node_modules/@intentius/chant/src/audit/report-model.ts"() {
+    init_catalog();
+    init_proof();
+    SEVERITY_WEIGHT = { error: 0, warning: 1, info: 2 };
+    SUPERSEDED_BY = {
+      WGL021: ["WGL016"]
+      // "unused variable" is noise when the var is a flagged hardcoded secret
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/yaml-helpers.ts
+function getDependabotYaml(output) {
+  if (typeof output === "string") return void 0;
+  return output.files?.["dependabot.yml"];
+}
+function extractDependabotUpdates(dependabotYaml) {
+  let doc;
+  try {
+    doc = parseYAML(dependabotYaml);
+  } catch {
+    return [];
+  }
+  const updates = doc.updates;
+  return Array.isArray(updates) ? updates : [];
+}
+function extractJobs(yaml) {
+  const jobs = /* @__PURE__ */ new Map();
+  const jobsIdx = yaml.search(/^jobs:\s*$/m);
+  if (jobsIdx === -1) return jobs;
+  const afterJobs = yaml.slice(jobsIdx + yaml.slice(jobsIdx).indexOf("\n") + 1);
+  const endMatch = afterJobs.search(/^[a-z]/m);
+  const jobsContent = endMatch === -1 ? afterJobs : afterJobs.slice(0, endMatch);
+  const jobSections = jobsContent.split(/\n(?=  [a-z][a-z0-9-]*:)/);
+  for (const section of jobSections) {
+    const nameMatch = section.match(/^\s{2}([a-z][a-z0-9-]*):/);
+    if (!nameMatch) continue;
+    const name = nameMatch[1];
+    const job = { name };
+    const needsInline = section.match(/^\s{4}needs:\s+\[(.+)\]$/m);
+    if (needsInline) {
+      job.needs = needsInline[1].split(",").map((s) => s.trim().replace(/^'|'$/g, "").replace(/^"|"$/g, ""));
+    } else {
+      const needsList = section.match(/^\s{4}needs:\n((?:\s{6}- .+\n?)+)/m);
+      if (needsList) {
+        job.needs = [];
+        for (const line of needsList[1].split("\n")) {
+          const item = line.match(/^\s{6}- (.+)$/);
+          if (item) job.needs.push(item[1].trim().replace(/^'|'$/g, "").replace(/^"|"$/g, ""));
+        }
+      }
+    }
+    const stepsMatch = section.match(/^\s{4}steps:\n([\s\S]*?)(?=\n\s{4}[a-z]|\n\s{2}[a-z]|$)/m);
+    if (stepsMatch) {
+      job.steps = [];
+      const stepEntries = stepsMatch[1].split(/\n(?=\s{6}- )/);
+      for (const stepEntry of stepEntries) {
+        const usesMatch = stepEntry.match(/uses:\s+(.+)$/m);
+        const runMatch = stepEntry.match(/run:\s+(.+)$/m);
+        const stepNameMatch = stepEntry.match(/name:\s+(.+)$/m);
+        if (usesMatch || runMatch) {
+          job.steps.push({
+            uses: usesMatch?.[1] ? stripUsesComment(usesMatch[1].trim().replace(/^'|'$/g, "")) : void 0,
+            run: runMatch?.[1]?.trim(),
+            name: stepNameMatch?.[1]?.trim().replace(/^'|'$/g, "")
+          });
+        }
+      }
+    }
+    jobs.set(name, job);
+  }
+  return jobs;
+}
+function extractTriggers(yaml) {
+  const onMatch = yaml.match(/^on:\n([\s\S]*?)(?=\n[a-z]|$)/m);
+  if (!onMatch) return {};
+  const triggers = {};
+  const lines = onMatch[1].split("\n");
+  for (const line of lines) {
+    const triggerMatch = line.match(/^\s{2}([a-z_]+):/);
+    if (triggerMatch) {
+      triggers[triggerMatch[1]] = true;
+    }
+  }
+  return triggers;
+}
+function hasCheckoutAction(steps) {
+  return steps.some((s) => s.uses?.startsWith("actions/checkout"));
+}
+function buildNeedsGraph(yaml) {
+  const jobs = extractJobs(yaml);
+  const graph = /* @__PURE__ */ new Map();
+  for (const [name, job] of jobs) {
+    graph.set(name, job.needs ?? []);
+  }
+  return graph;
+}
+function extractWorkflowName(yaml) {
+  const match = yaml.match(/^name:\s+(.+)$/m);
+  return match?.[1]?.trim().replace(/^'|'$/g, "");
+}
+function hasPermissions(yaml) {
+  return /^permissions:/m.test(yaml);
+}
+function parseDoc(yaml) {
+  try {
+    return parseYAML(yaml);
+  } catch {
+    return void 0;
+  }
+}
+function jobEntries(yaml) {
+  const doc = parseDoc(yaml);
+  const jobs = doc?.jobs;
+  if (!jobs || typeof jobs !== "object") return [];
+  const out = [];
+  for (const [name, val] of Object.entries(jobs)) {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      out.push([name, val]);
+    }
+  }
+  return out;
+}
+function extractStepsByJob(yaml) {
+  const out = /* @__PURE__ */ new Map();
+  for (const [job, jobObj] of jobEntries(yaml)) {
+    const steps = jobObj.steps;
+    if (!Array.isArray(steps)) continue;
+    out.set(
+      job,
+      steps.filter((s) => !!s && typeof s === "object" && !Array.isArray(s))
+    );
+  }
+  return out;
+}
+function extractActionRefs(yaml) {
+  const refs = [];
+  for (const [job, jobObj] of jobEntries(yaml)) {
+    if (typeof jobObj.uses === "string") {
+      refs.push({ job, ref: jobObj.uses, level: "job" });
+    }
+    const steps = jobObj.steps;
+    if (Array.isArray(steps)) {
+      for (const step of steps) {
+        if (step && typeof step === "object" && typeof step.uses === "string") {
+          refs.push({ job, ref: step.uses, level: "step" });
+        }
+      }
+    }
+  }
+  return refs;
+}
+function extractImageRefs(yaml) {
+  const refs = [];
+  for (const [job, jobObj] of jobEntries(yaml)) {
+    const container = jobObj.container;
+    if (typeof container === "string") {
+      refs.push({ job, image: container, source: "container" });
+    } else if (container && typeof container === "object" && typeof container.image === "string") {
+      refs.push({ job, image: container.image, source: "container" });
+    }
+    const services = jobObj.services;
+    if (services && typeof services === "object" && !Array.isArray(services)) {
+      for (const svc of Object.values(services)) {
+        if (typeof svc === "string") {
+          refs.push({ job, image: svc, source: "service" });
+        } else if (svc && typeof svc === "object" && typeof svc.image === "string") {
+          refs.push({ job, image: svc.image, source: "service" });
+        }
+      }
+    }
+    const steps = jobObj.steps;
+    if (Array.isArray(steps)) {
+      for (const step of steps) {
+        const uses = step && typeof step === "object" ? step.uses : void 0;
+        if (typeof uses === "string" && uses.startsWith("docker://")) {
+          refs.push({ job, image: uses.slice("docker://".length), source: "step" });
+        }
+      }
+    }
+  }
+  return refs;
+}
+function scanJobLines(yaml, onLine) {
+  const lines = yaml.split("\n");
+  let inJobs = false;
+  let currentJob = "";
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^jobs:\s*$/.test(line)) {
+      inJobs = true;
+      continue;
+    }
+    if (!inJobs) continue;
+    if (/^\S/.test(line)) {
+      inJobs = false;
+      continue;
+    }
+    const jobHeader = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
+    if (jobHeader) {
+      currentJob = jobHeader[1];
+      continue;
+    }
+    if (!currentJob) continue;
+    const indent = line.search(/\S/);
+    if (indent < 0) continue;
+    onLine(currentJob, line, indent, i, lines);
+  }
+}
+function extractRunBlocks(yaml) {
+  const out = [];
+  const consumed = /* @__PURE__ */ new Set();
+  scanJobLines(yaml, (job, line, _indent, lineNo, lines) => {
+    if (consumed.has(lineNo)) return;
+    const m = line.match(/^(\s*)(- )?run:\s*(.*)$/);
+    if (!m) return;
+    const keyIndent = m[1].length + (m[2] ? 2 : 0);
+    const value = m[3].trim();
+    if (value === "|" || value === "|-" || value === ">" || value === ">-" || value === "|+" || value === ">+") {
+      const blockLines = [];
+      for (let j = lineNo + 1; j < lines.length; j++) {
+        const bl = lines[j];
+        if (bl.trim() === "") {
+          blockLines.push("");
+          consumed.add(j);
+          continue;
+        }
+        const bi = bl.search(/\S/);
+        if (bi <= keyIndent) break;
+        blockLines.push(bl.trimStart());
+        consumed.add(j);
+      }
+      out.push({ job, run: blockLines.join("\n") });
+    } else {
+      out.push({ job, run: value.replace(/^['"]|['"]$/g, "") });
+    }
+  });
+  return out;
+}
+function extractIfConditions(yaml) {
+  const out = [];
+  scanJobLines(yaml, (job, line) => {
+    const m = line.match(/^\s+(?:- )?if:\s*(.+)$/);
+    if (m) out.push({ job, expr: m[1].trim().replace(/^['"]|['"]$/g, "") });
+  });
+  return out;
+}
+function extractRunsOnByJob(yaml) {
+  const out = /* @__PURE__ */ new Map();
+  scanJobLines(yaml, (job, line, indent, lineNo, lines) => {
+    const m = line.match(/^\s+runs-on:\s*(.*)$/);
+    if (!m) return;
+    const value = m[1].trim();
+    const labels = [];
+    if (value === "") {
+      for (let j = lineNo + 1; j < lines.length; j++) {
+        const item = lines[j].match(/^\s+- (.+)$/);
+        if (!item) break;
+        labels.push(item[1].trim().replace(/^['"]|['"]$/g, ""));
+      }
+    } else if (value.startsWith("[")) {
+      for (const part of value.replace(/^\[|\]$/g, "").split(",")) {
+        const t = part.trim().replace(/^['"]|['"]$/g, "");
+        if (t) labels.push(t);
+      }
+    } else {
+      labels.push(value.replace(/^['"]|['"]$/g, ""));
+    }
+    out.set(job, labels);
+  });
+  return out;
+}
+function extractExpressions(text) {
+  const out = [];
+  const re = /\$\{\{(.+?)\}\}/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    out.push(m[1].trim());
+  }
+  return out;
+}
+function jobLines(yaml) {
+  const out = [];
+  scanJobLines(yaml, (job, line) => out.push({ job, line }));
+  return out;
+}
+function linesByJob(yaml) {
+  const out = /* @__PURE__ */ new Map();
+  scanJobLines(yaml, (job, line) => {
+    const arr = out.get(job) ?? [];
+    arr.push(line);
+    out.set(job, arr);
+  });
+  return out;
+}
+function extractJobEnvironments(yaml) {
+  const set2 = /* @__PURE__ */ new Set();
+  scanJobLines(yaml, (job, line) => {
+    if (/^\s+environment:/.test(line)) set2.add(job);
+  });
+  return set2;
+}
+function jobsReferencingSecrets(yaml) {
+  const set2 = /* @__PURE__ */ new Set();
+  scanJobLines(yaml, (job, line) => {
+    if (/secrets\./.test(line)) set2.add(job);
+  });
+  return set2;
+}
+function extractWorkflowPermissions(yaml) {
+  const doc = parseDoc(yaml);
+  const perms = doc?.permissions;
+  if (typeof perms === "string") return perms;
+  if (perms && typeof perms === "object" && !Array.isArray(perms)) return perms;
+  return void 0;
+}
+function extractJobPermissions(yaml) {
+  const out = /* @__PURE__ */ new Map();
+  for (const [job, jobObj] of jobEntries(yaml)) {
+    const perms = jobObj.permissions;
+    if (typeof perms === "string") out.set(job, perms);
+    else if (perms && typeof perms === "object" && !Array.isArray(perms)) out.set(job, perms);
+  }
+  return out;
+}
+function writeSurface(perms) {
+  if (typeof perms === "string") {
+    return { writeAll: perms === "write-all", scopes: [] };
+  }
+  const scopes = [];
+  for (const [scope, level] of Object.entries(perms)) {
+    if (level === "write") scopes.push(scope);
+  }
+  return { writeAll: false, scopes };
+}
+function grantsWrite(perms) {
+  const { writeAll, scopes } = writeSurface(perms);
+  return writeAll || scopes.length > 0;
+}
+function stripUsesComment(uses) {
+  return uses.replace(/\s+#.*$/, "").trim();
+}
+function extractUsesComment(rawUses) {
+  const m = rawUses.match(/\s+#\s*(.*)$/);
+  const comment = m?.[1]?.trim();
+  return comment ? comment : void 0;
+}
+function parseActionUses(rawUses) {
+  const uses = stripUsesComment(rawUses);
+  if (uses.startsWith("./") || uses.startsWith("../") || uses.startsWith("docker://")) return void 0;
+  const at = uses.lastIndexOf("@");
+  const path = at === -1 ? uses : uses.slice(0, at);
+  const gitRef = at === -1 ? "" : uses.slice(at + 1);
+  const segments = path.split("/");
+  if (segments.length < 2 || !segments[0] || !segments[1]) return void 0;
+  return { owner: segments[0], repo: segments[1], slug: `${segments[0]}/${segments[1]}`, gitRef };
+}
+var init_yaml_helpers = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/yaml-helpers.ts"() {
+    init_yaml();
+    init_post_synth();
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha006.ts
+var gha006;
+var init_gha006 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha006.ts"() {
+    init_yaml_helpers();
+    gha006 = {
+      id: "GHA006",
+      description: "Multiple workflows share the same name",
+      check(ctx) {
+        const diagnostics = [];
+        const nameMap = /* @__PURE__ */ new Map();
+        for (const [outputName, output] of ctx.outputs) {
+          const yaml = typeof output === "string" ? output : output.primary;
+          if (typeof output === "object" && "files" in output) {
+            const result = output;
+            if (result.files) {
+              for (const [fileName, fileContent] of Object.entries(result.files)) {
+                const name = extractWorkflowName(fileContent);
+                if (name) {
+                  const existing = nameMap.get(name) ?? [];
+                  existing.push(fileName);
+                  nameMap.set(name, existing);
+                }
+              }
+            }
+          } else {
+            const name = extractWorkflowName(yaml);
+            if (name) {
+              const existing = nameMap.get(name) ?? [];
+              existing.push(outputName);
+              nameMap.set(name, existing);
+            }
+          }
+        }
+        for (const [name, files] of nameMap) {
+          if (files.length > 1) {
+            diagnostics.push({
+              checkId: "GHA006",
+              severity: "error",
+              message: `Duplicate workflow name "${name}" found in: ${files.join(", ")}`,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha009.ts
+var gha009;
+var init_gha009 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha009.ts"() {
+    init_yaml_helpers();
+    gha009 = {
+      id: "GHA009",
+      description: "Matrix dimension has empty values array",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const matrixMatch = yaml.match(/matrix:\n([\s\S]*?)(?=\n\s{4}[a-z]|\n\s{2}[a-z]|\n[a-z]|$)/gm);
+          if (!matrixMatch) continue;
+          for (const section of matrixMatch) {
+            const lines = section.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+              const keyMatch = lines[i].match(/^\s+([a-z][a-z0-9_-]*):\s*\[\s*\]\s*$/);
+              if (keyMatch) {
+                diagnostics.push({
+                  checkId: "GHA009",
+                  severity: "error",
+                  message: `Matrix dimension "${keyMatch[1]}" has an empty values array.`,
+                  lexicon: "github"
+                });
+              }
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha011.ts
+var gha011;
+var init_gha011 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha011.ts"() {
+    init_yaml_helpers();
+    gha011 = {
+      id: "GHA011",
+      description: "Job needs: references non-existent job",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const jobs = extractJobs(yaml);
+          const jobNames = new Set(jobs.keys());
+          for (const [jobName, job] of jobs) {
+            if (!job.needs) continue;
+            for (const need of job.needs) {
+              if (!jobNames.has(need)) {
+                diagnostics.push({
+                  checkId: "GHA011",
+                  severity: "error",
+                  message: `Job "${jobName}" needs "${need}", but no such job exists.`,
+                  entity: jobName,
+                  lexicon: "github"
+                });
+              }
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha013.ts
+var gha013;
+var init_gha013 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha013.ts"() {
+    init_yaml_helpers();
+    gha013 = {
+      id: "GHA013",
+      description: "Missing job-level permissions for sensitive triggers",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          if (!triggers["pull_request_target"] && !triggers["workflow_dispatch"]) continue;
+          const jobs = extractJobs(yaml);
+          const jobPermissions = extractJobPermissions(yaml);
+          for (const [jobName] of jobs) {
+            if (!jobPermissions.has(jobName)) {
+              diagnostics.push({
+                checkId: "GHA013",
+                severity: "warning",
+                message: `Job "${jobName}" lacks explicit permissions but workflow uses a sensitive trigger. Add job-level permissions for least-privilege security.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha017.ts
+var gha017;
+var init_gha017 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha017.ts"() {
+    init_yaml_helpers();
+    gha017 = {
+      id: "GHA017",
+      description: "Workflow without explicit permissions block",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          if (!hasPermissions(yaml)) {
+            diagnostics.push({
+              checkId: "GHA017",
+              severity: "info",
+              message: "Workflow does not specify permissions. Consider adding explicit permissions for least-privilege security.",
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha018.ts
+var gha018;
+var init_gha018 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha018.ts"() {
+    init_yaml_helpers();
+    gha018 = {
+      id: "GHA018",
+      description: "pull_request_target with checkout action is a security risk",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          if (!triggers["pull_request_target"]) continue;
+          const jobs = extractJobs(yaml);
+          for (const [jobName, job] of jobs) {
+            if (job.steps && hasCheckoutAction(job.steps)) {
+              diagnostics.push({
+                checkId: "GHA018",
+                severity: "warning",
+                message: `Job "${jobName}" uses checkout with pull_request_target trigger. This runs untrusted PR code with write permissions \u2014 a security risk.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha019.ts
+function checkCircularNeeds(ctx) {
+  const diagnostics = [];
+  for (const [, output] of ctx.outputs) {
+    let dfs = function(node, path) {
+      if (inStack.has(node)) {
+        const cycleStart = path.indexOf(node);
+        const cycle = path.slice(cycleStart);
+        cycle.push(node);
+        const cycleKey = [...cycle].sort().join(",");
+        if (!reportedInCycle.has(cycleKey)) {
+          reportedInCycle.add(cycleKey);
+          diagnostics.push({
+            checkId: "GHA019",
+            severity: "error",
+            message: `Circular needs: chain detected: ${cycle.join(" \u2192 ")}`,
+            entity: node,
+            lexicon: "github"
+          });
+        }
+        return;
+      }
+      if (visited.has(node)) return;
+      visited.add(node);
+      inStack.add(node);
+      for (const neighbor of graph.get(node) ?? []) {
+        if (graph.has(neighbor)) {
+          dfs(neighbor, [...path, node]);
+        }
+      }
+      inStack.delete(node);
+    };
+    const yaml = getPrimaryOutput(output);
+    const graph = buildNeedsGraph(yaml);
+    const visited = /* @__PURE__ */ new Set();
+    const inStack = /* @__PURE__ */ new Set();
+    const reportedInCycle = /* @__PURE__ */ new Set();
+    for (const jobName of graph.keys()) {
+      if (!visited.has(jobName)) {
+        dfs(jobName, []);
+      }
+    }
+  }
+  return diagnostics;
+}
+var gha019;
+var init_gha019 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha019.ts"() {
+    init_yaml_helpers();
+    gha019 = {
+      id: "GHA019",
+      description: "Circular needs: chain \u2014 cycle in job dependency graph",
+      check(ctx) {
+        return checkCircularNeeds(ctx);
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha021.ts
+var gha021;
+var init_gha021 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha021.ts"() {
+    init_yaml_helpers();
+    gha021 = {
+      id: "GHA021",
+      description: "actions/checkout used without pinned SHA",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const jobs = extractJobs(yaml);
+          for (const [jobName, job] of jobs) {
+            if (!job.steps) continue;
+            for (const step of job.steps) {
+              if (!step.uses) continue;
+              const match = step.uses.match(/^actions\/checkout@(.+)$/);
+              if (!match) continue;
+              const ref = match[1];
+              if (/^[0-9a-f]{40}$/.test(ref)) continue;
+              diagnostics.push({
+                checkId: "GHA021",
+                severity: "warning",
+                message: `Job "${jobName}" uses actions/checkout@${ref} \u2014 pin to a full commit SHA for supply-chain security.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha022.ts
+var gha022;
+var init_gha022 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha022.ts"() {
+    init_yaml_helpers();
+    gha022 = {
+      id: "GHA022",
+      description: "Job without timeout-minutes",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const jobs = extractJobs(yaml);
+          const jobsIdx = yaml.search(/^jobs:\s*$/m);
+          if (jobsIdx === -1) continue;
+          const jobsContent = yaml.slice(jobsIdx + yaml.slice(jobsIdx).indexOf("\n") + 1);
+          for (const [jobName] of jobs) {
+            const jobHeader = `  ${jobName}:
+`;
+            const start = jobsContent.indexOf(jobHeader);
+            if (start === -1) continue;
+            const rest = jobsContent.slice(start + jobHeader.length);
+            const nextJobMatch = rest.search(/\n  \w/);
+            const section = nextJobMatch === -1 ? rest : rest.slice(0, nextJobMatch);
+            if (!/timeout-minutes:/.test(section)) {
+              diagnostics.push({
+                checkId: "GHA022",
+                severity: "info",
+                message: `Job "${jobName}" does not specify timeout-minutes. Consider adding a timeout to prevent hung workflows.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha023.ts
+var gha023;
+var init_gha023 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha023.ts"() {
+    init_yaml_helpers();
+    gha023 = {
+      id: "GHA023",
+      description: "Deprecated ::set-output command usage",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const jobs = extractJobs(yaml);
+          for (const [jobName, job] of jobs) {
+            if (!job.steps) continue;
+            for (const step of job.steps) {
+              if (!step.run) continue;
+              if (step.run.includes("::set-output")) {
+                const stepLabel = step.name ?? "unnamed step";
+                diagnostics.push({
+                  checkId: "GHA023",
+                  severity: "warning",
+                  message: `Job "${jobName}" step "${stepLabel}" uses deprecated ::set-output. Use $GITHUB_OUTPUT instead.`,
+                  entity: jobName,
+                  lexicon: "github"
+                });
+              }
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha024.ts
+var gha024;
+var init_gha024 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha024.ts"() {
+    init_yaml_helpers();
+    gha024 = {
+      id: "GHA024",
+      description: "Missing concurrency block for deploy workflow",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const workflowName = extractWorkflowName(yaml) ?? "";
+          const jobs = extractJobs(yaml);
+          const jobNames = [...jobs.keys()];
+          const isDeployWorkflow = /deploy/i.test(workflowName) || jobNames.some((name) => /deploy/i.test(name));
+          if (!isDeployWorkflow) continue;
+          if (!/^\s*concurrency:/m.test(yaml)) {
+            diagnostics.push({
+              checkId: "GHA024",
+              severity: "info",
+              message: "Deploy workflow does not specify concurrency. Add a concurrency block to prevent overlapping deployments.",
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha025.ts
+var gha025;
+var init_gha025 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha025.ts"() {
+    init_yaml_helpers();
+    gha025 = {
+      id: "GHA025",
+      description: "Using pull_request_target without restrictions",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          if (!triggers["pull_request_target"]) continue;
+          const prtSection = yaml.match(/^\s{2}pull_request_target:\s*\n((?:\s{4,}.+\n)*)/m);
+          const hasTypes = prtSection?.[1]?.match(/^\s+types:/m);
+          if (!hasTypes) {
+            diagnostics.push({
+              checkId: "GHA025",
+              severity: "warning",
+              message: "Workflow uses `pull_request_target` without a `types:` filter. This exposes secrets to all fork PRs. Add a `types:` restriction (e.g., [labeled, opened]) to limit exposure.",
+              entity: "pull_request_target",
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha026.ts
+var gha026;
+var init_gha026 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha026.ts"() {
+    init_yaml_helpers();
+    gha026 = {
+      id: "GHA026",
+      description: "Secret passed to action without environment protection",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const usesSecrets = /secrets\./m.test(yaml);
+          if (!usesSecrets) continue;
+          const hasEnvironment = /^\s+environment:/m.test(yaml);
+          if (hasEnvironment) continue;
+          diagnostics.push({
+            checkId: "GHA026",
+            severity: "info",
+            message: "Workflow references secrets but no job defines an `environment:`. Consider using environment protection rules to gate secret access with required reviewers or wait timers.",
+            entity: "secrets",
+            lexicon: "github"
+          });
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha027.ts
+var CLEANUP_PATTERN, gha027;
+var init_gha027 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha027.ts"() {
+    init_yaml_helpers();
+    CLEANUP_PATTERN = /cleanup|teardown|clean\s+up/i;
+    gha027 = {
+      id: "GHA027",
+      description: "Missing `if: always()` on cleanup steps",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const stepPattern = /-\s+name:\s+(.+)/g;
+          let match;
+          while ((match = stepPattern.exec(yaml)) !== null) {
+            const stepName = match[1].trim().replace(/^['"]|['"]$/g, "");
+            if (!CLEANUP_PATTERN.test(stepName)) continue;
+            const afterName = yaml.slice(match.index + match[0].length);
+            const blockEnd = afterName.search(/\n\s{6}-\s|\n\s{2}[a-z]/);
+            const block = blockEnd === -1 ? afterName : afterName.slice(0, blockEnd);
+            if (!/^\s+if:/m.test(block)) {
+              const beforeStep = yaml.slice(0, match.index);
+              const jobMatch = [...beforeStep.matchAll(/^\s{2}([a-z][a-z0-9-]*):/gm)];
+              const jobName = jobMatch.length > 0 ? jobMatch[jobMatch.length - 1][1] : "unknown";
+              diagnostics.push({
+                checkId: "GHA027",
+                severity: "info",
+                message: `Step "${stepName}" in job "${jobName}" looks like a cleanup step but has no \`if:\` condition. Add \`if: always()\` so it runs even when prior steps fail.`,
+                entity: `${jobName}.${stepName}`,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha028.ts
+var gha028;
+var init_gha028 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha028.ts"() {
+    init_yaml_helpers();
+    gha028 = {
+      id: "GHA028",
+      description: "Workflow with no `on` triggers",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const hasOn = /^on:/m.test(yaml);
+          if (!hasOn) {
+            diagnostics.push({
+              checkId: "GHA028",
+              severity: "error",
+              message: "Workflow has no `on:` trigger block. Without triggers the workflow will never run. Add an `on:` section with at least one event.",
+              entity: "on",
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/trusted-action-owners.ts
+var TRUSTED_ACTION_OWNERS;
+var init_trusted_action_owners = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/trusted-action-owners.ts"() {
+    TRUSTED_ACTION_OWNERS = /* @__PURE__ */ new Set([]);
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha029.ts
+function findUnpinnedActions(yaml, trustedOwners = TRUSTED_ACTION_OWNERS) {
+  const result = [];
+  for (const { job, ref } of extractActionRefs(yaml)) {
+    const parsed = parseActionUses(ref);
+    if (!parsed) continue;
+    if (parsed.slug === "actions/checkout") continue;
+    if (trustedOwners.has(parsed.owner)) continue;
+    if (SHA_RE2.test(parsed.gitRef)) continue;
+    result.push({ job, ref, slug: parsed.slug });
+  }
+  return result;
+}
+var SHA_RE2, gha029;
+var init_gha029 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha029.ts"() {
+    init_yaml_helpers();
+    init_trusted_action_owners();
+    SHA_RE2 = /^[0-9a-f]{40}$/;
+    gha029 = {
+      id: "GHA029",
+      description: "Action or reusable workflow not pinned to a commit SHA",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, ref } of findUnpinnedActions(yaml)) {
+            diagnostics.push({
+              checkId: "GHA029",
+              severity: "warning",
+              message: `Job "${job}" uses ${ref} pinned to a tag or branch \u2014 pin to a full commit SHA for supply-chain security.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha030.ts
+var SOURCE_LABEL, gha030;
+var init_gha030 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha030.ts"() {
+    init_yaml_helpers();
+    SOURCE_LABEL = {
+      container: "container image",
+      service: "service image",
+      step: "docker:// image"
+    };
+    gha030 = {
+      id: "GHA030",
+      description: "Container image not pinned to an immutable digest",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, image, source } of extractImageRefs(yaml)) {
+            if (image.includes("@sha256:")) continue;
+            diagnostics.push({
+              checkId: "GHA030",
+              severity: "warning",
+              message: `Job "${job}" ${SOURCE_LABEL[source]} "${image}" is not pinned to a digest \u2014 reference it by @sha256:... so the image cannot change after review.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/known-action-slugs.ts
+var KNOWN_ACTION_SLUGS;
+var init_known_action_slugs = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/known-action-slugs.ts"() {
+    KNOWN_ACTION_SLUGS = [
+      "actions/checkout",
+      "actions/setup-node",
+      "actions/setup-python",
+      "actions/setup-go",
+      "actions/setup-java",
+      "actions/setup-dotnet",
+      "actions/cache",
+      "actions/upload-artifact",
+      "actions/download-artifact",
+      "actions/github-script",
+      "actions/stale",
+      "actions/labeler",
+      "actions/dependency-review-action",
+      "docker/build-push-action",
+      "docker/login-action",
+      "docker/setup-buildx-action",
+      "docker/setup-qemu-action",
+      "docker/metadata-action",
+      "aws-actions/configure-aws-credentials",
+      "azure/login",
+      "google-github-actions/auth",
+      "hashicorp/setup-terraform",
+      "codecov/codecov-action",
+      "softprops/action-gh-release",
+      "peter-evans/create-pull-request"
+    ];
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha031.ts
+function editDistance(a, b, max) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const val = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      curr.push(val);
+      if (val < rowMin) rowMin = val;
+    }
+    if (rowMin > max) return max + 1;
+    prev = curr;
+  }
+  return prev[b.length];
+}
+function nearestLookAlike(slug2) {
+  if (KNOWN.has(slug2)) return void 0;
+  let best;
+  let bestDist = 3;
+  for (const known of KNOWN) {
+    const d = editDistance(slug2, known, 2);
+    if (d >= 1 && d <= 2 && d < bestDist) {
+      best = known;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+var KNOWN, gha031;
+var init_gha031 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha031.ts"() {
+    init_yaml_helpers();
+    init_known_action_slugs();
+    KNOWN = new Set(KNOWN_ACTION_SLUGS);
+    gha031 = {
+      id: "GHA031",
+      description: "Action reference resembles a well-known action (possible impersonation)",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, ref } of extractActionRefs(yaml)) {
+            const parsed = parseActionUses(ref);
+            if (!parsed) continue;
+            const lookAlike = nearestLookAlike(parsed.slug);
+            if (!lookAlike) continue;
+            diagnostics.push({
+              checkId: "GHA031",
+              severity: "warning",
+              message: `Job "${job}" uses "${parsed.slug}", which closely resembles the well-known action "${lookAlike}". Confirm the owner is who you intend \u2014 this may be a typo or impersonation.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/flagged-actions.ts
+var FLAGGED_ACTIONS;
+var init_flagged_actions = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/flagged-actions.ts"() {
+    FLAGGED_ACTIONS = {
+      "tj-actions/changed-files": {
+        reason: "supply-chain compromise disclosed March 2025 (CVE-2025-30066) \u2014 tags were repointed to leak CI secrets",
+        remediation: "pin to a vetted commit SHA from before the compromise, or migrate to an audited alternative"
+      },
+      "actions/setup-ruby": {
+        reason: "archived and unmaintained",
+        remediation: "use ruby/setup-ruby"
+      },
+      "actions/create-release": {
+        reason: "archived and unmaintained",
+        remediation: "use softprops/action-gh-release or the gh CLI"
+      },
+      "actions/upload-release-asset": {
+        reason: "archived and unmaintained",
+        remediation: "use softprops/action-gh-release or the gh CLI"
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha032.ts
+var gha032;
+var init_gha032 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha032.ts"() {
+    init_yaml_helpers();
+    init_flagged_actions();
+    gha032 = {
+      id: "GHA032",
+      description: "Action is archived/abandoned or has a disclosed security issue",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, ref } of extractActionRefs(yaml)) {
+            const parsed = parseActionUses(ref);
+            if (!parsed) continue;
+            const flagged = FLAGGED_ACTIONS[parsed.slug];
+            if (!flagged) continue;
+            diagnostics.push({
+              checkId: "GHA032",
+              severity: "warning",
+              message: `Job "${job}" uses "${parsed.slug}" \u2014 ${flagged.reason}. ${flagged.remediation}.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha033.ts
+var gha033;
+var init_gha033 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha033.ts"() {
+    init_yaml_helpers();
+    gha033 = {
+      id: "GHA033",
+      description: "Blanket write-all token permissions",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const wf = extractWorkflowPermissions(yaml);
+          if (wf && writeSurface(wf).writeAll) {
+            diagnostics.push({
+              checkId: "GHA033",
+              severity: "warning",
+              message: `Workflow declares permissions: write-all \u2014 replace it with the specific scopes the jobs actually need (least privilege).`,
+              lexicon: "github"
+            });
+          }
+          for (const [job, perms] of extractJobPermissions(yaml)) {
+            if (writeSurface(perms).writeAll) {
+              diagnostics.push({
+                checkId: "GHA033",
+                severity: "warning",
+                message: `Job "${job}" declares permissions: write-all \u2014 replace it with the specific scopes this job needs (least privilege).`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha034.ts
+var gha034;
+var init_gha034 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha034.ts"() {
+    init_yaml_helpers();
+    gha034 = {
+      id: "GHA034",
+      description: "Write permissions granted workflow-wide instead of per-job",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const wf = extractWorkflowPermissions(yaml);
+          if (!wf) continue;
+          const { writeAll, scopes } = writeSurface(wf);
+          if (writeAll) continue;
+          if (scopes.length === 0) continue;
+          diagnostics.push({
+            checkId: "GHA034",
+            severity: "warning",
+            message: `Workflow grants write scope (${scopes.join(", ")}) for all jobs \u2014 move each write scope onto the specific job that needs it for least privilege.`,
+            lexicon: "github"
+          });
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha035.ts
+function describeWrite(perms) {
+  return perms.writeAll ? "write-all" : perms.scopes.map((s) => `${s}: write`).join(", ");
+}
+var UNTRUSTED_TRIGGERS, gha035;
+var init_gha035 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha035.ts"() {
+    init_yaml_helpers();
+    UNTRUSTED_TRIGGERS = ["pull_request_target", "workflow_run"];
+    gha035 = {
+      id: "GHA035",
+      description: "Elevated token scope on a trigger that can run untrusted code",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          const untrusted = UNTRUSTED_TRIGGERS.filter((t) => triggers[t]);
+          if (untrusted.length === 0) continue;
+          const wf = extractWorkflowPermissions(yaml);
+          if (wf && grantsWrite(wf)) {
+            diagnostics.push({
+              checkId: "GHA035",
+              severity: "error",
+              message: `Workflow grants write token scope (${describeWrite(writeSurface(wf))}) while using the ${untrusted.join("/")} trigger, which can run untrusted code. Drop write scope or gate the privileged work behind a separate trusted workflow.`,
+              lexicon: "github"
+            });
+          }
+          for (const [job, perms] of extractJobPermissions(yaml)) {
+            if (grantsWrite(perms)) {
+              diagnostics.push({
+                checkId: "GHA035",
+                severity: "error",
+                message: `Job "${job}" grants write token scope (${describeWrite(writeSurface(perms))}) while the workflow uses the ${untrusted.join("/")} trigger, which can run untrusted code. Drop write scope or isolate the privileged work.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/untrusted-contexts.ts
+function matchUntrustedContext(exprBody) {
+  const normalized = exprBody.replace(/\s+/g, "");
+  for (const ctx of UNTRUSTED_CONTEXTS) {
+    if (normalized.includes(ctx.replace(/\s+/g, ""))) return ctx;
+  }
+  return void 0;
+}
+var UNTRUSTED_CONTEXTS;
+var init_untrusted_contexts = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/untrusted-contexts.ts"() {
+    UNTRUSTED_CONTEXTS = [
+      "github.event.issue.title",
+      "github.event.issue.body",
+      "github.event.pull_request.title",
+      "github.event.pull_request.body",
+      "github.event.pull_request.head.ref",
+      "github.event.pull_request.head.label",
+      "github.event.pull_request.head.repo.default_branch",
+      "github.event.comment.body",
+      "github.event.review.body",
+      "github.event.review_comment.body",
+      "github.event.discussion.title",
+      "github.event.discussion.body",
+      "github.event.head_commit.message",
+      "github.event.head_commit.author.email",
+      "github.event.head_commit.author.name",
+      "github.event.commits",
+      // .*.message / .*.author.* (array — matched by prefix)
+      "github.event.pages",
+      // .*.page_name
+      "github.head_ref"
+    ];
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha036.ts
+var gha036;
+var init_gha036 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha036.ts"() {
+    init_yaml_helpers();
+    init_untrusted_contexts();
+    gha036 = {
+      id: "GHA036",
+      description: "Untrusted input interpolated into a run: shell command",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, run: run4 } of extractRunBlocks(yaml)) {
+            for (const expr of extractExpressions(run4)) {
+              const ctxName = matchUntrustedContext(expr);
+              if (!ctxName) continue;
+              diagnostics.push({
+                checkId: "GHA036",
+                severity: "error",
+                message: `Job "${job}" interpolates untrusted input \${{ ${ctxName} ... }} into a run: script \u2014 this is a script-injection sink. Pass it through an env: variable and reference "$VAR" quoted instead.`,
+                entity: job,
+                lexicon: "github"
+              });
+              break;
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha037.ts
+var ENV_FILE_RE, gha037;
+var init_gha037 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha037.ts"() {
+    init_yaml_helpers();
+    init_untrusted_contexts();
+    ENV_FILE_RE = /GITHUB_ENV|GITHUB_PATH/;
+    gha037 = {
+      id: "GHA037",
+      description: "Untrusted input written to GITHUB_ENV / GITHUB_PATH",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, run: run4 } of extractRunBlocks(yaml)) {
+            if (!ENV_FILE_RE.test(run4)) continue;
+            for (const expr of extractExpressions(run4)) {
+              const ctxName = matchUntrustedContext(expr);
+              if (!ctxName) continue;
+              const file2 = run4.includes("GITHUB_PATH") ? "GITHUB_PATH" : "GITHUB_ENV";
+              diagnostics.push({
+                checkId: "GHA037",
+                severity: "error",
+                message: `Job "${job}" writes untrusted input \${{ ${ctxName} ... }} into $${file2}, which sets state for later steps. Sanitize/validate the value or avoid persisting untrusted input across steps.`,
+                entity: job,
+                lexicon: "github"
+              });
+              break;
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha038.ts
+var gha038;
+var init_gha038 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha038.ts"() {
+    init_yaml_helpers();
+    gha038 = {
+      id: "GHA038",
+      description: "workflow_run trigger with checkout runs untrusted code in a privileged context",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          if (!triggers["workflow_run"]) continue;
+          const jobs = extractJobs(yaml);
+          for (const [jobName, job] of jobs) {
+            if (job.steps && hasCheckoutAction(job.steps)) {
+              diagnostics.push({
+                checkId: "GHA038",
+                severity: "warning",
+                message: `Job "${jobName}" checks out code under a workflow_run trigger, which runs with repo write scope and secrets. Treat the checked-out code as untrusted \u2014 avoid executing it, or move execution to an unprivileged workflow.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha039.ts
+var SPOOFABLE_FIELD_RE, COMPARISON_RE, gha039;
+var init_gha039 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha039.ts"() {
+    init_yaml_helpers();
+    SPOOFABLE_FIELD_RE = /\.author\.(name|email)\b/;
+    COMPARISON_RE = /==|!=|contains\s*\(/;
+    gha039 = {
+      id: "GHA039",
+      description: "Authorization gate on a spoofable commit-author identity field",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, expr } of extractIfConditions(yaml)) {
+            if (SPOOFABLE_FIELD_RE.test(expr) && COMPARISON_RE.test(expr)) {
+              diagnostics.push({
+                checkId: "GHA039",
+                severity: "warning",
+                message: `Job "${job}" gates on a commit-author identity field in an if: condition (${expr}). Author name/email are attacker-controlled and can be spoofed \u2014 gate on a verified signal (environment protection, CODEOWNERS, verified actor) instead.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha040.ts
+var UNTRUSTED_TRIGGERS2, gha040;
+var init_gha040 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha040.ts"() {
+    init_yaml_helpers();
+    UNTRUSTED_TRIGGERS2 = ["pull_request", "pull_request_target", "workflow_run"];
+    gha040 = {
+      id: "GHA040",
+      description: "Self-hosted runner on a trigger that can run untrusted code",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          const untrusted = UNTRUSTED_TRIGGERS2.filter((t) => triggers[t]);
+          if (untrusted.length === 0) continue;
+          for (const [job, labels] of extractRunsOnByJob(yaml)) {
+            if (labels.some((l) => l === "self-hosted")) {
+              diagnostics.push({
+                checkId: "GHA040",
+                severity: "warning",
+                message: `Job "${job}" runs on a self-hosted runner under the ${untrusted.join("/")} trigger, which a fork can reach. Use ephemeral GitHub-hosted runners for untrusted code, or require approval before the job runs.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha041.ts
+var gha041;
+var init_gha041 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha041.ts"() {
+    init_yaml_helpers();
+    gha041 = {
+      id: "GHA041",
+      description: "Blanket secrets: inherit into a reusable workflow",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const seen = /* @__PURE__ */ new Set();
+          for (const { job, line } of jobLines(yaml)) {
+            if (/^\s+secrets:\s*inherit\s*$/.test(line) && !seen.has(job)) {
+              seen.add(job);
+              diagnostics.push({
+                checkId: "GHA041",
+                severity: "warning",
+                message: `Job "${job}" calls a reusable workflow with secrets: inherit, passing every caller secret. Pass through only the specific secrets it needs.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha042.ts
+var TO_JSON_SECRETS, gha042;
+var init_gha042 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha042.ts"() {
+    init_yaml_helpers();
+    TO_JSON_SECRETS = /to_?json\s*\(\s*secrets\s*\)/i;
+    gha042 = {
+      id: "GHA042",
+      description: "Entire secrets context passed where specific secrets would do",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const seen = /* @__PURE__ */ new Set();
+          for (const { job, line } of jobLines(yaml)) {
+            if (TO_JSON_SECRETS.test(line) && !seen.has(job)) {
+              seen.add(job);
+              diagnostics.push({
+                checkId: "GHA042",
+                severity: "warning",
+                message: `Job "${job}" passes the entire secrets context via toJSON(secrets). Reference only the specific secrets the consumer needs.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha043.ts
+var gha043;
+var init_gha043 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha043.ts"() {
+    init_yaml_helpers();
+    gha043 = {
+      id: "GHA043",
+      description: "Secret consumed in a job without an environment gate",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const gated = extractJobEnvironments(yaml);
+          if (gated.size === 0) continue;
+          for (const job of jobsReferencingSecrets(yaml)) {
+            if (!gated.has(job)) {
+              diagnostics.push({
+                checkId: "GHA043",
+                severity: "warning",
+                message: `Job "${job}" consumes a secret but declares no environment:, while other jobs in this workflow are environment-gated. Gate this job too, or confirm it should bypass the approval/scoping the others use.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha044.ts
+var CRED_KEY_RE, gha044;
+var init_gha044 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha044.ts"() {
+    init_yaml_helpers();
+    CRED_KEY_RE = /^\s+(?:- )?(password|token|registry-password):\s*(.+)$/;
+    gha044 = {
+      id: "GHA044",
+      description: "Hardcoded registry/container credential",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, line } of jobLines(yaml)) {
+            const m = line.match(CRED_KEY_RE);
+            if (!m) continue;
+            const key = m[1];
+            const value = m[2].trim().replace(/^['"]|['"]$/g, "");
+            if (value === "" || value.includes("${{")) continue;
+            diagnostics.push({
+              checkId: "GHA044",
+              severity: "error",
+              message: `Job "${job}" sets ${key}: to a hardcoded literal. Reference a secret (\${{ secrets.NAME }}) instead of inlining the credential.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha045.ts
+var gha045;
+var init_gha045 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha045.ts"() {
+    init_yaml_helpers();
+    gha045 = {
+      id: "GHA045",
+      description: "Secret interpolated directly into a run: shell command",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, run: run4 } of extractRunBlocks(yaml)) {
+            const leaked = extractExpressions(run4).some((e) => /\bsecrets\./.test(e));
+            if (!leaked) continue;
+            diagnostics.push({
+              checkId: "GHA045",
+              severity: "warning",
+              message: `Job "${job}" interpolates a secret directly into a run: script, where a transform can defeat log masking. Pass it through an env: variable and reference "$VAR" quoted instead.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha046.ts
+function inner(expr) {
+  return expr.replace(/^\$\{\{/, "").replace(/\}\}$/, "").trim();
+}
+function unsoundReason(expr) {
+  const e = inner(expr);
+  if (e === "true") return "always true (true literal)";
+  if (e === "false") return "always false (false literal)";
+  if (/\|\|\s*true\b/.test(e)) return "always true (|| true collapses the condition)";
+  if (/&&\s*false\b/.test(e)) return "always false (&& false collapses the condition)";
+  const eq2 = e.match(/^([\w.$'"[\]-]+)\s*==\s*([\w.$'"[\]-]+)$/);
+  if (eq2 && eq2[1] === eq2[2]) return "always true (both sides of == are identical)";
+  const ne = e.match(/^([\w.$'"[\]-]+)\s*!=\s*([\w.$'"[\]-]+)$/);
+  if (ne && ne[1] === ne[2]) return "always false (both sides of != are identical)";
+  return void 0;
+}
+var gha046;
+var init_gha046 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha046.ts"() {
+    init_yaml_helpers();
+    gha046 = {
+      id: "GHA046",
+      description: "Logically unsound (constant) guard condition",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, expr } of extractIfConditions(yaml)) {
+            const reason = unsoundReason(expr);
+            if (!reason) continue;
+            diagnostics.push({
+              checkId: "GHA046",
+              severity: "warning",
+              message: `Job "${job}" has an if: condition that is ${reason}: "${expr}". A gate that does not constrain anything is misleading \u2014 remove it or write the real condition.`,
+              entity: job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha047.ts
+function isLiteral(arg) {
+  const t = arg.trim();
+  return t.startsWith("'") && t.endsWith("'") || t.startsWith('"') && t.endsWith('"');
+}
+var REVERSED_CONTAINS, gha047;
+var init_gha047 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha047.ts"() {
+    init_yaml_helpers();
+    REVERSED_CONTAINS = /contains\(\s*(['"][^'"]*['"])\s*,\s*([^)]+)\)/g;
+    gha047 = {
+      id: "GHA047",
+      description: "Ineffective contains() guard with reversed arguments",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, expr } of extractIfConditions(yaml)) {
+            let m;
+            REVERSED_CONTAINS.lastIndex = 0;
+            while ((m = REVERSED_CONTAINS.exec(expr)) !== null) {
+              if (isLiteral(m[2])) continue;
+              diagnostics.push({
+                checkId: "GHA047",
+                severity: "warning",
+                message: `Job "${job}" calls contains() with a string-literal haystack and a dynamic needle: "${m[0]}". contains(search, item) tests whether item is in search \u2014 swap the arguments so the dynamic value is searched.`,
+                entity: job,
+                lexicon: "github"
+              });
+              break;
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha048.ts
+var INDIRECTION, COMPARISON, gha048;
+var init_gha048 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha048.ts"() {
+    init_yaml_helpers();
+    INDIRECTION = /\b(format|join|fromJSON)\s*\(/i;
+    COMPARISON = /==|!=|&&|\|\||contains\(|startsWith\(|endsWith\(/;
+    gha048 = {
+      id: "GHA048",
+      description: "Obfuscated guard condition (operand built by indirection)",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, expr } of extractIfConditions(yaml)) {
+            if (INDIRECTION.test(expr) && COMPARISON.test(expr)) {
+              diagnostics.push({
+                checkId: "GHA048",
+                severity: "warning",
+                message: `Job "${job}" builds its if: gate through string indirection (format/join/fromJSON) feeding a comparison: "${expr}". Compare against the value directly so the condition is auditable.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha049.ts
+var gha049;
+var init_gha049 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha049.ts"() {
+    init_yaml_helpers();
+    gha049 = {
+      id: "GHA049",
+      description: "Persisted checkout credentials reachable by an uploaded artifact",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const [job, lines] of linesByJob(yaml)) {
+            const text = lines.join("\n");
+            const hasCheckout = /uses:\s*actions\/checkout/.test(text);
+            const persistDisabled = /persist-credentials:\s*false/.test(text);
+            const uploadsArtifact = /uses:\s*actions\/upload-artifact/.test(text);
+            if (hasCheckout && uploadsArtifact && !persistDisabled) {
+              diagnostics.push({
+                checkId: "GHA049",
+                severity: "warning",
+                message: `Job "${job}" checks out with persisted credentials (default) and uploads an artifact \u2014 the token in .git/config can leak into the artifact. Set persist-credentials: false on the checkout.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha050.ts
+var PRIVILEGED_TRIGGERS, gha050;
+var init_gha050 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha050.ts"() {
+    init_yaml_helpers();
+    PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run"];
+    gha050 = {
+      id: "GHA050",
+      description: "Cache populated in a privileged context (poisoning risk)",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const triggers = extractTriggers(yaml);
+          const privileged = PRIVILEGED_TRIGGERS.filter((t) => triggers[t]);
+          if (privileged.length === 0) continue;
+          for (const [job, lines] of linesByJob(yaml)) {
+            if (lines.some((l) => /uses:\s*actions\/cache/.test(l))) {
+              diagnostics.push({
+                checkId: "GHA050",
+                severity: "warning",
+                message: `Job "${job}" populates a cache under the ${privileged.join("/")} trigger, which runs in the privileged base context. A poisoned cache entry could be restored and executed by a trusted run \u2014 restrict caching to trusted triggers.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha051.ts
+var PUBLISH_RE, LONG_LIVED_SECRET_RE, gha051;
+var init_gha051 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha051.ts"() {
+    init_yaml_helpers();
+    PUBLISH_RE = /npm publish|yarn publish|pnpm publish|twine upload|poetry publish|cargo publish|gh release create|docker push|gh-action-pypi-publish|npm-publish/;
+    LONG_LIVED_SECRET_RE = /secrets\.(?!GITHUB_TOKEN\b)\w*(TOKEN|PASSWORD|API_KEY|APIKEY)/i;
+    gha051 = {
+      id: "GHA051",
+      description: "Publish/release step using a long-lived token instead of OIDC",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const requestsOidc = /id-token:\s*write/.test(yaml);
+          if (requestsOidc) continue;
+          for (const [job, lines] of linesByJob(yaml)) {
+            const text = lines.join("\n");
+            if (PUBLISH_RE.test(text) && LONG_LIVED_SECRET_RE.test(text)) {
+              diagnostics.push({
+                checkId: "GHA051",
+                severity: "info",
+                message: `Job "${job}" publishes using a long-lived token secret and requests no id-token: write. If the registry supports OIDC, mint a short-lived federated credential (permissions: id-token: write) instead of holding a standing token.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha052.ts
+var PIPE_TO_SHELL, gha052;
+var init_gha052 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha052.ts"() {
+    init_yaml_helpers();
+    PIPE_TO_SHELL = [
+      /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba)?sh\b/i,
+      /\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b/i
+    ];
+    gha052 = {
+      id: "GHA052",
+      description: "Software fetched and piped to a shell without verification",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, run: run4 } of extractRunBlocks(yaml)) {
+            if (PIPE_TO_SHELL.some((re) => re.test(run4))) {
+              diagnostics.push({
+                checkId: "GHA052",
+                severity: "warning",
+                message: `Job "${job}" pipes a network download directly into a shell \u2014 the fetched code is unpinned and unverified. Download to a file, verify a checksum or signature, then execute it.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha053.ts
+var UNSAFE_COMMANDS, gha053;
+var init_gha053 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha053.ts"() {
+    init_yaml_helpers();
+    UNSAFE_COMMANDS = /ACTIONS_ALLOW_UNSECURE_COMMANDS|::set-env\s|::add-path\s/;
+    gha053 = {
+      id: "GHA053",
+      description: "Re-enables unsafe set-env / add-path workflow commands",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const seen = /* @__PURE__ */ new Set();
+          for (const [job, lines] of linesByJob(yaml)) {
+            if (lines.some((l) => UNSAFE_COMMANDS.test(l)) && !seen.has(job)) {
+              seen.add(job);
+              diagnostics.push({
+                checkId: "GHA053",
+                severity: "error",
+                message: `Job "${job}" re-enables the unsafe set-env/add-path workflow commands (ACTIONS_ALLOW_UNSECURE_COMMANDS or ::set-env::/::add-path::). Use $GITHUB_ENV / $GITHUB_PATH files instead \u2014 the legacy commands were removed for security.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/risky-features.ts
+var RISKY_FEATURES;
+var init_risky_features = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/risky-features.ts"() {
+    RISKY_FEATURES = [
+      {
+        pattern: /::set-output\s/,
+        label: "deprecated ::set-output:: workflow command",
+        advice: "write to $GITHUB_OUTPUT instead"
+      },
+      {
+        pattern: /::save-state\s/,
+        label: "deprecated ::save-state:: workflow command",
+        advice: "write to $GITHUB_STATE instead"
+      },
+      {
+        pattern: /ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION/,
+        label: "opt-in to an end-of-life Node.js runtime",
+        advice: "upgrade the action to a supported Node runtime instead of forcing the unsupported one"
+      },
+      {
+        pattern: /::add-mask::\$\{\{/,
+        label: "masking a dynamic value after it may have already been logged",
+        advice: "mask secrets at their source; ::add-mask:: on an interpolated value can leak before the mask applies"
+      }
+    ];
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha054.ts
+var gha054;
+var init_gha054 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha054.ts"() {
+    init_yaml_helpers();
+    init_risky_features();
+    gha054 = {
+      id: "GHA054",
+      description: "Use of a feature with a known security footgun",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const [job, lines] of linesByJob(yaml)) {
+            const text = lines.join("\n");
+            for (const feature of RISKY_FEATURES) {
+              if (feature.pattern.test(text)) {
+                diagnostics.push({
+                  checkId: "GHA054",
+                  severity: "warning",
+                  message: `Job "${job}" uses ${feature.label} \u2014 ${feature.advice}.`,
+                  entity: job,
+                  lexicon: "github"
+                });
+              }
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/preinstalled-tools.ts
+var PREINSTALLED_TOOLS;
+var init_preinstalled_tools = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/preinstalled-tools.ts"() {
+    PREINSTALLED_TOOLS = [
+      "git",
+      "curl",
+      "wget",
+      "jq",
+      "make",
+      "gcc",
+      "g++",
+      "zip",
+      "unzip",
+      "tar",
+      "docker",
+      "docker-compose",
+      "python3",
+      "pip3",
+      "node",
+      "npm",
+      "yarn",
+      "go",
+      "gh",
+      "aws",
+      "az",
+      "gcloud",
+      "kubectl",
+      "helm",
+      "terraform"
+    ];
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha055.ts
+var INSTALL_RE, gha055;
+var init_gha055 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha055.ts"() {
+    init_yaml_helpers();
+    init_preinstalled_tools();
+    INSTALL_RE = /\b(?:apt(?:-get)?\s+install|brew\s+install|apk\s+add|choco\s+install)\b([^\n]*)/g;
+    gha055 = {
+      id: "GHA055",
+      description: "Runtime install of a tool already present on the runner",
+      check(ctx) {
+        const diagnostics = [];
+        const preinstalled = new Set(PREINSTALLED_TOOLS);
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const { job, run: run4 } of extractRunBlocks(yaml)) {
+            const redundant = /* @__PURE__ */ new Set();
+            let m;
+            INSTALL_RE.lastIndex = 0;
+            while ((m = INSTALL_RE.exec(run4)) !== null) {
+              for (const tok of m[1].split(/\s+/)) {
+                const name = tok.replace(/[^\w.+-]/g, "");
+                if (name && preinstalled.has(name)) redundant.add(name);
+              }
+            }
+            if (redundant.size > 0) {
+              diagnostics.push({
+                checkId: "GHA055",
+                severity: "info",
+                message: `Job "${job}" installs ${[...redundant].join(", ")} at runtime, but GitHub-hosted runners already ship ${redundant.size > 1 ? "these tools" : "this tool"}. Drop the redundant install (or rely on the preinstalled version) to reduce supply-chain surface.`,
+                entity: job,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha056.ts
+var gha056;
+var init_gha056 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha056.ts"() {
+    init_yaml_helpers();
+    gha056 = {
+      id: "GHA056",
+      description: "Workflow without a name",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [lexicon, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          if (!/^jobs:\s*$/m.test(yaml)) continue;
+          const name = extractWorkflowName(yaml);
+          if (!name) {
+            diagnostics.push({
+              checkId: "GHA056",
+              severity: "info",
+              message: `Workflow "${lexicon}" has no top-level name: \u2014 add one so runs are identifiable in the Actions UI and audit logs.`,
+              entity: "workflow",
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha057.ts
+var gha057;
+var init_gha057 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha057.ts"() {
+    init_yaml_helpers();
+    gha057 = {
+      id: "GHA057",
+      description: "Dependency update allows executing untrusted external code",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const dependabot = getDependabotYaml(output);
+          if (!dependabot) continue;
+          for (const update of extractDependabotUpdates(dependabot)) {
+            if (update["insecure-external-code-execution"] === "allow") {
+              const eco = String(update["package-ecosystem"] ?? "?");
+              diagnostics.push({
+                checkId: "GHA057",
+                severity: "error",
+                message: `Dependabot update for "${eco}" sets insecure-external-code-execution: allow, running dependency lifecycle scripts during the update. Set it to deny.`,
+                entity: eco,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha058.ts
+function hasEffectiveCooldown(cooldown) {
+  if (!cooldown || typeof cooldown !== "object") return false;
+  const c = cooldown;
+  return COOLDOWN_DAY_KEYS.some((k) => typeof c[k] === "number" && c[k] > 0);
+}
+var COOLDOWN_DAY_KEYS, gha058;
+var init_gha058 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha058.ts"() {
+    init_yaml_helpers();
+    COOLDOWN_DAY_KEYS = ["default-days", "semver-major-days", "semver-minor-days", "semver-patch-days"];
+    gha058 = {
+      id: "GHA058",
+      description: "Dependency update has no cooldown window",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const dependabot = getDependabotYaml(output);
+          if (!dependabot) continue;
+          for (const update of extractDependabotUpdates(dependabot)) {
+            if (!hasEffectiveCooldown(update.cooldown)) {
+              const eco = String(update["package-ecosystem"] ?? "?");
+              diagnostics.push({
+                checkId: "GHA058",
+                severity: "warning",
+                message: `Dependabot update for "${eco}" has no cooldown \u2014 a version published moments ago is adopted immediately. Add a cooldown window so fresh (possibly compromised) releases wait before they are proposed.`,
+                entity: eco,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha059.ts
+function findStalePinAnnotations(yaml) {
+  const refs = extractActionRefs(yaml).map(({ job, ref }) => ({ job, ref, parsed: parseActionUses(ref) })).filter((r) => !!r.parsed && SHA_RE3.test(r.parsed.gitRef));
+  const findings = [];
+  const withComment = [];
+  for (const { job, ref, parsed } of refs) {
+    const comment = extractUsesComment(ref);
+    if (!comment) {
+      findings.push({ job, ref, slug: parsed.slug, sha: parsed.gitRef, kind: "missing" });
+    } else {
+      withComment.push({ job, ref, slug: parsed.slug, sha: parsed.gitRef, comment });
+    }
+  }
+  const bySlug = /* @__PURE__ */ new Map();
+  for (const entry of withComment) {
+    const list = bySlug.get(entry.slug) ?? [];
+    list.push(entry);
+    bySlug.set(entry.slug, list);
+  }
+  for (const [, entries] of bySlug) {
+    const shaToComments = /* @__PURE__ */ new Map();
+    const commentToShas = /* @__PURE__ */ new Map();
+    for (const e of entries) {
+      (shaToComments.get(e.sha) ?? shaToComments.set(e.sha, /* @__PURE__ */ new Set()).get(e.sha)).add(e.comment);
+      (commentToShas.get(e.comment) ?? commentToShas.set(e.comment, /* @__PURE__ */ new Set()).get(e.comment)).add(e.sha);
+    }
+    for (const e of entries) {
+      const otherComments = [...shaToComments.get(e.sha) ?? []].filter((c) => c !== e.comment);
+      const otherShas = [...commentToShas.get(e.comment) ?? []].filter((s) => s !== e.sha);
+      if (otherComments.length > 0) {
+        findings.push({
+          job: e.job,
+          ref: e.ref,
+          slug: e.slug,
+          sha: e.sha,
+          kind: "mismatched",
+          conflict: `commit ${e.sha} is also annotated "# ${otherComments[0]}" elsewhere`
+        });
+      } else if (otherShas.length > 0) {
+        findings.push({
+          job: e.job,
+          ref: e.ref,
+          slug: e.slug,
+          sha: e.sha,
+          kind: "mismatched",
+          conflict: `label "# ${e.comment}" is also attached to commit ${otherShas[0]} elsewhere`
+        });
+      }
+    }
+  }
+  return findings;
+}
+var SHA_RE3, gha059;
+var init_gha059 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha059.ts"() {
+    init_yaml_helpers();
+    SHA_RE3 = /^[0-9a-f]{40}$/;
+    gha059 = {
+      id: "GHA059",
+      description: "SHA-pinned action reference has a missing or internally-inconsistent version annotation",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const finding of findStalePinAnnotations(yaml)) {
+            const message = finding.kind === "missing" ? `Job "${finding.job}" pins ${finding.ref} to a commit SHA with no trailing version comment (e.g. "# v4.0.2") \u2014 add one so reviewers can sanity-check the digest.` : `Job "${finding.job}" pins ${finding.ref} whose annotation is internally inconsistent (${finding.conflict}) \u2014 one of these labels no longer matches the digest it's attached to.`;
+            diagnostics.push({
+              checkId: "GHA059",
+              severity: "warning",
+              message,
+              entity: finding.job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha060.ts
+function scopeSignalMatches(scope, text) {
+  const signal = SCOPE_SIGNALS[scope];
+  if (signal) return signal.test(text);
+  return new RegExp(scope.replace(/-/g, "[-_ ]?"), "i").test(text);
+}
+function stepText(step) {
+  const parts = [];
+  if (typeof step.run === "string") parts.push(step.run);
+  if (step.with && typeof step.with === "object") parts.push(JSON.stringify(step.with));
+  if (step.env && typeof step.env === "object") parts.push(JSON.stringify(step.env));
+  if (typeof step.uses === "string") parts.push(step.uses);
+  return parts.join("\n");
+}
+function findOverScopedTokens(yaml) {
+  const findings = [];
+  for (const [job, steps] of extractStepsByJob(yaml)) {
+    steps.forEach((step, idx) => {
+      const uses = typeof step.uses === "string" ? step.uses : void 0;
+      if (!uses) return;
+      const parsed = parseActionUses(uses);
+      if (!parsed || !APP_TOKEN_SLUGS.has(parsed.slug)) return;
+      const withBlock = step.with && typeof step.with === "object" ? step.with : {};
+      const stepId = typeof step.id === "string" ? step.id : `#${idx}`;
+      const writeScopes = [];
+      for (const [key, value] of Object.entries(withBlock)) {
+        const m = /^permission-([a-z-]+)$/i.exec(key);
+        if (!m) continue;
+        if (WRITE_LEVELS.has(String(value).toLowerCase())) writeScopes.push(m[1]);
+      }
+      if (writeScopes.length === 0) return;
+      const otherStepsText = steps.filter((_, i) => i !== idx).map(stepText).join("\n");
+      const outputRef = `steps.${stepId}.outputs.token`;
+      if (!otherStepsText.includes(outputRef)) {
+        findings.push({ job, stepId, scopes: writeScopes, reason: "unused" });
+        return;
+      }
+      const unsignaled = writeScopes.filter((scope) => !scopeSignalMatches(scope, otherStepsText));
+      if (unsignaled.length > 0) {
+        findings.push({ job, stepId, scopes: unsignaled, reason: "no-signal" });
+      }
+    });
+  }
+  return findings;
+}
+var APP_TOKEN_SLUGS, WRITE_LEVELS, SCOPE_SIGNALS, gha060;
+var init_gha060 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha060.ts"() {
+    init_yaml_helpers();
+    APP_TOKEN_SLUGS = /* @__PURE__ */ new Set([
+      "actions/create-github-app-token",
+      "tibdex/github-app-token",
+      "getsentry/action-github-app-token"
+    ]);
+    WRITE_LEVELS = /* @__PURE__ */ new Set(["write", "admin"]);
+    SCOPE_SIGNALS = {
+      contents: /git\s+push|gh\s+release|\/(?:git\/)?contents\b/i,
+      issues: /gh\s+issue|\/issues\b/i,
+      "pull-requests": /gh\s+pr\b|\/pulls\b/i,
+      packages: /npm\s+publish|docker\s+push|\/packages\b/i,
+      administration: /\/admin\b|administration/i,
+      actions: /\/actions\/runs|gh\s+run\b/i,
+      checks: /check-runs|\bchecks\b/i,
+      deployments: /\/deployments\b/i,
+      statuses: /\/statuses\b/i,
+      workflows: /\.github\/workflows/i,
+      environments: /\/environments\b/i
+    };
+    gha060 = {
+      id: "GHA060",
+      description: "Generated GitHub App token granted broader scope than its consuming steps evidence",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const finding of findOverScopedTokens(yaml)) {
+            const scopeList = finding.scopes.map((s) => `permission-${s}`).join(", ");
+            const message = finding.reason === "unused" ? `Job "${finding.job}" step "${finding.stepId}" mints a GitHub App token with ${scopeList} but no other step references its output \u2014 remove the unused scope(s) or the token step entirely.` : `Job "${finding.job}" step "${finding.stepId}" mints a GitHub App token with ${scopeList}, but no consuming step shows evidence of exercising that scope \u2014 narrow the token to the scopes actually used.`;
+            diagnostics.push({
+              checkId: "GHA060",
+              severity: "warning",
+              message,
+              entity: finding.job,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/action-usage-policy.ts
+var DEFAULT_ACTION_USAGE_POLICY;
+var init_action_usage_policy = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/action-usage-policy.ts"() {
+    DEFAULT_ACTION_USAGE_POLICY = {};
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha061.ts
+function matches(entry, owner, slug2) {
+  if (entry === slug2) return true;
+  if (entry === owner) return true;
+  if (entry.endsWith("/*") && entry.slice(0, -2) === owner) return true;
+  return false;
+}
+function matchesAny(entries, owner, slug2) {
+  return (entries ?? []).some((e) => matches(e, owner, slug2));
+}
+function evaluateUsagePolicy(yaml, policy) {
+  const { allow, deny } = policy;
+  if ((!allow || allow.length === 0) && (!deny || deny.length === 0)) return [];
+  const diagnostics = [];
+  for (const { job, ref } of extractActionRefs(yaml)) {
+    const parsed = parseActionUses(ref);
+    if (!parsed) continue;
+    if (matchesAny(deny, parsed.owner, parsed.slug)) {
+      diagnostics.push({
+        checkId: "GHA061",
+        severity: "error",
+        message: `Job "${job}" uses "${parsed.slug}", which is denied by the configured action-usage policy.`,
+        entity: job,
+        lexicon: "github"
+      });
+      continue;
+    }
+    if (allow && allow.length > 0 && !matchesAny(allow, parsed.owner, parsed.slug)) {
+      diagnostics.push({
+        checkId: "GHA061",
+        severity: "warning",
+        message: `Job "${job}" uses "${parsed.slug}", which is not in the configured action-usage allowlist.`,
+        entity: job,
+        lexicon: "github"
+      });
+    }
+  }
+  return diagnostics;
+}
+var gha061;
+var init_gha061 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha061.ts"() {
+    init_yaml_helpers();
+    init_action_usage_policy();
+    gha061 = {
+      id: "GHA061",
+      description: "Action reference outside the configured usage policy (opt-in)",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          diagnostics.push(...evaluateUsagePolicy(yaml, DEFAULT_ACTION_USAGE_POLICY));
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/advisory-feed.ts
+var DEFAULT_ADVISORY_FEED;
+var init_advisory_feed = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/advisory-feed.ts"() {
+    DEFAULT_ADVISORY_FEED = { entries: [] };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha062.ts
+function matchesEntry(entry, slug2, gitRef) {
+  if (entry.slug !== slug2) return false;
+  if (entry.shas?.includes(gitRef)) return true;
+  if (entry.refs?.includes(gitRef)) return true;
+  return false;
+}
+function checkAdvisories(yaml, feed = DEFAULT_ADVISORY_FEED) {
+  if (!feed || !feed.entries || feed.entries.length === 0) return [];
+  const diagnostics = [];
+  for (const { job, ref } of extractActionRefs(yaml)) {
+    const parsed = parseActionUses(ref);
+    if (!parsed) continue;
+    for (const entry of feed.entries) {
+      if (!matchesEntry(entry, parsed.slug, parsed.gitRef)) continue;
+      const patch = entry.patchedRef ? ` A patched ref is available: ${entry.patchedRef}.` : "";
+      const link = entry.url ? ` (${entry.url})` : "";
+      diagnostics.push({
+        checkId: "GHA062",
+        severity: "error",
+        message: `Job "${job}" uses "${parsed.slug}@${parsed.gitRef}", which matches disclosed advisory ${entry.id}${link}: ${entry.summary}.${patch}`,
+        entity: job,
+        lexicon: "github"
+      });
+    }
+  }
+  return diagnostics;
+}
+var gha062;
+var init_gha062 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha062.ts"() {
+    init_yaml_helpers();
+    init_advisory_feed();
+    gha062 = {
+      id: "GHA062",
+      description: "Pinned action reference matches a known-vulnerability advisory (feed-driven)",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          diagnostics.push(...checkAdvisories(yaml, DEFAULT_ADVISORY_FEED));
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha063.ts
+function cacheEnabled(withBlock) {
+  if (!withBlock || typeof withBlock !== "object") return false;
+  const cache = withBlock.cache;
+  if (typeof cache === "boolean") return cache;
+  if (typeof cache === "string") return cache.trim().length > 0 && cache.trim() !== "false";
+  return false;
+}
+var CACHEABLE_SETUP_ACTIONS, gha063;
+var init_gha063 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha063.ts"() {
+    init_yaml_helpers();
+    CACHEABLE_SETUP_ACTIONS = /* @__PURE__ */ new Set(["actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "actions/setup-dotnet"]);
+    gha063 = {
+      id: "GHA063",
+      description: "Dependency setup action without caching enabled",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const [jobName, jobObj] of jobEntries(yaml)) {
+            const steps = Array.isArray(jobObj.steps) ? jobObj.steps : [];
+            const hasGenericCacheStep = steps.some((s) => parseActionUses(String(s.uses ?? ""))?.slug === "actions/cache");
+            if (hasGenericCacheStep) continue;
+            for (const step of steps) {
+              const uses = typeof step.uses === "string" ? step.uses : void 0;
+              if (!uses) continue;
+              const parsed = parseActionUses(uses);
+              if (!parsed || !CACHEABLE_SETUP_ACTIONS.has(parsed.slug)) continue;
+              if (cacheEnabled(step.with)) continue;
+              diagnostics.push({
+                checkId: "GHA063",
+                severity: "info",
+                message: `Job "${jobName}" uses ${parsed.slug} without enabling its \`cache:\` option, and no separate actions/cache step covers it \u2014 dependencies are re-fetched from a cold cache on every run. Set \`with.cache\` (e.g. \`cache: npm\`) or add an actions/cache step.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha064.ts
+var OS_JUSTIFICATION, gha064;
+var init_gha064 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha064.ts"() {
+    init_yaml_helpers();
+    OS_JUSTIFICATION = [
+      { prefix: "macos-", label: "macOS", keywords: /xcodebuild|xcode-select|\.xcodeproj|\.xcworkspace|carthage|fastlane|cocoapods|pod install|swiftpm|codesign|notarize/i },
+      { prefix: "windows-", label: "Windows", keywords: /msbuild|\.sln\b|\.ps1\b|vcvarsall|nuget\s|choco\s|Set-ItemProperty|Get-ChildItem/i }
+    ];
+    gha064 = {
+      id: "GHA064",
+      description: "Job hardcoded onto an expensive runner with no sign it needs that OS",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const runsOnByJob = extractRunsOnByJob(yaml);
+          const runBlocks = extractRunBlocks(yaml);
+          for (const [jobName, labels] of runsOnByJob) {
+            if (labels.some((l) => l.includes("${{"))) continue;
+            for (const { prefix, label, keywords } of OS_JUSTIFICATION) {
+              const matched = labels.find((l) => l.toLowerCase().startsWith(prefix));
+              if (!matched) continue;
+              const justified = runBlocks.some((r) => r.job === jobName && keywords.test(r.run));
+              if (justified) break;
+              diagnostics.push({
+                checkId: "GHA064",
+                severity: "info",
+                message: `Job "${jobName}" runs on "${matched}" (a pricier ${label} runner) but no step looks ${label}-specific. Confirm it needs ${label}, or move it to a Linux runner.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+              break;
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha065.ts
+function jobSection(yaml, jobName) {
+  const jobsIdx = yaml.search(/^jobs:\s*$/m);
+  if (jobsIdx === -1) return void 0;
+  const afterJobs = yaml.slice(jobsIdx + yaml.slice(jobsIdx).indexOf("\n") + 1);
+  const header = `  ${jobName}:
+`;
+  const start = afterJobs.indexOf(header);
+  if (start === -1) return void 0;
+  const rest = afterJobs.slice(start + header.length);
+  const nextJobMatch = rest.search(/\n {2}\S/);
+  return nextJobMatch === -1 ? rest : rest.slice(0, nextJobMatch);
+}
+function parseMatrix(section) {
+  const lines = section.split("\n");
+  const matrixLineIdx = lines.findIndex((l) => /^\s*matrix:\s*$/.test(l));
+  if (matrixLineIdx === -1) return void 0;
+  const matrixIndent = lines[matrixLineIdx].search(/\S/);
+  const maxParallel = lines.some((l) => {
+    const m = l.match(/^(\s*)max-parallel:/);
+    return !!m && m[1].length === matrixIndent;
+  });
+  const dims = [];
+  let i = matrixLineIdx + 1;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === "") {
+      i++;
+      continue;
+    }
+    const indent = line.search(/\S/);
+    if (indent <= matrixIndent) break;
+    const kv = line.match(/^\s*([a-zA-Z0-9_-]+):\s*(.*)$/);
+    if (!kv) {
+      i++;
+      continue;
+    }
+    const [, key, rest] = kv;
+    const value = rest.trim();
+    if (value.startsWith("[")) {
+      const inner2 = value.replace(/^\[|\]\s*$/g, "").trim();
+      dims.push({ key, size: inner2 === "" ? 0 : inner2.split(",").length });
+      i++;
+      continue;
+    }
+    if (value !== "") {
+      dims.push({ key, size: 1 });
+      i++;
+      continue;
+    }
+    let size = 0;
+    i++;
+    while (i < lines.length) {
+      const l2 = lines[i];
+      if (l2.trim() === "") {
+        i++;
+        continue;
+      }
+      const ind2 = l2.search(/\S/);
+      if (ind2 <= indent) break;
+      if (/^\s*-\s/.test(l2)) size++;
+      i++;
+    }
+    dims.push({ key, size });
+  }
+  return { dims, maxParallel };
+}
+var FANOUT_THRESHOLD, gha065;
+var init_gha065 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha065.ts"() {
+    init_yaml_helpers();
+    FANOUT_THRESHOLD = 12;
+    gha065 = {
+      id: "GHA065",
+      description: "Matrix combines dimensions into an uncapped, large fan-out",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const [jobName] of extractJobs(yaml)) {
+            const section = jobSection(yaml, jobName);
+            if (!section) continue;
+            const matrix = parseMatrix(section);
+            if (!matrix) continue;
+            const dims = matrix.dims.filter((d) => d.key !== "include" && d.key !== "exclude" && d.size > 0);
+            if (dims.length < 2) continue;
+            const combos = dims.reduce((a, d) => a * d.size, 1);
+            if (combos <= FANOUT_THRESHOLD || matrix.maxParallel) continue;
+            diagnostics.push({
+              checkId: "GHA065",
+              severity: "info",
+              message: `Job "${jobName}"'s matrix combines ${dims.length} dimensions (${dims.map((d) => d.key).join(" x ")}) into ${combos} jobs with no \`max-parallel:\` cap. Confirm the full cross-product is intended, trim it with \`include\`/\`exclude\`, or add \`max-parallel:\`.`,
+              entity: jobName,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha066.ts
+var gha066;
+var init_gha066 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha066.ts"() {
+    init_yaml_helpers();
+    gha066 = {
+      id: "GHA066",
+      description: "Uploaded artifact has no explicit retention-days",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          for (const [jobName, jobObj] of jobEntries(yaml)) {
+            const steps = Array.isArray(jobObj.steps) ? jobObj.steps : [];
+            for (const step of steps) {
+              const uses = typeof step.uses === "string" ? step.uses : void 0;
+              if (!uses || parseActionUses(uses)?.slug !== "actions/upload-artifact") continue;
+              const withBlock = step.with;
+              if (withBlock && withBlock["retention-days"] !== void 0) continue;
+              const name = typeof withBlock?.name === "string" ? withBlock.name : void 0;
+              diagnostics.push({
+                checkId: "GHA066",
+                severity: "info",
+                message: `Job "${jobName}" uploads${name ? ` artifact "${name}"` : " an artifact"} with no \`retention-days\` \u2014 it falls back to the repository's default (up to 90 days). Set a \`retention-days\` sized to how long the artifact is actually needed.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha067.ts
+function triggerObject(on, key) {
+  if (!on || typeof on !== "object" || Array.isArray(on)) return void 0;
+  const trig = on[key];
+  return trig && typeof trig === "object" && !Array.isArray(trig) ? trig : void 0;
+}
+function hasPushOrPRTrigger(on) {
+  if (typeof on === "string") return on === "push" || on === "pull_request";
+  if (Array.isArray(on)) return on.includes("push") || on.includes("pull_request");
+  if (on && typeof on === "object") {
+    const keys = Object.keys(on);
+    return keys.includes("push") || keys.includes("pull_request");
+  }
+  return false;
+}
+function hasPathFilter(on) {
+  for (const key of ["push", "pull_request"]) {
+    const trig = triggerObject(on, key);
+    if (!trig) continue;
+    if (Array.isArray(trig.paths) && trig.paths.length > 0) return true;
+    if (Array.isArray(trig["paths-ignore"]) && trig["paths-ignore"].length > 0) return true;
+  }
+  return false;
+}
+var DOCKER_BUILD_RE, gha067;
+var init_gha067 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha067.ts"() {
+    init_yaml_helpers();
+    DOCKER_BUILD_RE = /\bdocker(\s+buildx)?\s+build\b/i;
+    gha067 = {
+      id: "GHA067",
+      description: "Unconditional docker build with no path filter or guard",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const doc = parseDoc(yaml);
+          if (!doc) continue;
+          if (!hasPushOrPRTrigger(doc.on)) continue;
+          if (hasPathFilter(doc.on)) continue;
+          for (const [jobName, jobObj] of jobEntries(yaml)) {
+            const steps = Array.isArray(jobObj.steps) ? jobObj.steps : [];
+            for (const step of steps) {
+              const run4 = typeof step.run === "string" ? step.run : void 0;
+              if (!run4 || !DOCKER_BUILD_RE.test(run4)) continue;
+              if (step.if !== void 0) continue;
+              diagnostics.push({
+                checkId: "GHA067",
+                severity: "info",
+                message: `Job "${jobName}" runs a Docker build on every push/pull_request with no \`paths:\`/\`paths-ignore:\` filter and no \`if:\` guard \u2014 unrelated changes (docs, etc.) still pay for a full image build. Scope the trigger's paths or add a guard.`,
+                entity: jobName,
+                lexicon: "github"
+              });
+            }
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha068.ts
+function hasPullRequestTrigger(on) {
+  if (typeof on === "string") return on === "pull_request";
+  if (Array.isArray(on)) return on.includes("pull_request");
+  if (on && typeof on === "object") return "pull_request" in on;
+  return false;
+}
+var gha068;
+var init_gha068 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha068.ts"() {
+    init_yaml_helpers();
+    gha068 = {
+      id: "GHA068",
+      description: "Pull-request workflow missing a concurrency group",
+      check(ctx) {
+        const diagnostics = [];
+        for (const [, output] of ctx.outputs) {
+          const yaml = getPrimaryOutput(output);
+          const doc = parseDoc(yaml);
+          if (!doc || !hasPullRequestTrigger(doc.on)) continue;
+          const workflowName = extractWorkflowName(yaml) ?? "";
+          const jobNames = [...extractJobs(yaml).keys()];
+          const isDeployWorkflow = /deploy/i.test(workflowName) || jobNames.some((n) => /deploy/i.test(n));
+          if (isDeployWorkflow) continue;
+          if (!/^\s*concurrency:/m.test(yaml)) {
+            diagnostics.push({
+              checkId: "GHA068",
+              severity: "info",
+              message: `Workflow${workflowName ? ` "${workflowName}"` : ""} triggers on pull_request with no \`concurrency:\` group \u2014 a new push doesn't cancel the superseded run, so every commit on the PR consumes a full run's worth of runner capacity. Add a \`concurrency:\` group with \`cancel-in-progress: true\`.`,
+              lexicon: "github"
+            });
+          }
+        }
+        return diagnostics;
+      }
+    };
+  }
+});
+
+// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/index.ts
+var postSynthChecks;
+var init_post_synth2 = __esm({
+  "node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/index.ts"() {
+    init_gha006();
+    init_gha009();
+    init_gha011();
+    init_gha013();
+    init_gha017();
+    init_gha018();
+    init_gha019();
+    init_gha021();
+    init_gha022();
+    init_gha023();
+    init_gha024();
+    init_gha025();
+    init_gha026();
+    init_gha027();
+    init_gha028();
+    init_gha029();
+    init_gha030();
+    init_gha031();
+    init_gha032();
+    init_gha033();
+    init_gha034();
+    init_gha035();
+    init_gha036();
+    init_gha037();
+    init_gha038();
+    init_gha039();
+    init_gha040();
+    init_gha041();
+    init_gha042();
+    init_gha043();
+    init_gha044();
+    init_gha045();
+    init_gha046();
+    init_gha047();
+    init_gha048();
+    init_gha049();
+    init_gha050();
+    init_gha051();
+    init_gha052();
+    init_gha053();
+    init_gha054();
+    init_gha055();
+    init_gha056();
+    init_gha057();
+    init_gha058();
+    init_gha059();
+    init_gha060();
+    init_gha061();
+    init_gha062();
+    init_gha063();
+    init_gha064();
+    init_gha065();
+    init_gha066();
+    init_gha067();
+    init_gha068();
+    postSynthChecks = [
+      gha006,
+      gha009,
+      gha011,
+      gha013,
+      gha017,
+      gha018,
+      gha019,
+      gha021,
+      gha022,
+      gha023,
+      gha024,
+      gha025,
+      gha026,
+      gha027,
+      gha028,
+      gha029,
+      gha030,
+      gha031,
+      gha032,
+      gha033,
+      gha034,
+      gha035,
+      gha036,
+      gha037,
+      gha038,
+      gha039,
+      gha040,
+      gha041,
+      gha042,
+      gha043,
+      gha044,
+      gha045,
+      gha046,
+      gha047,
+      gha048,
+      gha049,
+      gha050,
+      gha051,
+      gha052,
+      gha053,
+      gha054,
+      gha055,
+      gha056,
+      gha057,
+      gha058,
+      gha059,
+      gha060,
+      gha061,
+      gha062,
+      gha063,
+      gha064,
+      gha065,
+      gha066,
+      gha067,
+      gha068
+    ];
+  }
+});
+
+// src/audit/engine.ts
+var engine_exports = {};
+__export(engine_exports, {
+  auditRepos: () => auditRepos
+});
+async function auditRepos(repoUrls, token, opts = {}) {
+  const concurrency = opts.concurrency ?? 3;
+  const maxFiles = opts.maxFiles ?? 50;
+  const fetchImpl = opts.fetchImpl;
+  const results = [];
+  for (let i = 0; i < repoUrls.length; i += concurrency) {
+    const batch = repoUrls.slice(i, i + concurrency);
+    const settled = await Promise.allSettled(
+      batch.map((url2) => auditOneRepo(url2, token, { maxFiles, fetchImpl }))
+    );
+    for (const outcome of settled) {
+      if (outcome.status === "fulfilled") {
+        results.push(outcome.value);
+      } else {
+        results.push({
+          repoUrl: "unknown",
+          slug: "unknown",
+          scanned: 0,
+          model: buildReportModel([]),
+          error: String(outcome.reason)
+        });
+      }
+    }
+  }
+  const totals = results.reduce(
+    (acc, r) => {
+      if (!r.error) {
+        acc.quickWin += r.model.counts?.quickWin ?? 0;
+        acc.needsReview += r.model.counts?.needsReview ?? 0;
+        acc.reportOnly += r.model.counts?.reportOnly ?? 0;
+        acc.total += r.model.counts?.total ?? 0;
+      }
+      return acc;
+    },
+    { quickWin: 0, needsReview: 0, reportOnly: 0, total: 0 }
+  );
+  return { repos: results, totals };
+}
+function slugFromUrl(url2) {
+  try {
+    const u = new URL(url2);
+    return u.pathname.replace(/^\//, "").replace(/\.git$/, "");
+  } catch {
+    return url2;
+  }
+}
+async function auditOneRepo(repoUrl, token, opts) {
+  const slug2 = slugFromUrl(repoUrl);
+  try {
+    const files = await fetchRepoFiles(repoUrl, {
+      token,
+      maxFiles: opts.maxFiles,
+      fetchImpl: opts.fetchImpl
+    });
+    const inputs = classifyFiles(files, DETECTORS);
+    const findings = await auditFiles(inputs, { checksProvider });
+    const model = buildReportModel(findings, {
+      files: inputs.map((i) => ({ path: i.path, content: i.content }))
+    });
+    return { repoUrl, slug: slug2, scanned: files.length, model };
+  } catch (err) {
+    return {
+      repoUrl,
+      slug: slug2,
+      scanned: 0,
+      model: buildReportModel([]),
+      error: err instanceof Error ? err.message : String(err)
+    };
+  }
+}
+var DETECTORS, checksProvider;
+var init_engine = __esm({
+  "src/audit/engine.ts"() {
+    "use strict";
+    init_fetch2();
+    init_discover3();
+    init_core4();
+    init_report_model();
+    init_post_synth2();
+    DETECTORS = [{ name: "github" }];
+    checksProvider = async (lexicon) => lexicon === "github" ? postSynthChecks : [];
+  }
+});
+
 // src/cli.ts
 import { readFileSync as readFileSync7, writeFileSync as writeFileSync4 } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -234823,6 +238783,9 @@ var package_default = {
   publishConfig: {
     access: "public"
   },
+  config: {
+    esm_require_banner: "import { createRequire as __gwCreateRequire } from 'node:module'; import { fileURLToPath as __gwFileURLToPath } from 'node:url'; import { dirname as __gwDirname } from 'node:path'; var require = globalThis.require ?? __gwCreateRequire(import.meta.url); var __filename = __gwFileURLToPath(import.meta.url); var __dirname = __gwDirname(__filename);"
+  },
   bin: {
     "github-warden": "bin/github-warden.js"
   },
@@ -234835,8 +238798,8 @@ var package_default = {
     "lint:prose": "bash mkdocs-stage.sh && node scripts/lint-prose.mjs $(find _docs -name '*.md')",
     test: "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    build: "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
-    "build:action": `esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='"1"' --outfile=action/index.mjs`,
+    build: 'rm -rf dist && esbuild src/cli.ts --bundle --splitting --platform=node --format=esm --outdir=dist --chunk-names=chunk-[hash] --banner:js="$npm_package_config_esm_require_banner" && chmod +x dist/cli.js',
+    "build:action": `esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='"1"' --banner:js="$npm_package_config_esm_require_banner" --outfile=action/index.mjs`,
     prepublishOnly: "npm run build"
   },
   dependencies: {
@@ -236819,3482 +240782,6 @@ var CYCLE_REGISTRY = {
   [tokenApprovalCycle.name]: tokenApprovalCycle
 };
 
-// node_modules/@intentius/chant/src/audit/fetch.ts
-var DEFAULTS = {
-  maxFiles: 50,
-  maxBytesPerFile: 256 * 1024,
-  maxTotalBytes: 2 * 1024 * 1024,
-  timeoutMs: 1e4
-};
-var ALLOWED_HOSTS = {
-  "github.com": { kind: "github", api: "https://api.github.com", lexicon: "github" },
-  "codeberg.org": { kind: "forgejo", api: "https://codeberg.org/api/v1", lexicon: "forgejo" },
-  "gitlab.com": { kind: "gitlab", api: "https://gitlab.com/api/v4", lexicon: "gitlab" }
-};
-var FetchError = class extends Error {
-};
-function parseRepoUrl(url2) {
-  let u;
-  try {
-    u = new URL(url2);
-  } catch {
-    throw new FetchError(`Invalid URL: ${url2}`);
-  }
-  if (u.protocol !== "https:") {
-    throw new FetchError(`Only https:// URLs are allowed (got ${u.protocol}).`);
-  }
-  const host = ALLOWED_HOSTS[u.hostname];
-  if (!host) {
-    throw new FetchError(
-      `Host not allowed: ${u.hostname}. Allowed: ${Object.keys(ALLOWED_HOSTS).join(", ")}.`
-    );
-  }
-  const parts = u.pathname.replace(/^\/+/, "").split("/");
-  if (parts.length < 2 || !parts[0] || !parts[1]) {
-    throw new FetchError(`URL must be https://${u.hostname}/<owner>/<repo>.`);
-  }
-  return { host, owner: parts[0], repo: parts[1].replace(/\.git$/, "") };
-}
-var USER_AGENT2 = "chant-audit (+https://github.com/intentius/chant)";
-function authHeaders(kind, token) {
-  const base = { "User-Agent": USER_AGENT2 };
-  if (!token) return base;
-  if (kind === "github") return { ...base, Authorization: `Bearer ${token}` };
-  if (kind === "forgejo") return { ...base, Authorization: `token ${token}` };
-  return { ...base, "PRIVATE-TOKEN": token };
-}
-function timeoutSignal(ms) {
-  return typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(ms) : void 0;
-}
-async function getJsonAt(url2, headers, doFetch, timeoutMs) {
-  let res;
-  try {
-    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(timeoutMs) });
-  } catch (err) {
-    throw new FetchError(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  if (res.status >= 300 && res.status < 400) throw new FetchError(`Refusing to follow redirect from ${url2}`);
-  if (res.status === 404) return { status: 404, body: null };
-  if (!res.ok) throw new FetchError(`${url2} returned ${res.status}`);
-  return { status: res.status, body: await res.json() };
-}
-async function getSearchJsonAt(url2, headers, doFetch, timeoutMs) {
-  let res;
-  try {
-    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(timeoutMs) });
-  } catch (err) {
-    throw new FetchError(`Request failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  if (res.status >= 300 && res.status < 400) throw new FetchError(`Refusing to follow redirect from ${url2}`);
-  if (!res.ok) throw new FetchError(`${url2} returned ${res.status}`);
-  return res.json();
-}
-function projectId(owner, repo) {
-  return encodeURIComponent(`${owner}/${repo}`);
-}
-async function defaultBranch(host, owner, repo, doFetch, headers, ms) {
-  const url2 = host.kind === "gitlab" ? `${host.api}/projects/${projectId(owner, repo)}` : `${host.api}/repos/${owner}/${repo}`;
-  const { body } = await getJsonAt(url2, headers, doFetch, ms);
-  const branch = body?.default_branch;
-  return branch && typeof branch === "string" ? branch : "HEAD";
-}
-var LARGE_REPO_TREE_ENTRIES = 500;
-var MAX_SEARCH_PAGES = 3;
-var CONTENT_SEARCH_TERMS = [
-  { lexicon: "aws", term: "AWSTemplateFormatVersion" },
-  // CloudFormation
-  { lexicon: "azure", term: "deploymentTemplate" },
-  // ARM $schema substring
-  { lexicon: "gcp", term: "cnrm.cloud.google.com" },
-  // GCP Config Connector
-  { lexicon: "helm", term: "apiVersion: v2" },
-  // Chart.yaml
-  { lexicon: "docker", term: "FROM " },
-  // Dockerfiles (space avoids false hits)
-  { lexicon: "docker", term: "services:" },
-  // Docker Compose
-  { lexicon: "k8s", term: "apiVersion" }
-  // any k8s resource (broad; runs last)
-];
-var GITLAB_CI_TERM = "stages:";
-async function gitlabSearchPage(host, owner, repo, ref, term, page, doFetch, headers, ms) {
-  const url2 = `${host.api}/projects/${projectId(owner, repo)}/search?scope=blobs&search=${encodeURIComponent(term)}&per_page=100&page=${page}&ref=${encodeURIComponent(ref)}`;
-  const body = await getSearchJsonAt(url2, headers, doFetch, ms);
-  if (!Array.isArray(body)) return [];
-  return body.map((e) => e.path).filter((p) => typeof p === "string");
-}
-async function gitlabSearch(host, owner, repo, ref, doFetch, headers, ms) {
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  const terms = [GITLAB_CI_TERM, ...CONTENT_SEARCH_TERMS.map((t) => t.term)];
-  for (const term of terms) {
-    for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
-      const hits = await gitlabSearchPage(host, owner, repo, ref, term, page, doFetch, headers, ms);
-      if (hits.length === 0) break;
-      for (const p of hits) if (!seen.has(p)) {
-        seen.add(p);
-        out.push({ path: p, type: "blob" });
-      }
-      if (hits.length < 100) break;
-    }
-  }
-  return out;
-}
-async function gitlabBfsWalk(host, owner, repo, ref, doFetch, headers, ms, seedRootPage1) {
-  const out = [];
-  const queue = [""];
-  const MAX_DIRS = 30;
-  const MAX_BLOBS = 200;
-  let dirs = 0;
-  while (queue.length > 0 && dirs < MAX_DIRS && out.length < MAX_BLOBS) {
-    const dir = queue.shift();
-    dirs++;
-    const pathParam = dir ? `&path=${encodeURIComponent(dir)}` : "";
-    for (let page = 1; page <= 5; page++) {
-      let body;
-      if (dir === "" && page === 1 && seedRootPage1) {
-        body = seedRootPage1;
-      } else {
-        const url2 = `${host.api}/projects/${projectId(owner, repo)}/repository/tree?per_page=100&page=${page}&ref=${encodeURIComponent(ref)}${pathParam}`;
-        ({ body } = await getJsonAt(url2, headers, doFetch, ms));
-      }
-      if (!Array.isArray(body) || body.length === 0) break;
-      for (const e of body) {
-        if (e.type === "blob") out.push({ path: e.path, type: "blob" });
-        else if (e.type === "tree") queue.push(e.path);
-      }
-      if (body.length < 100) break;
-    }
-  }
-  return out;
-}
-async function listTreeGitLab(host, owner, repo, ref, doFetch, headers, ms) {
-  const rootUrl = `${host.api}/projects/${projectId(owner, repo)}/repository/tree?per_page=100&page=1&ref=${encodeURIComponent(ref)}`;
-  const { body: rootBody } = await getJsonAt(rootUrl, headers, doFetch, ms);
-  const rootPage1 = Array.isArray(rootBody) ? rootBody : [];
-  const isLarge = rootPage1.length >= 100;
-  if (isLarge && "PRIVATE-TOKEN" in headers) {
-    try {
-      return await gitlabSearch(host, owner, repo, ref, doFetch, headers, ms);
-    } catch {
-    }
-  }
-  return gitlabBfsWalk(host, owner, repo, ref, doFetch, headers, ms, rootPage1);
-}
-async function githubSearchPage(host, owner, repo, term, page, doFetch, headers, ms) {
-  const q3 = encodeURIComponent(`${term} repo:${owner}/${repo}`);
-  const url2 = `${host.api}/search/code?q=${q3}&per_page=100&page=${page}`;
-  const body = await getSearchJsonAt(url2, { ...headers, Accept: "application/vnd.github+json" }, doFetch, ms);
-  const items = body?.items;
-  if (!Array.isArray(items)) return [];
-  return items.map((e) => e.path).filter((p) => typeof p === "string");
-}
-async function githubCodeSearch(host, owner, repo, doFetch, headers, ms) {
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const { term } of CONTENT_SEARCH_TERMS) {
-    for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
-      const hits = await githubSearchPage(host, owner, repo, term, page, doFetch, headers, ms);
-      if (hits.length === 0) break;
-      for (const p of hits) if (!seen.has(p)) {
-        seen.add(p);
-        out.push({ path: p, type: "blob" });
-      }
-      if (hits.length < 100) break;
-    }
-  }
-  return out;
-}
-async function forgejoSearchPage(host, owner, repo, term, page, doFetch, headers, ms) {
-  const url2 = `${host.api}/repos/${owner}/${repo}/search?q=${encodeURIComponent(term)}&page=${page}&limit=100`;
-  const body = await getSearchJsonAt(url2, headers, doFetch, ms);
-  const data = Array.isArray(body) ? body : body?.data;
-  if (!Array.isArray(data)) return [];
-  return data.map((e) => e.path).filter((p) => typeof p === "string");
-}
-async function forgejoCodeSearch(host, owner, repo, doFetch, headers, ms) {
-  const out = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const { term } of CONTENT_SEARCH_TERMS) {
-    for (let page = 1; page <= MAX_SEARCH_PAGES; page++) {
-      const hits = await forgejoSearchPage(host, owner, repo, term, page, doFetch, headers, ms);
-      if (hits.length === 0) break;
-      for (const p of hits) if (!seen.has(p)) {
-        seen.add(p);
-        out.push({ path: p, type: "blob" });
-      }
-      if (hits.length < 100) break;
-    }
-  }
-  return out;
-}
-async function listTreeGitHubLike(host, owner, repo, ref, doFetch, headers, ms) {
-  const url2 = `${host.api}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-  const { body } = await getJsonAt(url2, headers, doFetch, ms);
-  const treeBody = body;
-  const tree = treeBody?.tree;
-  if (!Array.isArray(tree)) return [];
-  const blobs = tree.filter((e) => e.type === "blob").map((e) => ({ path: e.path, type: "blob", size: e.size }));
-  const isLarge = blobs.length > LARGE_REPO_TREE_ENTRIES || treeBody?.truncated === true;
-  if (!isLarge) return blobs;
-  const { ciLexiconForPath: ciLexiconForPath2 } = await Promise.resolve().then(() => (init_discover3(), discover_exports));
-  const known = blobs.filter((e) => ciLexiconForPath2(e.path));
-  try {
-    const hits = host.kind === "github" ? await githubCodeSearch(host, owner, repo, doFetch, headers, ms) : await forgejoCodeSearch(host, owner, repo, doFetch, headers, ms);
-    const knownPaths = new Set(known.map((e) => e.path));
-    return [...known, ...hits.filter((h) => !knownPaths.has(h.path))];
-  } catch {
-    return blobs;
-  }
-}
-async function listTree(host, owner, repo, ref, doFetch, headers, ms) {
-  if (host.kind === "gitlab") return listTreeGitLab(host, owner, repo, ref, doFetch, headers, ms);
-  return listTreeGitHubLike(host, owner, repo, ref, doFetch, headers, ms);
-}
-async function fetchText(url2, headers, doFetch, ms) {
-  let res;
-  try {
-    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(ms) });
-  } catch {
-    return void 0;
-  }
-  if (!res.ok) return void 0;
-  try {
-    return await res.text();
-  } catch {
-    return void 0;
-  }
-}
-async function fetchFileContent(host, owner, repo, path, ref, doFetch, headers, ms) {
-  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  if (host.kind === "gitlab") {
-    const url3 = `${host.api}/projects/${projectId(owner, repo)}/repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(ref)}`;
-    return fetchText(url3, headers, doFetch, ms);
-  }
-  if (host.kind === "github") {
-    const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${encodeURIComponent(ref)}/${encodedPath}`;
-    const raw = await fetchText(rawUrl, { "User-Agent": USER_AGENT2 }, doFetch, ms);
-    if (raw !== void 0) return raw;
-  }
-  const url2 = `${host.api}/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`;
-  let res;
-  try {
-    res = await doFetch(url2, { headers, redirect: "manual", signal: timeoutSignal(ms) });
-  } catch {
-    return void 0;
-  }
-  if (!res.ok) return void 0;
-  let file2;
-  try {
-    file2 = await res.json();
-  } catch {
-    return void 0;
-  }
-  if (!file2?.content) return void 0;
-  return Buffer.from(file2.content, file2.encoding ?? "base64").toString("utf-8");
-}
-async function fetchRepoFiles(url2, opts = {}) {
-  const { isCandidatePath: isCandidatePath2 } = await Promise.resolve().then(() => (init_discover3(), discover_exports));
-  const { host, owner, repo } = parseRepoUrl(url2);
-  const doFetch = opts.fetchImpl ?? fetch;
-  const cfg = {
-    maxFiles: opts.maxFiles ?? DEFAULTS.maxFiles,
-    maxBytesPerFile: opts.maxBytesPerFile ?? DEFAULTS.maxBytesPerFile,
-    maxTotalBytes: opts.maxTotalBytes ?? DEFAULTS.maxTotalBytes,
-    timeoutMs: opts.timeoutMs ?? DEFAULTS.timeoutMs
-  };
-  const headers = authHeaders(host.kind, opts.token);
-  const ref = opts.ref ?? await defaultBranch(host, owner, repo, doFetch, headers, cfg.timeoutMs);
-  const tree = await listTree(host, owner, repo, ref, doFetch, headers, cfg.timeoutMs);
-  const candidates = tree.filter((e) => isCandidatePath2(e.path));
-  const files = [];
-  let total = 0;
-  for (const entry of candidates) {
-    if (files.length >= cfg.maxFiles) break;
-    if ((entry.size ?? 0) > cfg.maxBytesPerFile) continue;
-    const content = await fetchFileContent(host, owner, repo, entry.path, ref, doFetch, headers, cfg.timeoutMs);
-    if (content === void 0) continue;
-    if (content.length > cfg.maxBytesPerFile) continue;
-    total += content.length;
-    if (total > cfg.maxTotalBytes) throw new FetchError("Repository files exceed the total size cap.");
-    files.push({ path: entry.path, content });
-  }
-  return files;
-}
-
-// src/audit/engine.ts
-init_discover3();
-
-// node_modules/@intentius/chant/src/audit/core.ts
-import { basename as basename3 } from "path";
-var checksCache = /* @__PURE__ */ new Map();
-var entitiesParserCache = /* @__PURE__ */ new Map();
-function dedupeById(checks) {
-  const byId = /* @__PURE__ */ new Map();
-  for (const check2 of checks) {
-    if (!byId.has(check2.id)) byId.set(check2.id, check2);
-  }
-  return [...byId.values()];
-}
-var MissingLexiconError = class extends Error {
-};
-async function load(names) {
-  try {
-    const { loadPlugins: loadPlugins2 } = await Promise.resolve().then(() => (init_plugins(), plugins_exports));
-    return await loadPlugins2(names);
-  } catch (err) {
-    const pkgs = names.map((n) => `@intentius/chant-lexicon-${n}`).join(" ");
-    throw new MissingLexiconError(
-      `Missing lexicon package needed to audit ${names.join("/")} workflows. Install it with: npm i ${pkgs}
-(${err instanceof Error ? err.message : String(err)})`
-    );
-  }
-}
-async function defaultChecksProvider(lexicon) {
-  const cached2 = checksCache.get(lexicon);
-  if (cached2) return cached2;
-  let checks;
-  if (lexicon === "forgejo") {
-    const [forgejo, github] = await load(["forgejo", "github"]);
-    checks = dedupeById([
-      ...forgejo?.postSynthChecks?.() ?? [],
-      ...github?.postSynthChecks?.() ?? []
-    ]);
-  } else {
-    const [plugin] = await load([lexicon]);
-    checks = plugin?.postSynthChecks?.() ?? [];
-  }
-  checksCache.set(lexicon, checks);
-  return checks;
-}
-async function defaultEntitiesProvider(lexicon) {
-  if (entitiesParserCache.has(lexicon)) return entitiesParserCache.get(lexicon);
-  let parser;
-  try {
-    const [plugin] = await load([lexicon]);
-    const parse3 = plugin?.auditEntities?.bind(plugin);
-    if (parse3) parser = parse3;
-  } catch {
-    parser = void 0;
-  }
-  entitiesParserCache.set(lexicon, parser);
-  return parser;
-}
-async function auditFiles(inputs, opts = {}) {
-  const provider = opts.checksProvider ?? defaultChecksProvider;
-  const entitiesProvider = opts.entitiesProvider ?? defaultEntitiesProvider;
-  const findings = [];
-  const byLexicon = /* @__PURE__ */ new Map();
-  for (const input of inputs) {
-    const list = byLexicon.get(input.lexicon) ?? [];
-    list.push(input);
-    byLexicon.set(input.lexicon, list);
-  }
-  for (const [lexicon, files] of byLexicon) {
-    const checks = await provider(lexicon);
-    if (checks.length === 0) continue;
-    const parseEntities = await entitiesProvider(lexicon);
-    findings.push(...auditLexicon(lexicon, files, checks, parseEntities));
-  }
-  return findings;
-}
-var CROSS_FILE = "(cross-file)";
-function toOutput(file2) {
-  if (file2.files) return { primary: file2.content, files: file2.files };
-  if (file2.lexicon === "gcp") return file2.content;
-  return { primary: file2.content, files: { [basename3(file2.path)]: file2.content } };
-}
-function runChecks(checks, outputs, entities = /* @__PURE__ */ new Map()) {
-  const buildResult = { outputs, entities, warnings: [], errors: [], sourceFileCount: outputs.size };
-  const ctx = { outputs, entities: buildResult.entities, buildResult };
-  const diags = [];
-  for (const check2 of checks) {
-    try {
-      diags.push(...check2.check(ctx));
-    } catch {
-    }
-  }
-  return diags;
-}
-function diagKey(d) {
-  return `${d.checkId}\0${d.entity ?? ""}\0${d.message}`;
-}
-function mergeEntities(maps) {
-  const merged = /* @__PURE__ */ new Map();
-  for (const m of maps) {
-    for (const [key, entity] of m) {
-      let k = key;
-      for (let n = 2; merged.has(k); n++) k = `${key}#${n}`;
-      merged.set(k, entity);
-    }
-  }
-  return merged;
-}
-function auditLexicon(lexicon, files, checks, parseEntities) {
-  const entitiesFor = (file2) => {
-    if (!parseEntities) return /* @__PURE__ */ new Map();
-    try {
-      return parseEntities(file2.content);
-    } catch {
-      return /* @__PURE__ */ new Map();
-    }
-  };
-  const perEntities = new Map(files.map((f) => [f.path, entitiesFor(f)]));
-  const perFindings = [];
-  const perKeys = /* @__PURE__ */ new Set();
-  for (const file2 of files) {
-    const diags = runChecks(checks, /* @__PURE__ */ new Map([[file2.path, toOutput(file2)]]), perEntities.get(file2.path));
-    for (const d of diags) {
-      perFindings.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: file2.path, lexicon: d.lexicon ?? lexicon, entity: d.entity });
-      perKeys.add(diagKey(d));
-    }
-  }
-  const allOutputs = new Map(files.map((f) => [f.path, toOutput(f)]));
-  const allDiags = runChecks(checks, allOutputs, mergeEntities([...perEntities.values()]));
-  const allKeys = new Set(allDiags.map(diagKey));
-  const out = perFindings.filter((f) => allKeys.has(diagKey(f)));
-  for (const d of allDiags) {
-    if (!perKeys.has(diagKey(d))) {
-      out.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: CROSS_FILE, lexicon: d.lexicon ?? lexicon, entity: d.entity });
-    }
-  }
-  return out;
-}
-
-// node_modules/@intentius/chant/src/audit/catalog.ts
-var SCORECARD_PINNED = {
-  name: "OSSF Scorecard \u2014 Pinned-Dependencies",
-  url: "https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned-dependencies"
-};
-var GH_SECRET_SCANNING = {
-  name: "GitHub \u2014 About secret scanning",
-  url: "https://docs.github.com/en/code-security/secret-scanning/introduction/about-secret-scanning"
-};
-var CF_WORKERS_DEV = {
-  name: "Cloudflare Workers \u2014 workers.dev",
-  url: "https://developers.cloudflare.com/workers/configuration/routing/workers-dev/"
-};
-var CF_SECRETS = {
-  name: "Cloudflare Workers \u2014 Secrets",
-  url: "https://developers.cloudflare.com/workers/configuration/secrets/"
-};
-var CF_ROUTES = {
-  name: "Cloudflare Workers \u2014 Routes",
-  url: "https://developers.cloudflare.com/workers/configuration/routing/routes/"
-};
-var CF_ENVIRONMENTS = {
-  name: "Cloudflare Workers \u2014 Wrangler environments",
-  url: "https://developers.cloudflare.com/workers/wrangler/configuration/#environments"
-};
-var CF_STATIC_ASSETS = {
-  name: "Cloudflare Workers \u2014 Static assets",
-  url: "https://developers.cloudflare.com/workers/static-assets/"
-};
-var MOZILLA_TLS = {
-  name: "Mozilla \u2014 Server Side TLS",
-  url: "https://wiki.mozilla.org/Security/Server_Side_TLS"
-};
-var CWE_DIR_LISTING = {
-  name: "CWE-548 \u2014 Exposure of Information Through Directory Listing",
-  url: "https://cwe.mitre.org/data/definitions/548.html"
-};
-var GIXY_ALIAS = {
-  name: "Gixy \u2014 alias traversal",
-  url: "https://github.com/yandex/gixy/blob/master/docs/en/plugins/aliastraversal.md"
-};
-var NGINX_STUB_STATUS = {
-  name: "nginx \u2014 ngx_http_stub_status_module",
-  url: "https://nginx.org/en/docs/http/ngx_http_stub_status_module.html"
-};
-var CWE_HARDCODED_CREDS = {
-  name: "CWE-798 \u2014 Use of Hard-coded Credentials",
-  url: "https://cwe.mitre.org/data/definitions/798.html"
-};
-var CWE_CLEARTEXT = {
-  name: "CWE-319 \u2014 Cleartext Transmission of Sensitive Information",
-  url: "https://cwe.mitre.org/data/definitions/319.html"
-};
-function meta3(id, tier, fixKind, title, remediation, authority) {
-  const category = authority && authority.length > 0 ? "security" : RULE_CATEGORY[id] ?? "best-practice";
-  return { id, tier, fixKind, category, title, remediation, authority, yamlBased: true };
-}
-var M = "merge-worthy";
-var R = "report-only";
-var G = "guidance";
-function agentMeta(id, tier, title, remediation, authority) {
-  const category = authority && authority.length > 0 ? "security" : RULE_CATEGORY[id] ?? "best-practice";
-  return { id, tier, fixKind: G, category, title, remediation, authority, yamlBased: false };
-}
-var RULE_CATEGORY = {
-  COR020: "correctness",
-  EXT001: "correctness",
-  SEC001: "security",
-  SEC002: "security",
-  SEC003: "security",
-  SEC004: "security",
-  SEC005: "security",
-  SEC006: "security",
-  SEC007: "security",
-  SEC008: "security",
-  SEC009: "security",
-  SEC010: "security",
-  WRG001: "security",
-  WRG002: "security",
-  WRG003: "best-practice",
-  WRG004: "security",
-  WRG005: "security",
-  WRG006: "security",
-  // NGX — nginx config audit (#1979), lexicon-independent like SEC/WRG.
-  NGX001: "security",
-  NGX002: "security",
-  NGX003: "security",
-  NGX004: "security",
-  NGX005: "security",
-  NGX006: "best-practice",
-  NGX007: "best-practice",
-  // AGT — agent configuration (`chant audit --agents`). Core-owned like COR/EXT:
-  // these run against the machine's own agent config, not against any one
-  // lexicon's emitted output, so no lexicon ships them.
-  AGT001: "security",
-  AGT002: "security",
-  AGT003: "security",
-  AGT004: "security",
-  AGT005: "security",
-  AGT006: "best-practice",
-  AGT007: "correctness",
-  AGT008: "best-practice"
-};
-var RULE_CATALOG = {
-  COR020: meta3("COR020", M, G, "Circular resource dependency", "Break the dependency cycle between resources."),
-  EXT001: meta3("EXT001", M, G, "Extension constraint violation", "Fix the cross-property constraint flagged by the cfn-lint extension schema."),
-  // Secrets & credentials (#443) — lexicon-independent: `secrets.ts` scans the
-  // raw text of every candidate file, so these ids apply regardless of which
-  // (if any) audit lexicons are installed. `fixKind` is `guidance`: removing
-  // a hardcoded credential and rotating it needs a human, never an auto-fix.
-  SEC001: meta3("SEC001", M, G, "AWS access key ID found", "Remove the key from source, rotate it in IAM, and load it from a secret store or environment variable instead.", [GH_SECRET_SCANNING]),
-  SEC002: meta3("SEC002", M, G, "AWS secret access key found", "Remove the key from source, rotate it in IAM, and load it from a secret store or environment variable instead.", [GH_SECRET_SCANNING]),
-  SEC003: meta3("SEC003", M, G, "GitHub token found", "Remove the token from source and revoke it at github.com/settings/tokens; use a GitHub Actions secret instead.", [GH_SECRET_SCANNING]),
-  SEC004: meta3("SEC004", M, G, "Slack token found", "Remove the token from source and revoke it in the Slack app's OAuth settings.", [GH_SECRET_SCANNING]),
-  SEC005: meta3("SEC005", M, G, "Google API key found", "Remove the key from source and regenerate it in the Google Cloud Console credentials page.", [GH_SECRET_SCANNING]),
-  SEC006: meta3("SEC006", M, G, "Stripe live secret key found", "Remove the key from source and roll it in the Stripe dashboard immediately \u2014 this is a live-mode key.", [GH_SECRET_SCANNING]),
-  SEC007: meta3("SEC007", M, G, "Private key block found", "Remove the private key from source, rotate the keypair, and load the key from a secret store instead.", [GH_SECRET_SCANNING]),
-  SEC008: meta3("SEC008", M, G, "Bearer/authorization token found", "Remove the token from source; if it's long-lived, revoke and reissue it via the issuing service.", [GH_SECRET_SCANNING]),
-  SEC009: meta3("SEC009", M, G, "Credentials embedded in a connection string", "Move the username/password out of the URI into a secret store, and rotate the credential.", [GH_SECRET_SCANNING]),
-  SEC010: meta3("SEC010", M, G, "High-entropy string \u2014 possible secret", "Confirm whether this is a live credential; if so, remove it from source and rotate it. If it's a false positive, suppress with a `chant-audit-ignore` comment or an allowlist entry.", [GH_SECRET_SCANNING]),
-  // Wrangler config audit (#446) — lexicon-independent, same shape as the SEC
-  // family above: `wrangler.ts` scans every `wrangler.toml` it finds
-  // regardless of which (if any) audit lexicons are installed.
-  WRG001: meta3("WRG001", M, G, "Production environment exposed on *.workers.dev", "Remove workers_dev (or set it to false) for this environment and rely on its custom domain/route instead of the shared public subdomain.", [CF_WORKERS_DEV]),
-  WRG002: meta3("WRG002", M, G, "Credential-shaped key stored in [vars]", "Move the value out of [vars] and into `wrangler secret put <name>` so it isn't committed to source or visible in `wrangler dev`/the dashboard.", [CF_SECRETS]),
-  WRG003: meta3("WRG003", R, G, "Observability explicitly disabled", "Set observability.enabled = true (or remove the override) so Workers Logs are recorded for this deployment."),
-  WRG004: meta3("WRG004", M, G, "Unscoped wildcard route", 'Scope the route pattern to the intended zone (e.g. "example.com/*") instead of a bare "*" or "*/*" that matches every zone on the account.', [CF_ROUTES]),
-  WRG005: meta3("WRG005", M, G, "Non-production environment shares a data store with production", "Give the non-production environment its own KV namespace/R2 bucket/D1 database id instead of reusing production's.", [CF_ENVIRONMENTS]),
-  WRG006: meta3("WRG006", M, G, "Static assets served from the project root", "Point [site].bucket / [assets].directory at a dedicated public output folder, not the project root, so non-public files (config, source maps, .git) aren't served.", [CF_STATIC_ASSETS]),
-  // nginx config audit (#1979, the #446 follow-up) — lexicon-independent,
-  // same shape as SEC/WRG: `nginx.ts` scans every nginx config it detects
-  // regardless of which (if any) audit lexicons are installed.
-  NGX001: meta3("NGX001", M, G, "Deprecated TLS protocol enabled", "Remove SSLv2/SSLv3/TLSv1/TLSv1.1 from ssl_protocols and serve TLSv1.2 and TLSv1.3 only.", [MOZILLA_TLS]),
-  NGX002: meta3("NGX002", M, G, "Weak cipher suite enabled", "Remove the RC4/DES/MD5/NULL/EXPORT-class entries from ssl_ciphers and use a modern cipher list (e.g. Mozilla's intermediate configuration).", [MOZILLA_TLS]),
-  NGX003: meta3("NGX003", M, G, "Directory listing enabled", "Remove `autoindex on` (or scope it to a directory that is genuinely meant to be enumerated) so file listings aren't served to anyone who asks.", [CWE_DIR_LISTING]),
-  NGX004: meta3("NGX004", M, G, "alias path traversal", 'End the location prefix with "/" so it matches the trailing slash of the alias target \u2014 without it, a request for "<prefix>../" escapes the aliased directory.', [GIXY_ALIAS]),
-  NGX005: meta3("NGX005", M, G, "Status endpoint with no access restriction", "Restrict the stub_status location with allow/deny (or auth_basic/auth_request) so connection metrics aren't public reconnaissance.", [NGINX_STUB_STATUS]),
-  NGX006: meta3("NGX006", R, G, "Server version disclosure", "Add `server_tokens off;` in the http block so nginx stops advertising its exact version in the Server header and error pages."),
-  NGX007: meta3("NGX007", R, G, "Access logging disabled at server scope", "Re-enable access_log at http/server scope (silencing a single noisy location is fine) so requests are recorded for incident investigation."),
-  // ── Agent configuration (`chant audit --agents`) ──────────────────
-  AGT001: agentMeta(
-    "AGT001",
-    M,
-    "MCP server runs an unpinned package",
-    "Pin the package spec to an exact version (`server@1.2.3`), so a new upstream release can't execute on this machine unreviewed.",
-    [SCORECARD_PINNED]
-  ),
-  AGT002: agentMeta(
-    "AGT002",
-    M,
-    "Literal credential in agent config",
-    "Replace the value with an environment reference (`${TOKEN}`) and keep the secret in a secret store \u2014 agent config files sync, back up, and get shared.",
-    [CWE_HARDCODED_CREDS]
-  ),
-  AGT003: agentMeta(
-    "AGT003",
-    M,
-    "MCP server reached over cleartext HTTP",
-    "Use an https:// endpoint. Tool arguments and results \u2014 including data the agent read locally \u2014 otherwise cross the network in the clear.",
-    [CWE_CLEARTEXT]
-  ),
-  AGT004: agentMeta(
-    "AGT004",
-    M,
-    "Remote skill or plugin is unpinned",
-    "Pin the source to a tag or commit sha, so the instructions the agent follows can't change upstream without a local edit.",
-    [SCORECARD_PINNED]
-  ),
-  AGT005: agentMeta(
-    "AGT005",
-    M,
-    "Tool permission granted without constraint",
-    "Scope the grant to the specific commands you run (`Bash(git status:*)`), and re-enable the confirmation prompt for dangerous operations."
-  ),
-  AGT006: agentMeta(
-    "AGT006",
-    R,
-    "User-scope config applies to every project",
-    "Move project-specific instructions, MCP servers, and skills to that project's own config so they don't follow you into unrelated repos."
-  ),
-  AGT007: agentMeta(
-    "AGT007",
-    R,
-    "MCP server declared in multiple files",
-    "Delete the shadowed declarations. The harness silently picks one, so the file you read may not be the one that decides what runs."
-  ),
-  AGT008: agentMeta(
-    "AGT008",
-    R,
-    "Instruction file exceeds the attention budget",
-    "Move situational guidance into skills that load on demand, so the always-on instructions stay short enough to be followed reliably."
-  )
-};
-
-// node_modules/@intentius/chant/src/audit/proof.ts
-var SHA_RE = /^[0-9a-f]{40}$/;
-var USES_RE = /^(\s*-?\s*uses:\s*)([^@\s'"]+)@([^\s'"#]+)(.*)$/;
-var IMAGE_RE = /^(\s*image:\s*)(["']?)([^\s"'#]+)\2(.*)$/;
-function notApplied(checkId, reason, note) {
-  return { checkId, applied: false, reason, note };
-}
-function pinActions(content, opts) {
-  const lines = content.split("\n");
-  let changed = false;
-  let needsSha = false;
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(USES_RE);
-    if (!m) continue;
-    const [, prefix, action, ref, rest] = m;
-    if (SHA_RE.test(ref)) continue;
-    const sha = opts.resolveSha?.(action, ref);
-    if (!sha) {
-      needsSha = true;
-      continue;
-    }
-    lines[i] = `${prefix}${action}@${sha}  # ${ref}${rest.replace(/\s*#.*$/, "")}`;
-    changed = true;
-  }
-  return { patched: lines.join("\n"), changed, needsSha };
-}
-function isPinnableImage(ref) {
-  return !ref.includes("@sha256:") && !ref.includes("$");
-}
-function pinImages(content, opts) {
-  const lines = content.split("\n");
-  let changed = false;
-  let needsValue = false;
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(IMAGE_RE);
-    if (!m) continue;
-    const [, prefix, , ref, rest] = m;
-    if (!isPinnableImage(ref)) continue;
-    const digest = opts.resolveDigest?.(ref);
-    if (!digest) {
-      needsValue = true;
-      continue;
-    }
-    lines[i] = `${prefix}${ref}@${digest}${rest.replace(/\s*#.*$/, "")}`;
-    changed = true;
-  }
-  return { patched: lines.join("\n"), changed, needsValue };
-}
-function addPermissions(content) {
-  if (/^permissions:/m.test(content)) return { patched: content, changed: false };
-  const lines = content.split("\n");
-  const jobsIdx = lines.findIndex((l) => /^jobs:\s*$/.test(l));
-  if (jobsIdx === -1) return { patched: content, changed: false };
-  lines.splice(jobsIdx, 0, "permissions:", "  contents: read");
-  return { patched: lines.join("\n"), changed: true };
-}
-function narrowWriteAll(content) {
-  const re = /^permissions:[ \t]+write-all[ \t]*$/m;
-  if (!re.test(content)) return { patched: content, changed: false };
-  return { patched: content.replace(re, "permissions:\n  contents: read"), changed: true };
-}
-function proveFix(checkId, content, opts = {}) {
-  const cat = (opts.catalog ?? RULE_CATALOG)[checkId];
-  if (cat && cat.fixKind !== "deterministic") {
-    return notApplied(checkId, "guidance", cat.remediation || "Manual fix required.");
-  }
-  let result;
-  switch (checkId) {
-    case "GHA021":
-    case "GHA029":
-      result = pinActions(content, opts);
-      if (!result.changed && result.needsSha) {
-        return notApplied(checkId, "needs-input", "A commit SHA is required to pin; resolve it (e.g. via the fetch layer) and re-run.");
-      }
-      break;
-    case "GHA030":
-    case "WGL031": {
-      const r = pinImages(content, opts);
-      if (!r.changed && r.needsValue) {
-        return notApplied(checkId, "needs-input", "A registry digest is required to pin the image; resolve it (e.g. via the fetch layer) and re-run.");
-      }
-      result = r;
-      break;
-    }
-    case "GHA017":
-      result = addPermissions(content);
-      break;
-    case "GHA033":
-      result = narrowWriteAll(content);
-      break;
-    default:
-      return notApplied(checkId, "needs-input", cat?.remediation || "No deterministic fix implemented for this rule yet.");
-  }
-  if (!result.changed) {
-    return notApplied(checkId, "noop", "Nothing to fix \u2014 the issue is not present (no-op).");
-  }
-  return {
-    checkId,
-    applied: true,
-    reason: "applied",
-    patched: result.patched,
-    diff: unifiedDiff(content, result.patched)
-  };
-}
-function diffOps(a, b) {
-  const n = a.length;
-  const m = b.length;
-  const lcs = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-  for (let i2 = n - 1; i2 >= 0; i2--) {
-    for (let j2 = m - 1; j2 >= 0; j2--) {
-      lcs[i2][j2] = a[i2] === b[j2] ? lcs[i2 + 1][j2 + 1] + 1 : Math.max(lcs[i2 + 1][j2], lcs[i2][j2 + 1]);
-    }
-  }
-  const ops = [];
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (a[i] === b[j]) {
-      ops.push({ type: "eq", line: a[i] });
-      i++;
-      j++;
-    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-      ops.push({ type: "del", line: a[i] });
-      i++;
-    } else {
-      ops.push({ type: "add", line: b[j] });
-      j++;
-    }
-  }
-  while (i < n) ops.push({ type: "del", line: a[i++] });
-  while (j < m) ops.push({ type: "add", line: b[j++] });
-  return ops;
-}
-function unifiedDiff(oldStr, newStr, context = 3) {
-  const a = oldStr.split("\n");
-  const b = newStr.split("\n");
-  const ops = diffOps(a, b);
-  const keep = new Array(ops.length).fill(false);
-  for (let k2 = 0; k2 < ops.length; k2++) {
-    if (ops[k2].type !== "eq") {
-      for (let d = -context; d <= context; d++) {
-        const idx = k2 + d;
-        if (idx >= 0 && idx < ops.length) keep[idx] = true;
-      }
-    }
-  }
-  const lines = [];
-  let oldLine = 1;
-  let newLine = 1;
-  let k = 0;
-  while (k < ops.length) {
-    if (!keep[k]) {
-      if (ops[k].type !== "add") oldLine++;
-      if (ops[k].type !== "del") newLine++;
-      k++;
-      continue;
-    }
-    const hunk = [];
-    const oldStart = oldLine;
-    const newStart = newLine;
-    let oldCount = 0;
-    let newCount = 0;
-    while (k < ops.length && keep[k]) {
-      const op = ops[k];
-      if (op.type === "eq") {
-        hunk.push(` ${op.line}`);
-        oldCount++;
-        newCount++;
-        oldLine++;
-        newLine++;
-      } else if (op.type === "del") {
-        hunk.push(`-${op.line}`);
-        oldCount++;
-        oldLine++;
-      } else {
-        hunk.push(`+${op.line}`);
-        newCount++;
-        newLine++;
-      }
-      k++;
-    }
-    lines.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
-    lines.push(...hunk);
-  }
-  return lines.join("\n");
-}
-
-// node_modules/@intentius/chant/src/audit/report-model.ts
-var SEVERITY_WEIGHT = { error: 0, warning: 1, info: 2 };
-var SUPERSEDED_BY = {
-  WGL021: ["WGL016"]
-  // "unused variable" is noise when the var is a flagged hardcoded secret
-};
-function metaFor(id, catalog = RULE_CATALOG) {
-  return catalog[id] ?? {
-    id,
-    tier: "report-only",
-    fixKind: "guidance",
-    title: id,
-    remediation: "",
-    yamlBased: true
-  };
-}
-function sortFindings(a, b) {
-  const sev = SEVERITY_WEIGHT[a.severity] - SEVERITY_WEIGHT[b.severity];
-  if (sev !== 0) return sev;
-  if (a.checkId !== b.checkId) return a.checkId < b.checkId ? -1 : 1;
-  return a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
-}
-function byFile(items) {
-  const map2 = /* @__PURE__ */ new Map();
-  for (const it of [...items].sort((a, b) => a.file < b.file ? -1 : a.file > b.file ? 1 : 0)) {
-    const list = map2.get(it.file) ?? [];
-    list.push(it);
-    map2.set(it.file, list);
-  }
-  return map2;
-}
-function clusterName(m) {
-  return m.authority?.[0]?.name ?? "General hardening";
-}
-function buildQuickWins(findings, contents, proveOpts, catalog = RULE_CATALOG) {
-  const out = [];
-  for (const [file2, group] of byFile(findings)) {
-    const ids = [...new Set(group.map((f) => f.checkId))].sort();
-    const original = contents.get(file2);
-    const addressed = [];
-    const needsInput = [];
-    let patched = original;
-    if (original !== void 0) {
-      for (const id of ids) {
-        const res = proveFix(id, patched ?? original, { ...proveOpts, catalog });
-        if (res.applied && res.patched !== void 0) {
-          patched = res.patched;
-          addressed.push(metaFor(id, catalog));
-        } else if (res.reason === "needs-input") {
-          needsInput.push(...group.filter((f) => f.checkId === id));
-        }
-      }
-    } else {
-      for (const f of group) needsInput.push(f);
-    }
-    const diff2 = original !== void 0 && patched !== void 0 && patched !== original ? unifiedDiff(original, patched) : void 0;
-    const seen = /* @__PURE__ */ new Set();
-    const deduped = needsInput.filter((f) => {
-      const k = `${f.checkId}:${f.entity ?? ""}`;
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-    out.push({ file: file2, diff: diff2, addressed, needsInput: deduped });
-  }
-  return out;
-}
-function buildClusters(findings) {
-  const clusters = /* @__PURE__ */ new Map();
-  for (const f of [...findings].sort(sortFindings)) {
-    const key = clusterName(f.meta);
-    const list = clusters.get(key) ?? [];
-    list.push(f);
-    clusters.set(key, list);
-  }
-  return [...clusters.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1).map(([name, group]) => {
-    const byRule = /* @__PURE__ */ new Map();
-    for (const f of group) {
-      const list = byRule.get(f.checkId) ?? [];
-      list.push(f);
-      byRule.set(f.checkId, list);
-    }
-    return {
-      name,
-      url: group[0].meta.authority?.[0]?.url,
-      rules: [...byRule.values()].map((findings2) => ({ meta: findings2[0].meta, findings: findings2 }))
-    };
-  });
-}
-function buildReportModel(findings, opts = {}) {
-  const catalog = opts.catalog ?? RULE_CATALOG;
-  const enriched = findings.map((f) => ({ ...f, meta: metaFor(f.checkId, catalog) }));
-  const contents = new Map((opts.files ?? []).map((f) => [f.path, f.content]));
-  const mergeWorthy = enriched.filter((f) => f.meta.tier === "merge-worthy");
-  const quickWinFindings = mergeWorthy.filter((f) => f.meta.fixKind === "deterministic");
-  const needsReviewFindings = mergeWorthy.filter((f) => f.meta.fixKind === "guidance");
-  const mwOnEntity = new Set(mergeWorthy.filter((f) => f.entity).map((f) => `${f.file}:${f.entity}:${f.checkId}`));
-  const reportOnly = enriched.filter((f) => {
-    if (f.meta.tier !== "report-only") return false;
-    const supers = SUPERSEDED_BY[f.checkId];
-    if (supers && f.entity && supers.some((id) => mwOnEntity.has(`${f.file}:${f.entity}:${id}`))) return false;
-    return true;
-  });
-  const shown = [...quickWinFindings, ...needsReviewFindings, ...reportOnly];
-  const counts = {
-    total: shown.length,
-    quickWin: quickWinFindings.length,
-    needsReview: needsReviewFindings.length,
-    reportOnly: reportOnly.length,
-    errors: shown.filter((f) => f.severity === "error").length,
-    warnings: shown.filter((f) => f.severity === "warning").length,
-    infos: shown.filter((f) => f.severity === "info").length,
-    security: shown.filter((f) => f.meta.category === "security").length,
-    correctness: shown.filter((f) => f.meta.category === "correctness").length,
-    bestPractice: shown.filter((f) => f.meta.category === "best-practice").length,
-    efficiency: shown.filter((f) => f.meta.category === "efficiency").length
-  };
-  return {
-    counts,
-    quickWins: buildQuickWins(quickWinFindings, contents, { resolveSha: opts.resolveSha, resolveDigest: opts.resolveDigest }, catalog),
-    needsReview: buildClusters(needsReviewFindings),
-    reportOnly: [...reportOnly].sort(sortFindings),
-    findings: [...shown].sort(sortFindings)
-  };
-}
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/yaml-helpers.ts
-init_yaml();
-init_post_synth();
-function getDependabotYaml(output) {
-  if (typeof output === "string") return void 0;
-  return output.files?.["dependabot.yml"];
-}
-function extractDependabotUpdates(dependabotYaml) {
-  let doc;
-  try {
-    doc = parseYAML(dependabotYaml);
-  } catch {
-    return [];
-  }
-  const updates = doc.updates;
-  return Array.isArray(updates) ? updates : [];
-}
-function extractJobs(yaml) {
-  const jobs = /* @__PURE__ */ new Map();
-  const jobsIdx = yaml.search(/^jobs:\s*$/m);
-  if (jobsIdx === -1) return jobs;
-  const afterJobs = yaml.slice(jobsIdx + yaml.slice(jobsIdx).indexOf("\n") + 1);
-  const endMatch = afterJobs.search(/^[a-z]/m);
-  const jobsContent = endMatch === -1 ? afterJobs : afterJobs.slice(0, endMatch);
-  const jobSections = jobsContent.split(/\n(?=  [a-z][a-z0-9-]*:)/);
-  for (const section of jobSections) {
-    const nameMatch = section.match(/^\s{2}([a-z][a-z0-9-]*):/);
-    if (!nameMatch) continue;
-    const name = nameMatch[1];
-    const job = { name };
-    const needsInline = section.match(/^\s{4}needs:\s+\[(.+)\]$/m);
-    if (needsInline) {
-      job.needs = needsInline[1].split(",").map((s) => s.trim().replace(/^'|'$/g, "").replace(/^"|"$/g, ""));
-    } else {
-      const needsList = section.match(/^\s{4}needs:\n((?:\s{6}- .+\n?)+)/m);
-      if (needsList) {
-        job.needs = [];
-        for (const line of needsList[1].split("\n")) {
-          const item = line.match(/^\s{6}- (.+)$/);
-          if (item) job.needs.push(item[1].trim().replace(/^'|'$/g, "").replace(/^"|"$/g, ""));
-        }
-      }
-    }
-    const stepsMatch = section.match(/^\s{4}steps:\n([\s\S]*?)(?=\n\s{4}[a-z]|\n\s{2}[a-z]|$)/m);
-    if (stepsMatch) {
-      job.steps = [];
-      const stepEntries = stepsMatch[1].split(/\n(?=\s{6}- )/);
-      for (const stepEntry of stepEntries) {
-        const usesMatch = stepEntry.match(/uses:\s+(.+)$/m);
-        const runMatch = stepEntry.match(/run:\s+(.+)$/m);
-        const stepNameMatch = stepEntry.match(/name:\s+(.+)$/m);
-        if (usesMatch || runMatch) {
-          job.steps.push({
-            uses: usesMatch?.[1] ? stripUsesComment(usesMatch[1].trim().replace(/^'|'$/g, "")) : void 0,
-            run: runMatch?.[1]?.trim(),
-            name: stepNameMatch?.[1]?.trim().replace(/^'|'$/g, "")
-          });
-        }
-      }
-    }
-    jobs.set(name, job);
-  }
-  return jobs;
-}
-function extractTriggers(yaml) {
-  const onMatch = yaml.match(/^on:\n([\s\S]*?)(?=\n[a-z]|$)/m);
-  if (!onMatch) return {};
-  const triggers = {};
-  const lines = onMatch[1].split("\n");
-  for (const line of lines) {
-    const triggerMatch = line.match(/^\s{2}([a-z_]+):/);
-    if (triggerMatch) {
-      triggers[triggerMatch[1]] = true;
-    }
-  }
-  return triggers;
-}
-function hasCheckoutAction(steps) {
-  return steps.some((s) => s.uses?.startsWith("actions/checkout"));
-}
-function buildNeedsGraph(yaml) {
-  const jobs = extractJobs(yaml);
-  const graph = /* @__PURE__ */ new Map();
-  for (const [name, job] of jobs) {
-    graph.set(name, job.needs ?? []);
-  }
-  return graph;
-}
-function extractWorkflowName(yaml) {
-  const match = yaml.match(/^name:\s+(.+)$/m);
-  return match?.[1]?.trim().replace(/^'|'$/g, "");
-}
-function hasPermissions(yaml) {
-  return /^permissions:/m.test(yaml);
-}
-function parseDoc(yaml) {
-  try {
-    return parseYAML(yaml);
-  } catch {
-    return void 0;
-  }
-}
-function jobEntries(yaml) {
-  const doc = parseDoc(yaml);
-  const jobs = doc?.jobs;
-  if (!jobs || typeof jobs !== "object") return [];
-  const out = [];
-  for (const [name, val] of Object.entries(jobs)) {
-    if (val && typeof val === "object" && !Array.isArray(val)) {
-      out.push([name, val]);
-    }
-  }
-  return out;
-}
-function extractStepsByJob(yaml) {
-  const out = /* @__PURE__ */ new Map();
-  for (const [job, jobObj] of jobEntries(yaml)) {
-    const steps = jobObj.steps;
-    if (!Array.isArray(steps)) continue;
-    out.set(
-      job,
-      steps.filter((s) => !!s && typeof s === "object" && !Array.isArray(s))
-    );
-  }
-  return out;
-}
-function extractActionRefs(yaml) {
-  const refs = [];
-  for (const [job, jobObj] of jobEntries(yaml)) {
-    if (typeof jobObj.uses === "string") {
-      refs.push({ job, ref: jobObj.uses, level: "job" });
-    }
-    const steps = jobObj.steps;
-    if (Array.isArray(steps)) {
-      for (const step of steps) {
-        if (step && typeof step === "object" && typeof step.uses === "string") {
-          refs.push({ job, ref: step.uses, level: "step" });
-        }
-      }
-    }
-  }
-  return refs;
-}
-function extractImageRefs(yaml) {
-  const refs = [];
-  for (const [job, jobObj] of jobEntries(yaml)) {
-    const container = jobObj.container;
-    if (typeof container === "string") {
-      refs.push({ job, image: container, source: "container" });
-    } else if (container && typeof container === "object" && typeof container.image === "string") {
-      refs.push({ job, image: container.image, source: "container" });
-    }
-    const services = jobObj.services;
-    if (services && typeof services === "object" && !Array.isArray(services)) {
-      for (const svc of Object.values(services)) {
-        if (typeof svc === "string") {
-          refs.push({ job, image: svc, source: "service" });
-        } else if (svc && typeof svc === "object" && typeof svc.image === "string") {
-          refs.push({ job, image: svc.image, source: "service" });
-        }
-      }
-    }
-    const steps = jobObj.steps;
-    if (Array.isArray(steps)) {
-      for (const step of steps) {
-        const uses = step && typeof step === "object" ? step.uses : void 0;
-        if (typeof uses === "string" && uses.startsWith("docker://")) {
-          refs.push({ job, image: uses.slice("docker://".length), source: "step" });
-        }
-      }
-    }
-  }
-  return refs;
-}
-function scanJobLines(yaml, onLine) {
-  const lines = yaml.split("\n");
-  let inJobs = false;
-  let currentJob = "";
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (/^jobs:\s*$/.test(line)) {
-      inJobs = true;
-      continue;
-    }
-    if (!inJobs) continue;
-    if (/^\S/.test(line)) {
-      inJobs = false;
-      continue;
-    }
-    const jobHeader = line.match(/^ {2}([A-Za-z0-9_-]+):\s*$/);
-    if (jobHeader) {
-      currentJob = jobHeader[1];
-      continue;
-    }
-    if (!currentJob) continue;
-    const indent = line.search(/\S/);
-    if (indent < 0) continue;
-    onLine(currentJob, line, indent, i, lines);
-  }
-}
-function extractRunBlocks(yaml) {
-  const out = [];
-  const consumed = /* @__PURE__ */ new Set();
-  scanJobLines(yaml, (job, line, _indent, lineNo, lines) => {
-    if (consumed.has(lineNo)) return;
-    const m = line.match(/^(\s*)(- )?run:\s*(.*)$/);
-    if (!m) return;
-    const keyIndent = m[1].length + (m[2] ? 2 : 0);
-    const value = m[3].trim();
-    if (value === "|" || value === "|-" || value === ">" || value === ">-" || value === "|+" || value === ">+") {
-      const blockLines = [];
-      for (let j = lineNo + 1; j < lines.length; j++) {
-        const bl = lines[j];
-        if (bl.trim() === "") {
-          blockLines.push("");
-          consumed.add(j);
-          continue;
-        }
-        const bi = bl.search(/\S/);
-        if (bi <= keyIndent) break;
-        blockLines.push(bl.trimStart());
-        consumed.add(j);
-      }
-      out.push({ job, run: blockLines.join("\n") });
-    } else {
-      out.push({ job, run: value.replace(/^['"]|['"]$/g, "") });
-    }
-  });
-  return out;
-}
-function extractIfConditions(yaml) {
-  const out = [];
-  scanJobLines(yaml, (job, line) => {
-    const m = line.match(/^\s+(?:- )?if:\s*(.+)$/);
-    if (m) out.push({ job, expr: m[1].trim().replace(/^['"]|['"]$/g, "") });
-  });
-  return out;
-}
-function extractRunsOnByJob(yaml) {
-  const out = /* @__PURE__ */ new Map();
-  scanJobLines(yaml, (job, line, indent, lineNo, lines) => {
-    const m = line.match(/^\s+runs-on:\s*(.*)$/);
-    if (!m) return;
-    const value = m[1].trim();
-    const labels = [];
-    if (value === "") {
-      for (let j = lineNo + 1; j < lines.length; j++) {
-        const item = lines[j].match(/^\s+- (.+)$/);
-        if (!item) break;
-        labels.push(item[1].trim().replace(/^['"]|['"]$/g, ""));
-      }
-    } else if (value.startsWith("[")) {
-      for (const part of value.replace(/^\[|\]$/g, "").split(",")) {
-        const t = part.trim().replace(/^['"]|['"]$/g, "");
-        if (t) labels.push(t);
-      }
-    } else {
-      labels.push(value.replace(/^['"]|['"]$/g, ""));
-    }
-    out.set(job, labels);
-  });
-  return out;
-}
-function extractExpressions(text) {
-  const out = [];
-  const re = /\$\{\{(.+?)\}\}/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    out.push(m[1].trim());
-  }
-  return out;
-}
-function jobLines(yaml) {
-  const out = [];
-  scanJobLines(yaml, (job, line) => out.push({ job, line }));
-  return out;
-}
-function linesByJob(yaml) {
-  const out = /* @__PURE__ */ new Map();
-  scanJobLines(yaml, (job, line) => {
-    const arr = out.get(job) ?? [];
-    arr.push(line);
-    out.set(job, arr);
-  });
-  return out;
-}
-function extractJobEnvironments(yaml) {
-  const set2 = /* @__PURE__ */ new Set();
-  scanJobLines(yaml, (job, line) => {
-    if (/^\s+environment:/.test(line)) set2.add(job);
-  });
-  return set2;
-}
-function jobsReferencingSecrets(yaml) {
-  const set2 = /* @__PURE__ */ new Set();
-  scanJobLines(yaml, (job, line) => {
-    if (/secrets\./.test(line)) set2.add(job);
-  });
-  return set2;
-}
-function extractWorkflowPermissions(yaml) {
-  const doc = parseDoc(yaml);
-  const perms = doc?.permissions;
-  if (typeof perms === "string") return perms;
-  if (perms && typeof perms === "object" && !Array.isArray(perms)) return perms;
-  return void 0;
-}
-function extractJobPermissions(yaml) {
-  const out = /* @__PURE__ */ new Map();
-  for (const [job, jobObj] of jobEntries(yaml)) {
-    const perms = jobObj.permissions;
-    if (typeof perms === "string") out.set(job, perms);
-    else if (perms && typeof perms === "object" && !Array.isArray(perms)) out.set(job, perms);
-  }
-  return out;
-}
-function writeSurface(perms) {
-  if (typeof perms === "string") {
-    return { writeAll: perms === "write-all", scopes: [] };
-  }
-  const scopes = [];
-  for (const [scope, level] of Object.entries(perms)) {
-    if (level === "write") scopes.push(scope);
-  }
-  return { writeAll: false, scopes };
-}
-function grantsWrite(perms) {
-  const { writeAll, scopes } = writeSurface(perms);
-  return writeAll || scopes.length > 0;
-}
-function stripUsesComment(uses) {
-  return uses.replace(/\s+#.*$/, "").trim();
-}
-function extractUsesComment(rawUses) {
-  const m = rawUses.match(/\s+#\s*(.*)$/);
-  const comment = m?.[1]?.trim();
-  return comment ? comment : void 0;
-}
-function parseActionUses(rawUses) {
-  const uses = stripUsesComment(rawUses);
-  if (uses.startsWith("./") || uses.startsWith("../") || uses.startsWith("docker://")) return void 0;
-  const at = uses.lastIndexOf("@");
-  const path = at === -1 ? uses : uses.slice(0, at);
-  const gitRef = at === -1 ? "" : uses.slice(at + 1);
-  const segments = path.split("/");
-  if (segments.length < 2 || !segments[0] || !segments[1]) return void 0;
-  return { owner: segments[0], repo: segments[1], slug: `${segments[0]}/${segments[1]}`, gitRef };
-}
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha006.ts
-var gha006 = {
-  id: "GHA006",
-  description: "Multiple workflows share the same name",
-  check(ctx) {
-    const diagnostics = [];
-    const nameMap = /* @__PURE__ */ new Map();
-    for (const [outputName, output] of ctx.outputs) {
-      const yaml = typeof output === "string" ? output : output.primary;
-      if (typeof output === "object" && "files" in output) {
-        const result = output;
-        if (result.files) {
-          for (const [fileName, fileContent] of Object.entries(result.files)) {
-            const name = extractWorkflowName(fileContent);
-            if (name) {
-              const existing = nameMap.get(name) ?? [];
-              existing.push(fileName);
-              nameMap.set(name, existing);
-            }
-          }
-        }
-      } else {
-        const name = extractWorkflowName(yaml);
-        if (name) {
-          const existing = nameMap.get(name) ?? [];
-          existing.push(outputName);
-          nameMap.set(name, existing);
-        }
-      }
-    }
-    for (const [name, files] of nameMap) {
-      if (files.length > 1) {
-        diagnostics.push({
-          checkId: "GHA006",
-          severity: "error",
-          message: `Duplicate workflow name "${name}" found in: ${files.join(", ")}`,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha009.ts
-var gha009 = {
-  id: "GHA009",
-  description: "Matrix dimension has empty values array",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const matrixMatch = yaml.match(/matrix:\n([\s\S]*?)(?=\n\s{4}[a-z]|\n\s{2}[a-z]|\n[a-z]|$)/gm);
-      if (!matrixMatch) continue;
-      for (const section of matrixMatch) {
-        const lines = section.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-          const keyMatch = lines[i].match(/^\s+([a-z][a-z0-9_-]*):\s*\[\s*\]\s*$/);
-          if (keyMatch) {
-            diagnostics.push({
-              checkId: "GHA009",
-              severity: "error",
-              message: `Matrix dimension "${keyMatch[1]}" has an empty values array.`,
-              lexicon: "github"
-            });
-          }
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha011.ts
-var gha011 = {
-  id: "GHA011",
-  description: "Job needs: references non-existent job",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const jobs = extractJobs(yaml);
-      const jobNames = new Set(jobs.keys());
-      for (const [jobName, job] of jobs) {
-        if (!job.needs) continue;
-        for (const need of job.needs) {
-          if (!jobNames.has(need)) {
-            diagnostics.push({
-              checkId: "GHA011",
-              severity: "error",
-              message: `Job "${jobName}" needs "${need}", but no such job exists.`,
-              entity: jobName,
-              lexicon: "github"
-            });
-          }
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha013.ts
-var gha013 = {
-  id: "GHA013",
-  description: "Missing job-level permissions for sensitive triggers",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      if (!triggers["pull_request_target"] && !triggers["workflow_dispatch"]) continue;
-      const jobs = extractJobs(yaml);
-      const jobPermissions = extractJobPermissions(yaml);
-      for (const [jobName] of jobs) {
-        if (!jobPermissions.has(jobName)) {
-          diagnostics.push({
-            checkId: "GHA013",
-            severity: "warning",
-            message: `Job "${jobName}" lacks explicit permissions but workflow uses a sensitive trigger. Add job-level permissions for least-privilege security.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha017.ts
-var gha017 = {
-  id: "GHA017",
-  description: "Workflow without explicit permissions block",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      if (!hasPermissions(yaml)) {
-        diagnostics.push({
-          checkId: "GHA017",
-          severity: "info",
-          message: "Workflow does not specify permissions. Consider adding explicit permissions for least-privilege security.",
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha018.ts
-var gha018 = {
-  id: "GHA018",
-  description: "pull_request_target with checkout action is a security risk",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      if (!triggers["pull_request_target"]) continue;
-      const jobs = extractJobs(yaml);
-      for (const [jobName, job] of jobs) {
-        if (job.steps && hasCheckoutAction(job.steps)) {
-          diagnostics.push({
-            checkId: "GHA018",
-            severity: "warning",
-            message: `Job "${jobName}" uses checkout with pull_request_target trigger. This runs untrusted PR code with write permissions \u2014 a security risk.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha019.ts
-function checkCircularNeeds(ctx) {
-  const diagnostics = [];
-  for (const [, output] of ctx.outputs) {
-    let dfs = function(node, path) {
-      if (inStack.has(node)) {
-        const cycleStart = path.indexOf(node);
-        const cycle = path.slice(cycleStart);
-        cycle.push(node);
-        const cycleKey = [...cycle].sort().join(",");
-        if (!reportedInCycle.has(cycleKey)) {
-          reportedInCycle.add(cycleKey);
-          diagnostics.push({
-            checkId: "GHA019",
-            severity: "error",
-            message: `Circular needs: chain detected: ${cycle.join(" \u2192 ")}`,
-            entity: node,
-            lexicon: "github"
-          });
-        }
-        return;
-      }
-      if (visited.has(node)) return;
-      visited.add(node);
-      inStack.add(node);
-      for (const neighbor of graph.get(node) ?? []) {
-        if (graph.has(neighbor)) {
-          dfs(neighbor, [...path, node]);
-        }
-      }
-      inStack.delete(node);
-    };
-    const yaml = getPrimaryOutput(output);
-    const graph = buildNeedsGraph(yaml);
-    const visited = /* @__PURE__ */ new Set();
-    const inStack = /* @__PURE__ */ new Set();
-    const reportedInCycle = /* @__PURE__ */ new Set();
-    for (const jobName of graph.keys()) {
-      if (!visited.has(jobName)) {
-        dfs(jobName, []);
-      }
-    }
-  }
-  return diagnostics;
-}
-var gha019 = {
-  id: "GHA019",
-  description: "Circular needs: chain \u2014 cycle in job dependency graph",
-  check(ctx) {
-    return checkCircularNeeds(ctx);
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha021.ts
-var gha021 = {
-  id: "GHA021",
-  description: "actions/checkout used without pinned SHA",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const jobs = extractJobs(yaml);
-      for (const [jobName, job] of jobs) {
-        if (!job.steps) continue;
-        for (const step of job.steps) {
-          if (!step.uses) continue;
-          const match = step.uses.match(/^actions\/checkout@(.+)$/);
-          if (!match) continue;
-          const ref = match[1];
-          if (/^[0-9a-f]{40}$/.test(ref)) continue;
-          diagnostics.push({
-            checkId: "GHA021",
-            severity: "warning",
-            message: `Job "${jobName}" uses actions/checkout@${ref} \u2014 pin to a full commit SHA for supply-chain security.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha022.ts
-var gha022 = {
-  id: "GHA022",
-  description: "Job without timeout-minutes",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const jobs = extractJobs(yaml);
-      const jobsIdx = yaml.search(/^jobs:\s*$/m);
-      if (jobsIdx === -1) continue;
-      const jobsContent = yaml.slice(jobsIdx + yaml.slice(jobsIdx).indexOf("\n") + 1);
-      for (const [jobName] of jobs) {
-        const jobHeader = `  ${jobName}:
-`;
-        const start = jobsContent.indexOf(jobHeader);
-        if (start === -1) continue;
-        const rest = jobsContent.slice(start + jobHeader.length);
-        const nextJobMatch = rest.search(/\n  \w/);
-        const section = nextJobMatch === -1 ? rest : rest.slice(0, nextJobMatch);
-        if (!/timeout-minutes:/.test(section)) {
-          diagnostics.push({
-            checkId: "GHA022",
-            severity: "info",
-            message: `Job "${jobName}" does not specify timeout-minutes. Consider adding a timeout to prevent hung workflows.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha023.ts
-var gha023 = {
-  id: "GHA023",
-  description: "Deprecated ::set-output command usage",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const jobs = extractJobs(yaml);
-      for (const [jobName, job] of jobs) {
-        if (!job.steps) continue;
-        for (const step of job.steps) {
-          if (!step.run) continue;
-          if (step.run.includes("::set-output")) {
-            const stepLabel = step.name ?? "unnamed step";
-            diagnostics.push({
-              checkId: "GHA023",
-              severity: "warning",
-              message: `Job "${jobName}" step "${stepLabel}" uses deprecated ::set-output. Use $GITHUB_OUTPUT instead.`,
-              entity: jobName,
-              lexicon: "github"
-            });
-          }
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha024.ts
-var gha024 = {
-  id: "GHA024",
-  description: "Missing concurrency block for deploy workflow",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const workflowName = extractWorkflowName(yaml) ?? "";
-      const jobs = extractJobs(yaml);
-      const jobNames = [...jobs.keys()];
-      const isDeployWorkflow = /deploy/i.test(workflowName) || jobNames.some((name) => /deploy/i.test(name));
-      if (!isDeployWorkflow) continue;
-      if (!/^\s*concurrency:/m.test(yaml)) {
-        diagnostics.push({
-          checkId: "GHA024",
-          severity: "info",
-          message: "Deploy workflow does not specify concurrency. Add a concurrency block to prevent overlapping deployments.",
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha025.ts
-var gha025 = {
-  id: "GHA025",
-  description: "Using pull_request_target without restrictions",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      if (!triggers["pull_request_target"]) continue;
-      const prtSection = yaml.match(/^\s{2}pull_request_target:\s*\n((?:\s{4,}.+\n)*)/m);
-      const hasTypes = prtSection?.[1]?.match(/^\s+types:/m);
-      if (!hasTypes) {
-        diagnostics.push({
-          checkId: "GHA025",
-          severity: "warning",
-          message: "Workflow uses `pull_request_target` without a `types:` filter. This exposes secrets to all fork PRs. Add a `types:` restriction (e.g., [labeled, opened]) to limit exposure.",
-          entity: "pull_request_target",
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha026.ts
-var gha026 = {
-  id: "GHA026",
-  description: "Secret passed to action without environment protection",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const usesSecrets = /secrets\./m.test(yaml);
-      if (!usesSecrets) continue;
-      const hasEnvironment = /^\s+environment:/m.test(yaml);
-      if (hasEnvironment) continue;
-      diagnostics.push({
-        checkId: "GHA026",
-        severity: "info",
-        message: "Workflow references secrets but no job defines an `environment:`. Consider using environment protection rules to gate secret access with required reviewers or wait timers.",
-        entity: "secrets",
-        lexicon: "github"
-      });
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha027.ts
-var CLEANUP_PATTERN = /cleanup|teardown|clean\s+up/i;
-var gha027 = {
-  id: "GHA027",
-  description: "Missing `if: always()` on cleanup steps",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const stepPattern = /-\s+name:\s+(.+)/g;
-      let match;
-      while ((match = stepPattern.exec(yaml)) !== null) {
-        const stepName = match[1].trim().replace(/^['"]|['"]$/g, "");
-        if (!CLEANUP_PATTERN.test(stepName)) continue;
-        const afterName = yaml.slice(match.index + match[0].length);
-        const blockEnd = afterName.search(/\n\s{6}-\s|\n\s{2}[a-z]/);
-        const block = blockEnd === -1 ? afterName : afterName.slice(0, blockEnd);
-        if (!/^\s+if:/m.test(block)) {
-          const beforeStep = yaml.slice(0, match.index);
-          const jobMatch = [...beforeStep.matchAll(/^\s{2}([a-z][a-z0-9-]*):/gm)];
-          const jobName = jobMatch.length > 0 ? jobMatch[jobMatch.length - 1][1] : "unknown";
-          diagnostics.push({
-            checkId: "GHA027",
-            severity: "info",
-            message: `Step "${stepName}" in job "${jobName}" looks like a cleanup step but has no \`if:\` condition. Add \`if: always()\` so it runs even when prior steps fail.`,
-            entity: `${jobName}.${stepName}`,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha028.ts
-var gha028 = {
-  id: "GHA028",
-  description: "Workflow with no `on` triggers",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const hasOn = /^on:/m.test(yaml);
-      if (!hasOn) {
-        diagnostics.push({
-          checkId: "GHA028",
-          severity: "error",
-          message: "Workflow has no `on:` trigger block. Without triggers the workflow will never run. Add an `on:` section with at least one event.",
-          entity: "on",
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/trusted-action-owners.ts
-var TRUSTED_ACTION_OWNERS = /* @__PURE__ */ new Set([]);
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha029.ts
-var SHA_RE2 = /^[0-9a-f]{40}$/;
-function findUnpinnedActions(yaml, trustedOwners = TRUSTED_ACTION_OWNERS) {
-  const result = [];
-  for (const { job, ref } of extractActionRefs(yaml)) {
-    const parsed = parseActionUses(ref);
-    if (!parsed) continue;
-    if (parsed.slug === "actions/checkout") continue;
-    if (trustedOwners.has(parsed.owner)) continue;
-    if (SHA_RE2.test(parsed.gitRef)) continue;
-    result.push({ job, ref, slug: parsed.slug });
-  }
-  return result;
-}
-var gha029 = {
-  id: "GHA029",
-  description: "Action or reusable workflow not pinned to a commit SHA",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, ref } of findUnpinnedActions(yaml)) {
-        diagnostics.push({
-          checkId: "GHA029",
-          severity: "warning",
-          message: `Job "${job}" uses ${ref} pinned to a tag or branch \u2014 pin to a full commit SHA for supply-chain security.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha030.ts
-var SOURCE_LABEL = {
-  container: "container image",
-  service: "service image",
-  step: "docker:// image"
-};
-var gha030 = {
-  id: "GHA030",
-  description: "Container image not pinned to an immutable digest",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, image, source } of extractImageRefs(yaml)) {
-        if (image.includes("@sha256:")) continue;
-        diagnostics.push({
-          checkId: "GHA030",
-          severity: "warning",
-          message: `Job "${job}" ${SOURCE_LABEL[source]} "${image}" is not pinned to a digest \u2014 reference it by @sha256:... so the image cannot change after review.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/known-action-slugs.ts
-var KNOWN_ACTION_SLUGS = [
-  "actions/checkout",
-  "actions/setup-node",
-  "actions/setup-python",
-  "actions/setup-go",
-  "actions/setup-java",
-  "actions/setup-dotnet",
-  "actions/cache",
-  "actions/upload-artifact",
-  "actions/download-artifact",
-  "actions/github-script",
-  "actions/stale",
-  "actions/labeler",
-  "actions/dependency-review-action",
-  "docker/build-push-action",
-  "docker/login-action",
-  "docker/setup-buildx-action",
-  "docker/setup-qemu-action",
-  "docker/metadata-action",
-  "aws-actions/configure-aws-credentials",
-  "azure/login",
-  "google-github-actions/auth",
-  "hashicorp/setup-terraform",
-  "codecov/codecov-action",
-  "softprops/action-gh-release",
-  "peter-evans/create-pull-request"
-];
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha031.ts
-var KNOWN = new Set(KNOWN_ACTION_SLUGS);
-function editDistance(a, b, max) {
-  if (a === b) return 0;
-  if (Math.abs(a.length - b.length) > max) return max + 1;
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const curr = [i];
-    let rowMin = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      const val = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
-      curr.push(val);
-      if (val < rowMin) rowMin = val;
-    }
-    if (rowMin > max) return max + 1;
-    prev = curr;
-  }
-  return prev[b.length];
-}
-function nearestLookAlike(slug2) {
-  if (KNOWN.has(slug2)) return void 0;
-  let best;
-  let bestDist = 3;
-  for (const known of KNOWN) {
-    const d = editDistance(slug2, known, 2);
-    if (d >= 1 && d <= 2 && d < bestDist) {
-      best = known;
-      bestDist = d;
-    }
-  }
-  return best;
-}
-var gha031 = {
-  id: "GHA031",
-  description: "Action reference resembles a well-known action (possible impersonation)",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, ref } of extractActionRefs(yaml)) {
-        const parsed = parseActionUses(ref);
-        if (!parsed) continue;
-        const lookAlike = nearestLookAlike(parsed.slug);
-        if (!lookAlike) continue;
-        diagnostics.push({
-          checkId: "GHA031",
-          severity: "warning",
-          message: `Job "${job}" uses "${parsed.slug}", which closely resembles the well-known action "${lookAlike}". Confirm the owner is who you intend \u2014 this may be a typo or impersonation.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/flagged-actions.ts
-var FLAGGED_ACTIONS = {
-  "tj-actions/changed-files": {
-    reason: "supply-chain compromise disclosed March 2025 (CVE-2025-30066) \u2014 tags were repointed to leak CI secrets",
-    remediation: "pin to a vetted commit SHA from before the compromise, or migrate to an audited alternative"
-  },
-  "actions/setup-ruby": {
-    reason: "archived and unmaintained",
-    remediation: "use ruby/setup-ruby"
-  },
-  "actions/create-release": {
-    reason: "archived and unmaintained",
-    remediation: "use softprops/action-gh-release or the gh CLI"
-  },
-  "actions/upload-release-asset": {
-    reason: "archived and unmaintained",
-    remediation: "use softprops/action-gh-release or the gh CLI"
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha032.ts
-var gha032 = {
-  id: "GHA032",
-  description: "Action is archived/abandoned or has a disclosed security issue",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, ref } of extractActionRefs(yaml)) {
-        const parsed = parseActionUses(ref);
-        if (!parsed) continue;
-        const flagged = FLAGGED_ACTIONS[parsed.slug];
-        if (!flagged) continue;
-        diagnostics.push({
-          checkId: "GHA032",
-          severity: "warning",
-          message: `Job "${job}" uses "${parsed.slug}" \u2014 ${flagged.reason}. ${flagged.remediation}.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha033.ts
-var gha033 = {
-  id: "GHA033",
-  description: "Blanket write-all token permissions",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const wf = extractWorkflowPermissions(yaml);
-      if (wf && writeSurface(wf).writeAll) {
-        diagnostics.push({
-          checkId: "GHA033",
-          severity: "warning",
-          message: `Workflow declares permissions: write-all \u2014 replace it with the specific scopes the jobs actually need (least privilege).`,
-          lexicon: "github"
-        });
-      }
-      for (const [job, perms] of extractJobPermissions(yaml)) {
-        if (writeSurface(perms).writeAll) {
-          diagnostics.push({
-            checkId: "GHA033",
-            severity: "warning",
-            message: `Job "${job}" declares permissions: write-all \u2014 replace it with the specific scopes this job needs (least privilege).`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha034.ts
-var gha034 = {
-  id: "GHA034",
-  description: "Write permissions granted workflow-wide instead of per-job",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const wf = extractWorkflowPermissions(yaml);
-      if (!wf) continue;
-      const { writeAll, scopes } = writeSurface(wf);
-      if (writeAll) continue;
-      if (scopes.length === 0) continue;
-      diagnostics.push({
-        checkId: "GHA034",
-        severity: "warning",
-        message: `Workflow grants write scope (${scopes.join(", ")}) for all jobs \u2014 move each write scope onto the specific job that needs it for least privilege.`,
-        lexicon: "github"
-      });
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha035.ts
-var UNTRUSTED_TRIGGERS = ["pull_request_target", "workflow_run"];
-function describeWrite(perms) {
-  return perms.writeAll ? "write-all" : perms.scopes.map((s) => `${s}: write`).join(", ");
-}
-var gha035 = {
-  id: "GHA035",
-  description: "Elevated token scope on a trigger that can run untrusted code",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      const untrusted = UNTRUSTED_TRIGGERS.filter((t) => triggers[t]);
-      if (untrusted.length === 0) continue;
-      const wf = extractWorkflowPermissions(yaml);
-      if (wf && grantsWrite(wf)) {
-        diagnostics.push({
-          checkId: "GHA035",
-          severity: "error",
-          message: `Workflow grants write token scope (${describeWrite(writeSurface(wf))}) while using the ${untrusted.join("/")} trigger, which can run untrusted code. Drop write scope or gate the privileged work behind a separate trusted workflow.`,
-          lexicon: "github"
-        });
-      }
-      for (const [job, perms] of extractJobPermissions(yaml)) {
-        if (grantsWrite(perms)) {
-          diagnostics.push({
-            checkId: "GHA035",
-            severity: "error",
-            message: `Job "${job}" grants write token scope (${describeWrite(writeSurface(perms))}) while the workflow uses the ${untrusted.join("/")} trigger, which can run untrusted code. Drop write scope or isolate the privileged work.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/untrusted-contexts.ts
-var UNTRUSTED_CONTEXTS = [
-  "github.event.issue.title",
-  "github.event.issue.body",
-  "github.event.pull_request.title",
-  "github.event.pull_request.body",
-  "github.event.pull_request.head.ref",
-  "github.event.pull_request.head.label",
-  "github.event.pull_request.head.repo.default_branch",
-  "github.event.comment.body",
-  "github.event.review.body",
-  "github.event.review_comment.body",
-  "github.event.discussion.title",
-  "github.event.discussion.body",
-  "github.event.head_commit.message",
-  "github.event.head_commit.author.email",
-  "github.event.head_commit.author.name",
-  "github.event.commits",
-  // .*.message / .*.author.* (array — matched by prefix)
-  "github.event.pages",
-  // .*.page_name
-  "github.head_ref"
-];
-function matchUntrustedContext(exprBody) {
-  const normalized = exprBody.replace(/\s+/g, "");
-  for (const ctx of UNTRUSTED_CONTEXTS) {
-    if (normalized.includes(ctx.replace(/\s+/g, ""))) return ctx;
-  }
-  return void 0;
-}
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha036.ts
-var gha036 = {
-  id: "GHA036",
-  description: "Untrusted input interpolated into a run: shell command",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, run: run4 } of extractRunBlocks(yaml)) {
-        for (const expr of extractExpressions(run4)) {
-          const ctxName = matchUntrustedContext(expr);
-          if (!ctxName) continue;
-          diagnostics.push({
-            checkId: "GHA036",
-            severity: "error",
-            message: `Job "${job}" interpolates untrusted input \${{ ${ctxName} ... }} into a run: script \u2014 this is a script-injection sink. Pass it through an env: variable and reference "$VAR" quoted instead.`,
-            entity: job,
-            lexicon: "github"
-          });
-          break;
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha037.ts
-var ENV_FILE_RE = /GITHUB_ENV|GITHUB_PATH/;
-var gha037 = {
-  id: "GHA037",
-  description: "Untrusted input written to GITHUB_ENV / GITHUB_PATH",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, run: run4 } of extractRunBlocks(yaml)) {
-        if (!ENV_FILE_RE.test(run4)) continue;
-        for (const expr of extractExpressions(run4)) {
-          const ctxName = matchUntrustedContext(expr);
-          if (!ctxName) continue;
-          const file2 = run4.includes("GITHUB_PATH") ? "GITHUB_PATH" : "GITHUB_ENV";
-          diagnostics.push({
-            checkId: "GHA037",
-            severity: "error",
-            message: `Job "${job}" writes untrusted input \${{ ${ctxName} ... }} into $${file2}, which sets state for later steps. Sanitize/validate the value or avoid persisting untrusted input across steps.`,
-            entity: job,
-            lexicon: "github"
-          });
-          break;
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha038.ts
-var gha038 = {
-  id: "GHA038",
-  description: "workflow_run trigger with checkout runs untrusted code in a privileged context",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      if (!triggers["workflow_run"]) continue;
-      const jobs = extractJobs(yaml);
-      for (const [jobName, job] of jobs) {
-        if (job.steps && hasCheckoutAction(job.steps)) {
-          diagnostics.push({
-            checkId: "GHA038",
-            severity: "warning",
-            message: `Job "${jobName}" checks out code under a workflow_run trigger, which runs with repo write scope and secrets. Treat the checked-out code as untrusted \u2014 avoid executing it, or move execution to an unprivileged workflow.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha039.ts
-var SPOOFABLE_FIELD_RE = /\.author\.(name|email)\b/;
-var COMPARISON_RE = /==|!=|contains\s*\(/;
-var gha039 = {
-  id: "GHA039",
-  description: "Authorization gate on a spoofable commit-author identity field",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, expr } of extractIfConditions(yaml)) {
-        if (SPOOFABLE_FIELD_RE.test(expr) && COMPARISON_RE.test(expr)) {
-          diagnostics.push({
-            checkId: "GHA039",
-            severity: "warning",
-            message: `Job "${job}" gates on a commit-author identity field in an if: condition (${expr}). Author name/email are attacker-controlled and can be spoofed \u2014 gate on a verified signal (environment protection, CODEOWNERS, verified actor) instead.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha040.ts
-var UNTRUSTED_TRIGGERS2 = ["pull_request", "pull_request_target", "workflow_run"];
-var gha040 = {
-  id: "GHA040",
-  description: "Self-hosted runner on a trigger that can run untrusted code",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      const untrusted = UNTRUSTED_TRIGGERS2.filter((t) => triggers[t]);
-      if (untrusted.length === 0) continue;
-      for (const [job, labels] of extractRunsOnByJob(yaml)) {
-        if (labels.some((l) => l === "self-hosted")) {
-          diagnostics.push({
-            checkId: "GHA040",
-            severity: "warning",
-            message: `Job "${job}" runs on a self-hosted runner under the ${untrusted.join("/")} trigger, which a fork can reach. Use ephemeral GitHub-hosted runners for untrusted code, or require approval before the job runs.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha041.ts
-var gha041 = {
-  id: "GHA041",
-  description: "Blanket secrets: inherit into a reusable workflow",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const seen = /* @__PURE__ */ new Set();
-      for (const { job, line } of jobLines(yaml)) {
-        if (/^\s+secrets:\s*inherit\s*$/.test(line) && !seen.has(job)) {
-          seen.add(job);
-          diagnostics.push({
-            checkId: "GHA041",
-            severity: "warning",
-            message: `Job "${job}" calls a reusable workflow with secrets: inherit, passing every caller secret. Pass through only the specific secrets it needs.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha042.ts
-var TO_JSON_SECRETS = /to_?json\s*\(\s*secrets\s*\)/i;
-var gha042 = {
-  id: "GHA042",
-  description: "Entire secrets context passed where specific secrets would do",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const seen = /* @__PURE__ */ new Set();
-      for (const { job, line } of jobLines(yaml)) {
-        if (TO_JSON_SECRETS.test(line) && !seen.has(job)) {
-          seen.add(job);
-          diagnostics.push({
-            checkId: "GHA042",
-            severity: "warning",
-            message: `Job "${job}" passes the entire secrets context via toJSON(secrets). Reference only the specific secrets the consumer needs.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha043.ts
-var gha043 = {
-  id: "GHA043",
-  description: "Secret consumed in a job without an environment gate",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const gated = extractJobEnvironments(yaml);
-      if (gated.size === 0) continue;
-      for (const job of jobsReferencingSecrets(yaml)) {
-        if (!gated.has(job)) {
-          diagnostics.push({
-            checkId: "GHA043",
-            severity: "warning",
-            message: `Job "${job}" consumes a secret but declares no environment:, while other jobs in this workflow are environment-gated. Gate this job too, or confirm it should bypass the approval/scoping the others use.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha044.ts
-var CRED_KEY_RE = /^\s+(?:- )?(password|token|registry-password):\s*(.+)$/;
-var gha044 = {
-  id: "GHA044",
-  description: "Hardcoded registry/container credential",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, line } of jobLines(yaml)) {
-        const m = line.match(CRED_KEY_RE);
-        if (!m) continue;
-        const key = m[1];
-        const value = m[2].trim().replace(/^['"]|['"]$/g, "");
-        if (value === "" || value.includes("${{")) continue;
-        diagnostics.push({
-          checkId: "GHA044",
-          severity: "error",
-          message: `Job "${job}" sets ${key}: to a hardcoded literal. Reference a secret (\${{ secrets.NAME }}) instead of inlining the credential.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha045.ts
-var gha045 = {
-  id: "GHA045",
-  description: "Secret interpolated directly into a run: shell command",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, run: run4 } of extractRunBlocks(yaml)) {
-        const leaked = extractExpressions(run4).some((e) => /\bsecrets\./.test(e));
-        if (!leaked) continue;
-        diagnostics.push({
-          checkId: "GHA045",
-          severity: "warning",
-          message: `Job "${job}" interpolates a secret directly into a run: script, where a transform can defeat log masking. Pass it through an env: variable and reference "$VAR" quoted instead.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha046.ts
-function inner(expr) {
-  return expr.replace(/^\$\{\{/, "").replace(/\}\}$/, "").trim();
-}
-function unsoundReason(expr) {
-  const e = inner(expr);
-  if (e === "true") return "always true (true literal)";
-  if (e === "false") return "always false (false literal)";
-  if (/\|\|\s*true\b/.test(e)) return "always true (|| true collapses the condition)";
-  if (/&&\s*false\b/.test(e)) return "always false (&& false collapses the condition)";
-  const eq2 = e.match(/^([\w.$'"[\]-]+)\s*==\s*([\w.$'"[\]-]+)$/);
-  if (eq2 && eq2[1] === eq2[2]) return "always true (both sides of == are identical)";
-  const ne = e.match(/^([\w.$'"[\]-]+)\s*!=\s*([\w.$'"[\]-]+)$/);
-  if (ne && ne[1] === ne[2]) return "always false (both sides of != are identical)";
-  return void 0;
-}
-var gha046 = {
-  id: "GHA046",
-  description: "Logically unsound (constant) guard condition",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, expr } of extractIfConditions(yaml)) {
-        const reason = unsoundReason(expr);
-        if (!reason) continue;
-        diagnostics.push({
-          checkId: "GHA046",
-          severity: "warning",
-          message: `Job "${job}" has an if: condition that is ${reason}: "${expr}". A gate that does not constrain anything is misleading \u2014 remove it or write the real condition.`,
-          entity: job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha047.ts
-var REVERSED_CONTAINS = /contains\(\s*(['"][^'"]*['"])\s*,\s*([^)]+)\)/g;
-function isLiteral(arg) {
-  const t = arg.trim();
-  return t.startsWith("'") && t.endsWith("'") || t.startsWith('"') && t.endsWith('"');
-}
-var gha047 = {
-  id: "GHA047",
-  description: "Ineffective contains() guard with reversed arguments",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, expr } of extractIfConditions(yaml)) {
-        let m;
-        REVERSED_CONTAINS.lastIndex = 0;
-        while ((m = REVERSED_CONTAINS.exec(expr)) !== null) {
-          if (isLiteral(m[2])) continue;
-          diagnostics.push({
-            checkId: "GHA047",
-            severity: "warning",
-            message: `Job "${job}" calls contains() with a string-literal haystack and a dynamic needle: "${m[0]}". contains(search, item) tests whether item is in search \u2014 swap the arguments so the dynamic value is searched.`,
-            entity: job,
-            lexicon: "github"
-          });
-          break;
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha048.ts
-var INDIRECTION = /\b(format|join|fromJSON)\s*\(/i;
-var COMPARISON = /==|!=|&&|\|\||contains\(|startsWith\(|endsWith\(/;
-var gha048 = {
-  id: "GHA048",
-  description: "Obfuscated guard condition (operand built by indirection)",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, expr } of extractIfConditions(yaml)) {
-        if (INDIRECTION.test(expr) && COMPARISON.test(expr)) {
-          diagnostics.push({
-            checkId: "GHA048",
-            severity: "warning",
-            message: `Job "${job}" builds its if: gate through string indirection (format/join/fromJSON) feeding a comparison: "${expr}". Compare against the value directly so the condition is auditable.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha049.ts
-var gha049 = {
-  id: "GHA049",
-  description: "Persisted checkout credentials reachable by an uploaded artifact",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const [job, lines] of linesByJob(yaml)) {
-        const text = lines.join("\n");
-        const hasCheckout = /uses:\s*actions\/checkout/.test(text);
-        const persistDisabled = /persist-credentials:\s*false/.test(text);
-        const uploadsArtifact = /uses:\s*actions\/upload-artifact/.test(text);
-        if (hasCheckout && uploadsArtifact && !persistDisabled) {
-          diagnostics.push({
-            checkId: "GHA049",
-            severity: "warning",
-            message: `Job "${job}" checks out with persisted credentials (default) and uploads an artifact \u2014 the token in .git/config can leak into the artifact. Set persist-credentials: false on the checkout.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha050.ts
-var PRIVILEGED_TRIGGERS = ["pull_request_target", "workflow_run"];
-var gha050 = {
-  id: "GHA050",
-  description: "Cache populated in a privileged context (poisoning risk)",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const triggers = extractTriggers(yaml);
-      const privileged = PRIVILEGED_TRIGGERS.filter((t) => triggers[t]);
-      if (privileged.length === 0) continue;
-      for (const [job, lines] of linesByJob(yaml)) {
-        if (lines.some((l) => /uses:\s*actions\/cache/.test(l))) {
-          diagnostics.push({
-            checkId: "GHA050",
-            severity: "warning",
-            message: `Job "${job}" populates a cache under the ${privileged.join("/")} trigger, which runs in the privileged base context. A poisoned cache entry could be restored and executed by a trusted run \u2014 restrict caching to trusted triggers.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha051.ts
-var PUBLISH_RE = /npm publish|yarn publish|pnpm publish|twine upload|poetry publish|cargo publish|gh release create|docker push|gh-action-pypi-publish|npm-publish/;
-var LONG_LIVED_SECRET_RE = /secrets\.(?!GITHUB_TOKEN\b)\w*(TOKEN|PASSWORD|API_KEY|APIKEY)/i;
-var gha051 = {
-  id: "GHA051",
-  description: "Publish/release step using a long-lived token instead of OIDC",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const requestsOidc = /id-token:\s*write/.test(yaml);
-      if (requestsOidc) continue;
-      for (const [job, lines] of linesByJob(yaml)) {
-        const text = lines.join("\n");
-        if (PUBLISH_RE.test(text) && LONG_LIVED_SECRET_RE.test(text)) {
-          diagnostics.push({
-            checkId: "GHA051",
-            severity: "info",
-            message: `Job "${job}" publishes using a long-lived token secret and requests no id-token: write. If the registry supports OIDC, mint a short-lived federated credential (permissions: id-token: write) instead of holding a standing token.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha052.ts
-var PIPE_TO_SHELL = [
-  /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(ba)?sh\b/i,
-  /\b(iwr|invoke-webrequest|irm|invoke-restmethod)\b[^\n|]*\|\s*(iex|invoke-expression)\b/i
-];
-var gha052 = {
-  id: "GHA052",
-  description: "Software fetched and piped to a shell without verification",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, run: run4 } of extractRunBlocks(yaml)) {
-        if (PIPE_TO_SHELL.some((re) => re.test(run4))) {
-          diagnostics.push({
-            checkId: "GHA052",
-            severity: "warning",
-            message: `Job "${job}" pipes a network download directly into a shell \u2014 the fetched code is unpinned and unverified. Download to a file, verify a checksum or signature, then execute it.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha053.ts
-var UNSAFE_COMMANDS = /ACTIONS_ALLOW_UNSECURE_COMMANDS|::set-env\s|::add-path\s/;
-var gha053 = {
-  id: "GHA053",
-  description: "Re-enables unsafe set-env / add-path workflow commands",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const seen = /* @__PURE__ */ new Set();
-      for (const [job, lines] of linesByJob(yaml)) {
-        if (lines.some((l) => UNSAFE_COMMANDS.test(l)) && !seen.has(job)) {
-          seen.add(job);
-          diagnostics.push({
-            checkId: "GHA053",
-            severity: "error",
-            message: `Job "${job}" re-enables the unsafe set-env/add-path workflow commands (ACTIONS_ALLOW_UNSECURE_COMMANDS or ::set-env::/::add-path::). Use $GITHUB_ENV / $GITHUB_PATH files instead \u2014 the legacy commands were removed for security.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/risky-features.ts
-var RISKY_FEATURES = [
-  {
-    pattern: /::set-output\s/,
-    label: "deprecated ::set-output:: workflow command",
-    advice: "write to $GITHUB_OUTPUT instead"
-  },
-  {
-    pattern: /::save-state\s/,
-    label: "deprecated ::save-state:: workflow command",
-    advice: "write to $GITHUB_STATE instead"
-  },
-  {
-    pattern: /ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION/,
-    label: "opt-in to an end-of-life Node.js runtime",
-    advice: "upgrade the action to a supported Node runtime instead of forcing the unsupported one"
-  },
-  {
-    pattern: /::add-mask::\$\{\{/,
-    label: "masking a dynamic value after it may have already been logged",
-    advice: "mask secrets at their source; ::add-mask:: on an interpolated value can leak before the mask applies"
-  }
-];
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha054.ts
-var gha054 = {
-  id: "GHA054",
-  description: "Use of a feature with a known security footgun",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const [job, lines] of linesByJob(yaml)) {
-        const text = lines.join("\n");
-        for (const feature of RISKY_FEATURES) {
-          if (feature.pattern.test(text)) {
-            diagnostics.push({
-              checkId: "GHA054",
-              severity: "warning",
-              message: `Job "${job}" uses ${feature.label} \u2014 ${feature.advice}.`,
-              entity: job,
-              lexicon: "github"
-            });
-          }
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/preinstalled-tools.ts
-var PREINSTALLED_TOOLS = [
-  "git",
-  "curl",
-  "wget",
-  "jq",
-  "make",
-  "gcc",
-  "g++",
-  "zip",
-  "unzip",
-  "tar",
-  "docker",
-  "docker-compose",
-  "python3",
-  "pip3",
-  "node",
-  "npm",
-  "yarn",
-  "go",
-  "gh",
-  "aws",
-  "az",
-  "gcloud",
-  "kubectl",
-  "helm",
-  "terraform"
-];
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha055.ts
-var INSTALL_RE = /\b(?:apt(?:-get)?\s+install|brew\s+install|apk\s+add|choco\s+install)\b([^\n]*)/g;
-var gha055 = {
-  id: "GHA055",
-  description: "Runtime install of a tool already present on the runner",
-  check(ctx) {
-    const diagnostics = [];
-    const preinstalled = new Set(PREINSTALLED_TOOLS);
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const { job, run: run4 } of extractRunBlocks(yaml)) {
-        const redundant = /* @__PURE__ */ new Set();
-        let m;
-        INSTALL_RE.lastIndex = 0;
-        while ((m = INSTALL_RE.exec(run4)) !== null) {
-          for (const tok of m[1].split(/\s+/)) {
-            const name = tok.replace(/[^\w.+-]/g, "");
-            if (name && preinstalled.has(name)) redundant.add(name);
-          }
-        }
-        if (redundant.size > 0) {
-          diagnostics.push({
-            checkId: "GHA055",
-            severity: "info",
-            message: `Job "${job}" installs ${[...redundant].join(", ")} at runtime, but GitHub-hosted runners already ship ${redundant.size > 1 ? "these tools" : "this tool"}. Drop the redundant install (or rely on the preinstalled version) to reduce supply-chain surface.`,
-            entity: job,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha056.ts
-var gha056 = {
-  id: "GHA056",
-  description: "Workflow without a name",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [lexicon, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      if (!/^jobs:\s*$/m.test(yaml)) continue;
-      const name = extractWorkflowName(yaml);
-      if (!name) {
-        diagnostics.push({
-          checkId: "GHA056",
-          severity: "info",
-          message: `Workflow "${lexicon}" has no top-level name: \u2014 add one so runs are identifiable in the Actions UI and audit logs.`,
-          entity: "workflow",
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha057.ts
-var gha057 = {
-  id: "GHA057",
-  description: "Dependency update allows executing untrusted external code",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const dependabot = getDependabotYaml(output);
-      if (!dependabot) continue;
-      for (const update of extractDependabotUpdates(dependabot)) {
-        if (update["insecure-external-code-execution"] === "allow") {
-          const eco = String(update["package-ecosystem"] ?? "?");
-          diagnostics.push({
-            checkId: "GHA057",
-            severity: "error",
-            message: `Dependabot update for "${eco}" sets insecure-external-code-execution: allow, running dependency lifecycle scripts during the update. Set it to deny.`,
-            entity: eco,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha058.ts
-var COOLDOWN_DAY_KEYS = ["default-days", "semver-major-days", "semver-minor-days", "semver-patch-days"];
-function hasEffectiveCooldown(cooldown) {
-  if (!cooldown || typeof cooldown !== "object") return false;
-  const c = cooldown;
-  return COOLDOWN_DAY_KEYS.some((k) => typeof c[k] === "number" && c[k] > 0);
-}
-var gha058 = {
-  id: "GHA058",
-  description: "Dependency update has no cooldown window",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const dependabot = getDependabotYaml(output);
-      if (!dependabot) continue;
-      for (const update of extractDependabotUpdates(dependabot)) {
-        if (!hasEffectiveCooldown(update.cooldown)) {
-          const eco = String(update["package-ecosystem"] ?? "?");
-          diagnostics.push({
-            checkId: "GHA058",
-            severity: "warning",
-            message: `Dependabot update for "${eco}" has no cooldown \u2014 a version published moments ago is adopted immediately. Add a cooldown window so fresh (possibly compromised) releases wait before they are proposed.`,
-            entity: eco,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha059.ts
-var SHA_RE3 = /^[0-9a-f]{40}$/;
-function findStalePinAnnotations(yaml) {
-  const refs = extractActionRefs(yaml).map(({ job, ref }) => ({ job, ref, parsed: parseActionUses(ref) })).filter((r) => !!r.parsed && SHA_RE3.test(r.parsed.gitRef));
-  const findings = [];
-  const withComment = [];
-  for (const { job, ref, parsed } of refs) {
-    const comment = extractUsesComment(ref);
-    if (!comment) {
-      findings.push({ job, ref, slug: parsed.slug, sha: parsed.gitRef, kind: "missing" });
-    } else {
-      withComment.push({ job, ref, slug: parsed.slug, sha: parsed.gitRef, comment });
-    }
-  }
-  const bySlug = /* @__PURE__ */ new Map();
-  for (const entry of withComment) {
-    const list = bySlug.get(entry.slug) ?? [];
-    list.push(entry);
-    bySlug.set(entry.slug, list);
-  }
-  for (const [, entries] of bySlug) {
-    const shaToComments = /* @__PURE__ */ new Map();
-    const commentToShas = /* @__PURE__ */ new Map();
-    for (const e of entries) {
-      (shaToComments.get(e.sha) ?? shaToComments.set(e.sha, /* @__PURE__ */ new Set()).get(e.sha)).add(e.comment);
-      (commentToShas.get(e.comment) ?? commentToShas.set(e.comment, /* @__PURE__ */ new Set()).get(e.comment)).add(e.sha);
-    }
-    for (const e of entries) {
-      const otherComments = [...shaToComments.get(e.sha) ?? []].filter((c) => c !== e.comment);
-      const otherShas = [...commentToShas.get(e.comment) ?? []].filter((s) => s !== e.sha);
-      if (otherComments.length > 0) {
-        findings.push({
-          job: e.job,
-          ref: e.ref,
-          slug: e.slug,
-          sha: e.sha,
-          kind: "mismatched",
-          conflict: `commit ${e.sha} is also annotated "# ${otherComments[0]}" elsewhere`
-        });
-      } else if (otherShas.length > 0) {
-        findings.push({
-          job: e.job,
-          ref: e.ref,
-          slug: e.slug,
-          sha: e.sha,
-          kind: "mismatched",
-          conflict: `label "# ${e.comment}" is also attached to commit ${otherShas[0]} elsewhere`
-        });
-      }
-    }
-  }
-  return findings;
-}
-var gha059 = {
-  id: "GHA059",
-  description: "SHA-pinned action reference has a missing or internally-inconsistent version annotation",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const finding of findStalePinAnnotations(yaml)) {
-        const message = finding.kind === "missing" ? `Job "${finding.job}" pins ${finding.ref} to a commit SHA with no trailing version comment (e.g. "# v4.0.2") \u2014 add one so reviewers can sanity-check the digest.` : `Job "${finding.job}" pins ${finding.ref} whose annotation is internally inconsistent (${finding.conflict}) \u2014 one of these labels no longer matches the digest it's attached to.`;
-        diagnostics.push({
-          checkId: "GHA059",
-          severity: "warning",
-          message,
-          entity: finding.job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha060.ts
-var APP_TOKEN_SLUGS = /* @__PURE__ */ new Set([
-  "actions/create-github-app-token",
-  "tibdex/github-app-token",
-  "getsentry/action-github-app-token"
-]);
-var WRITE_LEVELS = /* @__PURE__ */ new Set(["write", "admin"]);
-var SCOPE_SIGNALS = {
-  contents: /git\s+push|gh\s+release|\/(?:git\/)?contents\b/i,
-  issues: /gh\s+issue|\/issues\b/i,
-  "pull-requests": /gh\s+pr\b|\/pulls\b/i,
-  packages: /npm\s+publish|docker\s+push|\/packages\b/i,
-  administration: /\/admin\b|administration/i,
-  actions: /\/actions\/runs|gh\s+run\b/i,
-  checks: /check-runs|\bchecks\b/i,
-  deployments: /\/deployments\b/i,
-  statuses: /\/statuses\b/i,
-  workflows: /\.github\/workflows/i,
-  environments: /\/environments\b/i
-};
-function scopeSignalMatches(scope, text) {
-  const signal = SCOPE_SIGNALS[scope];
-  if (signal) return signal.test(text);
-  return new RegExp(scope.replace(/-/g, "[-_ ]?"), "i").test(text);
-}
-function stepText(step) {
-  const parts = [];
-  if (typeof step.run === "string") parts.push(step.run);
-  if (step.with && typeof step.with === "object") parts.push(JSON.stringify(step.with));
-  if (step.env && typeof step.env === "object") parts.push(JSON.stringify(step.env));
-  if (typeof step.uses === "string") parts.push(step.uses);
-  return parts.join("\n");
-}
-function findOverScopedTokens(yaml) {
-  const findings = [];
-  for (const [job, steps] of extractStepsByJob(yaml)) {
-    steps.forEach((step, idx) => {
-      const uses = typeof step.uses === "string" ? step.uses : void 0;
-      if (!uses) return;
-      const parsed = parseActionUses(uses);
-      if (!parsed || !APP_TOKEN_SLUGS.has(parsed.slug)) return;
-      const withBlock = step.with && typeof step.with === "object" ? step.with : {};
-      const stepId = typeof step.id === "string" ? step.id : `#${idx}`;
-      const writeScopes = [];
-      for (const [key, value] of Object.entries(withBlock)) {
-        const m = /^permission-([a-z-]+)$/i.exec(key);
-        if (!m) continue;
-        if (WRITE_LEVELS.has(String(value).toLowerCase())) writeScopes.push(m[1]);
-      }
-      if (writeScopes.length === 0) return;
-      const otherStepsText = steps.filter((_, i) => i !== idx).map(stepText).join("\n");
-      const outputRef = `steps.${stepId}.outputs.token`;
-      if (!otherStepsText.includes(outputRef)) {
-        findings.push({ job, stepId, scopes: writeScopes, reason: "unused" });
-        return;
-      }
-      const unsignaled = writeScopes.filter((scope) => !scopeSignalMatches(scope, otherStepsText));
-      if (unsignaled.length > 0) {
-        findings.push({ job, stepId, scopes: unsignaled, reason: "no-signal" });
-      }
-    });
-  }
-  return findings;
-}
-var gha060 = {
-  id: "GHA060",
-  description: "Generated GitHub App token granted broader scope than its consuming steps evidence",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const finding of findOverScopedTokens(yaml)) {
-        const scopeList = finding.scopes.map((s) => `permission-${s}`).join(", ");
-        const message = finding.reason === "unused" ? `Job "${finding.job}" step "${finding.stepId}" mints a GitHub App token with ${scopeList} but no other step references its output \u2014 remove the unused scope(s) or the token step entirely.` : `Job "${finding.job}" step "${finding.stepId}" mints a GitHub App token with ${scopeList}, but no consuming step shows evidence of exercising that scope \u2014 narrow the token to the scopes actually used.`;
-        diagnostics.push({
-          checkId: "GHA060",
-          severity: "warning",
-          message,
-          entity: finding.job,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/action-usage-policy.ts
-var DEFAULT_ACTION_USAGE_POLICY = {};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha061.ts
-function matches(entry, owner, slug2) {
-  if (entry === slug2) return true;
-  if (entry === owner) return true;
-  if (entry.endsWith("/*") && entry.slice(0, -2) === owner) return true;
-  return false;
-}
-function matchesAny(entries, owner, slug2) {
-  return (entries ?? []).some((e) => matches(e, owner, slug2));
-}
-function evaluateUsagePolicy(yaml, policy) {
-  const { allow, deny } = policy;
-  if ((!allow || allow.length === 0) && (!deny || deny.length === 0)) return [];
-  const diagnostics = [];
-  for (const { job, ref } of extractActionRefs(yaml)) {
-    const parsed = parseActionUses(ref);
-    if (!parsed) continue;
-    if (matchesAny(deny, parsed.owner, parsed.slug)) {
-      diagnostics.push({
-        checkId: "GHA061",
-        severity: "error",
-        message: `Job "${job}" uses "${parsed.slug}", which is denied by the configured action-usage policy.`,
-        entity: job,
-        lexicon: "github"
-      });
-      continue;
-    }
-    if (allow && allow.length > 0 && !matchesAny(allow, parsed.owner, parsed.slug)) {
-      diagnostics.push({
-        checkId: "GHA061",
-        severity: "warning",
-        message: `Job "${job}" uses "${parsed.slug}", which is not in the configured action-usage allowlist.`,
-        entity: job,
-        lexicon: "github"
-      });
-    }
-  }
-  return diagnostics;
-}
-var gha061 = {
-  id: "GHA061",
-  description: "Action reference outside the configured usage policy (opt-in)",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      diagnostics.push(...evaluateUsagePolicy(yaml, DEFAULT_ACTION_USAGE_POLICY));
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/rules/data/advisory-feed.ts
-var DEFAULT_ADVISORY_FEED = { entries: [] };
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha062.ts
-function matchesEntry(entry, slug2, gitRef) {
-  if (entry.slug !== slug2) return false;
-  if (entry.shas?.includes(gitRef)) return true;
-  if (entry.refs?.includes(gitRef)) return true;
-  return false;
-}
-function checkAdvisories(yaml, feed = DEFAULT_ADVISORY_FEED) {
-  if (!feed || !feed.entries || feed.entries.length === 0) return [];
-  const diagnostics = [];
-  for (const { job, ref } of extractActionRefs(yaml)) {
-    const parsed = parseActionUses(ref);
-    if (!parsed) continue;
-    for (const entry of feed.entries) {
-      if (!matchesEntry(entry, parsed.slug, parsed.gitRef)) continue;
-      const patch = entry.patchedRef ? ` A patched ref is available: ${entry.patchedRef}.` : "";
-      const link = entry.url ? ` (${entry.url})` : "";
-      diagnostics.push({
-        checkId: "GHA062",
-        severity: "error",
-        message: `Job "${job}" uses "${parsed.slug}@${parsed.gitRef}", which matches disclosed advisory ${entry.id}${link}: ${entry.summary}.${patch}`,
-        entity: job,
-        lexicon: "github"
-      });
-    }
-  }
-  return diagnostics;
-}
-var gha062 = {
-  id: "GHA062",
-  description: "Pinned action reference matches a known-vulnerability advisory (feed-driven)",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      diagnostics.push(...checkAdvisories(yaml, DEFAULT_ADVISORY_FEED));
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha063.ts
-var CACHEABLE_SETUP_ACTIONS = /* @__PURE__ */ new Set(["actions/setup-node", "actions/setup-python", "actions/setup-java", "actions/setup-ruby", "actions/setup-dotnet"]);
-function cacheEnabled(withBlock) {
-  if (!withBlock || typeof withBlock !== "object") return false;
-  const cache = withBlock.cache;
-  if (typeof cache === "boolean") return cache;
-  if (typeof cache === "string") return cache.trim().length > 0 && cache.trim() !== "false";
-  return false;
-}
-var gha063 = {
-  id: "GHA063",
-  description: "Dependency setup action without caching enabled",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const [jobName, jobObj] of jobEntries(yaml)) {
-        const steps = Array.isArray(jobObj.steps) ? jobObj.steps : [];
-        const hasGenericCacheStep = steps.some((s) => parseActionUses(String(s.uses ?? ""))?.slug === "actions/cache");
-        if (hasGenericCacheStep) continue;
-        for (const step of steps) {
-          const uses = typeof step.uses === "string" ? step.uses : void 0;
-          if (!uses) continue;
-          const parsed = parseActionUses(uses);
-          if (!parsed || !CACHEABLE_SETUP_ACTIONS.has(parsed.slug)) continue;
-          if (cacheEnabled(step.with)) continue;
-          diagnostics.push({
-            checkId: "GHA063",
-            severity: "info",
-            message: `Job "${jobName}" uses ${parsed.slug} without enabling its \`cache:\` option, and no separate actions/cache step covers it \u2014 dependencies are re-fetched from a cold cache on every run. Set \`with.cache\` (e.g. \`cache: npm\`) or add an actions/cache step.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha064.ts
-var OS_JUSTIFICATION = [
-  { prefix: "macos-", label: "macOS", keywords: /xcodebuild|xcode-select|\.xcodeproj|\.xcworkspace|carthage|fastlane|cocoapods|pod install|swiftpm|codesign|notarize/i },
-  { prefix: "windows-", label: "Windows", keywords: /msbuild|\.sln\b|\.ps1\b|vcvarsall|nuget\s|choco\s|Set-ItemProperty|Get-ChildItem/i }
-];
-var gha064 = {
-  id: "GHA064",
-  description: "Job hardcoded onto an expensive runner with no sign it needs that OS",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const runsOnByJob = extractRunsOnByJob(yaml);
-      const runBlocks = extractRunBlocks(yaml);
-      for (const [jobName, labels] of runsOnByJob) {
-        if (labels.some((l) => l.includes("${{"))) continue;
-        for (const { prefix, label, keywords } of OS_JUSTIFICATION) {
-          const matched = labels.find((l) => l.toLowerCase().startsWith(prefix));
-          if (!matched) continue;
-          const justified = runBlocks.some((r) => r.job === jobName && keywords.test(r.run));
-          if (justified) break;
-          diagnostics.push({
-            checkId: "GHA064",
-            severity: "info",
-            message: `Job "${jobName}" runs on "${matched}" (a pricier ${label} runner) but no step looks ${label}-specific. Confirm it needs ${label}, or move it to a Linux runner.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-          break;
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha065.ts
-var FANOUT_THRESHOLD = 12;
-function jobSection(yaml, jobName) {
-  const jobsIdx = yaml.search(/^jobs:\s*$/m);
-  if (jobsIdx === -1) return void 0;
-  const afterJobs = yaml.slice(jobsIdx + yaml.slice(jobsIdx).indexOf("\n") + 1);
-  const header = `  ${jobName}:
-`;
-  const start = afterJobs.indexOf(header);
-  if (start === -1) return void 0;
-  const rest = afterJobs.slice(start + header.length);
-  const nextJobMatch = rest.search(/\n {2}\S/);
-  return nextJobMatch === -1 ? rest : rest.slice(0, nextJobMatch);
-}
-function parseMatrix(section) {
-  const lines = section.split("\n");
-  const matrixLineIdx = lines.findIndex((l) => /^\s*matrix:\s*$/.test(l));
-  if (matrixLineIdx === -1) return void 0;
-  const matrixIndent = lines[matrixLineIdx].search(/\S/);
-  const maxParallel = lines.some((l) => {
-    const m = l.match(/^(\s*)max-parallel:/);
-    return !!m && m[1].length === matrixIndent;
-  });
-  const dims = [];
-  let i = matrixLineIdx + 1;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line.trim() === "") {
-      i++;
-      continue;
-    }
-    const indent = line.search(/\S/);
-    if (indent <= matrixIndent) break;
-    const kv = line.match(/^\s*([a-zA-Z0-9_-]+):\s*(.*)$/);
-    if (!kv) {
-      i++;
-      continue;
-    }
-    const [, key, rest] = kv;
-    const value = rest.trim();
-    if (value.startsWith("[")) {
-      const inner2 = value.replace(/^\[|\]\s*$/g, "").trim();
-      dims.push({ key, size: inner2 === "" ? 0 : inner2.split(",").length });
-      i++;
-      continue;
-    }
-    if (value !== "") {
-      dims.push({ key, size: 1 });
-      i++;
-      continue;
-    }
-    let size = 0;
-    i++;
-    while (i < lines.length) {
-      const l2 = lines[i];
-      if (l2.trim() === "") {
-        i++;
-        continue;
-      }
-      const ind2 = l2.search(/\S/);
-      if (ind2 <= indent) break;
-      if (/^\s*-\s/.test(l2)) size++;
-      i++;
-    }
-    dims.push({ key, size });
-  }
-  return { dims, maxParallel };
-}
-var gha065 = {
-  id: "GHA065",
-  description: "Matrix combines dimensions into an uncapped, large fan-out",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const [jobName] of extractJobs(yaml)) {
-        const section = jobSection(yaml, jobName);
-        if (!section) continue;
-        const matrix = parseMatrix(section);
-        if (!matrix) continue;
-        const dims = matrix.dims.filter((d) => d.key !== "include" && d.key !== "exclude" && d.size > 0);
-        if (dims.length < 2) continue;
-        const combos = dims.reduce((a, d) => a * d.size, 1);
-        if (combos <= FANOUT_THRESHOLD || matrix.maxParallel) continue;
-        diagnostics.push({
-          checkId: "GHA065",
-          severity: "info",
-          message: `Job "${jobName}"'s matrix combines ${dims.length} dimensions (${dims.map((d) => d.key).join(" x ")}) into ${combos} jobs with no \`max-parallel:\` cap. Confirm the full cross-product is intended, trim it with \`include\`/\`exclude\`, or add \`max-parallel:\`.`,
-          entity: jobName,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha066.ts
-var gha066 = {
-  id: "GHA066",
-  description: "Uploaded artifact has no explicit retention-days",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      for (const [jobName, jobObj] of jobEntries(yaml)) {
-        const steps = Array.isArray(jobObj.steps) ? jobObj.steps : [];
-        for (const step of steps) {
-          const uses = typeof step.uses === "string" ? step.uses : void 0;
-          if (!uses || parseActionUses(uses)?.slug !== "actions/upload-artifact") continue;
-          const withBlock = step.with;
-          if (withBlock && withBlock["retention-days"] !== void 0) continue;
-          const name = typeof withBlock?.name === "string" ? withBlock.name : void 0;
-          diagnostics.push({
-            checkId: "GHA066",
-            severity: "info",
-            message: `Job "${jobName}" uploads${name ? ` artifact "${name}"` : " an artifact"} with no \`retention-days\` \u2014 it falls back to the repository's default (up to 90 days). Set a \`retention-days\` sized to how long the artifact is actually needed.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha067.ts
-var DOCKER_BUILD_RE = /\bdocker(\s+buildx)?\s+build\b/i;
-function triggerObject(on, key) {
-  if (!on || typeof on !== "object" || Array.isArray(on)) return void 0;
-  const trig = on[key];
-  return trig && typeof trig === "object" && !Array.isArray(trig) ? trig : void 0;
-}
-function hasPushOrPRTrigger(on) {
-  if (typeof on === "string") return on === "push" || on === "pull_request";
-  if (Array.isArray(on)) return on.includes("push") || on.includes("pull_request");
-  if (on && typeof on === "object") {
-    const keys = Object.keys(on);
-    return keys.includes("push") || keys.includes("pull_request");
-  }
-  return false;
-}
-function hasPathFilter(on) {
-  for (const key of ["push", "pull_request"]) {
-    const trig = triggerObject(on, key);
-    if (!trig) continue;
-    if (Array.isArray(trig.paths) && trig.paths.length > 0) return true;
-    if (Array.isArray(trig["paths-ignore"]) && trig["paths-ignore"].length > 0) return true;
-  }
-  return false;
-}
-var gha067 = {
-  id: "GHA067",
-  description: "Unconditional docker build with no path filter or guard",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const doc = parseDoc(yaml);
-      if (!doc) continue;
-      if (!hasPushOrPRTrigger(doc.on)) continue;
-      if (hasPathFilter(doc.on)) continue;
-      for (const [jobName, jobObj] of jobEntries(yaml)) {
-        const steps = Array.isArray(jobObj.steps) ? jobObj.steps : [];
-        for (const step of steps) {
-          const run4 = typeof step.run === "string" ? step.run : void 0;
-          if (!run4 || !DOCKER_BUILD_RE.test(run4)) continue;
-          if (step.if !== void 0) continue;
-          diagnostics.push({
-            checkId: "GHA067",
-            severity: "info",
-            message: `Job "${jobName}" runs a Docker build on every push/pull_request with no \`paths:\`/\`paths-ignore:\` filter and no \`if:\` guard \u2014 unrelated changes (docs, etc.) still pay for a full image build. Scope the trigger's paths or add a guard.`,
-            entity: jobName,
-            lexicon: "github"
-          });
-        }
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/gha068.ts
-function hasPullRequestTrigger(on) {
-  if (typeof on === "string") return on === "pull_request";
-  if (Array.isArray(on)) return on.includes("pull_request");
-  if (on && typeof on === "object") return "pull_request" in on;
-  return false;
-}
-var gha068 = {
-  id: "GHA068",
-  description: "Pull-request workflow missing a concurrency group",
-  check(ctx) {
-    const diagnostics = [];
-    for (const [, output] of ctx.outputs) {
-      const yaml = getPrimaryOutput(output);
-      const doc = parseDoc(yaml);
-      if (!doc || !hasPullRequestTrigger(doc.on)) continue;
-      const workflowName = extractWorkflowName(yaml) ?? "";
-      const jobNames = [...extractJobs(yaml).keys()];
-      const isDeployWorkflow = /deploy/i.test(workflowName) || jobNames.some((n) => /deploy/i.test(n));
-      if (isDeployWorkflow) continue;
-      if (!/^\s*concurrency:/m.test(yaml)) {
-        diagnostics.push({
-          checkId: "GHA068",
-          severity: "info",
-          message: `Workflow${workflowName ? ` "${workflowName}"` : ""} triggers on pull_request with no \`concurrency:\` group \u2014 a new push doesn't cancel the superseded run, so every commit on the PR consumes a full run's worth of runner capacity. Add a \`concurrency:\` group with \`cancel-in-progress: true\`.`,
-          lexicon: "github"
-        });
-      }
-    }
-    return diagnostics;
-  }
-};
-
-// node_modules/@intentius/chant-lexicon-github/src/lint/post-synth/index.ts
-var postSynthChecks = [
-  gha006,
-  gha009,
-  gha011,
-  gha013,
-  gha017,
-  gha018,
-  gha019,
-  gha021,
-  gha022,
-  gha023,
-  gha024,
-  gha025,
-  gha026,
-  gha027,
-  gha028,
-  gha029,
-  gha030,
-  gha031,
-  gha032,
-  gha033,
-  gha034,
-  gha035,
-  gha036,
-  gha037,
-  gha038,
-  gha039,
-  gha040,
-  gha041,
-  gha042,
-  gha043,
-  gha044,
-  gha045,
-  gha046,
-  gha047,
-  gha048,
-  gha049,
-  gha050,
-  gha051,
-  gha052,
-  gha053,
-  gha054,
-  gha055,
-  gha056,
-  gha057,
-  gha058,
-  gha059,
-  gha060,
-  gha061,
-  gha062,
-  gha063,
-  gha064,
-  gha065,
-  gha066,
-  gha067,
-  gha068
-];
-
-// src/audit/engine.ts
-async function auditRepos(repoUrls, token, opts = {}) {
-  const concurrency = opts.concurrency ?? 3;
-  const maxFiles = opts.maxFiles ?? 50;
-  const fetchImpl = opts.fetchImpl;
-  const results = [];
-  for (let i = 0; i < repoUrls.length; i += concurrency) {
-    const batch = repoUrls.slice(i, i + concurrency);
-    const settled = await Promise.allSettled(
-      batch.map((url2) => auditOneRepo(url2, token, { maxFiles, fetchImpl }))
-    );
-    for (const outcome of settled) {
-      if (outcome.status === "fulfilled") {
-        results.push(outcome.value);
-      } else {
-        results.push({
-          repoUrl: "unknown",
-          slug: "unknown",
-          scanned: 0,
-          model: buildReportModel([]),
-          error: String(outcome.reason)
-        });
-      }
-    }
-  }
-  const totals = results.reduce(
-    (acc, r) => {
-      if (!r.error) {
-        acc.quickWin += r.model.counts?.quickWin ?? 0;
-        acc.needsReview += r.model.counts?.needsReview ?? 0;
-        acc.reportOnly += r.model.counts?.reportOnly ?? 0;
-        acc.total += r.model.counts?.total ?? 0;
-      }
-      return acc;
-    },
-    { quickWin: 0, needsReview: 0, reportOnly: 0, total: 0 }
-  );
-  return { repos: results, totals };
-}
-function slugFromUrl(url2) {
-  try {
-    const u = new URL(url2);
-    return u.pathname.replace(/^\//, "").replace(/\.git$/, "");
-  } catch {
-    return url2;
-  }
-}
-var DETECTORS = [{ name: "github" }];
-var checksProvider = async (lexicon) => lexicon === "github" ? postSynthChecks : [];
-async function auditOneRepo(repoUrl, token, opts) {
-  const slug2 = slugFromUrl(repoUrl);
-  try {
-    const files = await fetchRepoFiles(repoUrl, {
-      token,
-      maxFiles: opts.maxFiles,
-      fetchImpl: opts.fetchImpl
-    });
-    const inputs = classifyFiles(files, DETECTORS);
-    const findings = await auditFiles(inputs, { checksProvider });
-    const model = buildReportModel(findings, {
-      files: inputs.map((i) => ({ path: i.path, content: i.content }))
-    });
-    return { repoUrl, slug: slug2, scanned: files.length, model };
-  } catch (err) {
-    return {
-      repoUrl,
-      slug: slug2,
-      scanned: 0,
-      model: buildReportModel([]),
-      error: err instanceof Error ? err.message : String(err)
-    };
-  }
-}
-
 // src/audit/summary.ts
 function renderPostureSummary(report2) {
   const lines = [];
@@ -241135,7 +241622,8 @@ async function runAudit(argv) {
   }
   let report2;
   try {
-    report2 = await auditRepos(repoUrls, token);
+    const { auditRepos: auditRepos2 } = await Promise.resolve().then(() => (init_engine(), engine_exports));
+    report2 = await auditRepos2(repoUrls, token);
   } catch (err) {
     die(3, `audit failed: ${errMsg2(err)}`);
   }
@@ -241216,7 +241704,8 @@ async function runReport(argv) {
           const { token: minted } = await mintInstallationToken2({ appId, installationId, privateKeyPem });
           token = minted;
         }
-        auditReport = await auditRepos(repoUrls, token);
+        const { auditRepos: auditRepos2 } = await Promise.resolve().then(() => (init_engine(), engine_exports));
+        auditReport = await auditRepos2(repoUrls, token);
       } catch (err) {
         die(3, `audit failed: ${errMsg2(err)}`);
       }

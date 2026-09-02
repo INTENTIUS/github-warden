@@ -42,7 +42,12 @@ import { loadGovernanceConfig } from "./config/load.js";
 import { createAppClient } from "./auth/app-client.js";
 import { runReconcile } from "./reconcile/runner.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
-import { auditRepos } from "./audit/engine.js";
+// NOTE: ./audit/engine.js is deliberately NOT imported statically. Its import
+// graph reaches chant's audit pipeline and the lexicon's lint rules, which pull
+// in the TypeScript compiler (~9 MB). The audit/report handlers load it with a
+// dynamic import() so esbuild's code splitting keeps the reconcile fast path
+// lean (see the `build` script's --splitting flag). Do not re-add a top-level
+// value import of audit/engine here — type-only imports are fine.
 import { renderPostureSummary, shouldFail, type FailOn } from "./audit/summary.js";
 import type { Cycle, ReconcileResult } from "./reconcile/runner.js";
 import { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
@@ -983,6 +988,7 @@ async function runAudit(argv: string[]): Promise<void> {
   // ── Run audit ──────────────────────────────────────────────────────────────
   let report;
   try {
+    const { auditRepos } = await import("./audit/engine.js");
     report = await auditRepos(repoUrls, token);
   } catch (err) {
     die(3, `audit failed: ${errMsg(err)}`);
@@ -1091,6 +1097,7 @@ async function runReport(argv: string[]): Promise<void> {
           const { token: minted } = await mintInstallationToken({ appId, installationId, privateKeyPem });
           token = minted;
         }
+        const { auditRepos } = await import("./audit/engine.js");
         auditReport = await auditRepos(repoUrls, token);
       } catch (err) {
         die(3, `audit failed: ${errMsg(err)}`);

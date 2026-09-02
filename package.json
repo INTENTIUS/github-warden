@@ -15,6 +15,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "config": {
+    "esm_require_banner": "import { createRequire as __gwCreateRequire } from 'node:module'; import { fileURLToPath as __gwFileURLToPath } from 'node:url'; import { dirname as __gwDirname } from 'node:path'; var require = globalThis.require ?? __gwCreateRequire(import.meta.url); var __filename = __gwFileURLToPath(import.meta.url); var __dirname = __gwDirname(__filename);"
+  },
   "bin": {
     "github-warden": "bin/github-warden.js"
   },
@@ -27,8 +30,8 @@
     "lint:prose": "bash mkdocs-stage.sh && node scripts/lint-prose.mjs $(find _docs -name '*.md')",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
-    "build:action": "esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='\"1\"' --outfile=action/index.mjs",
+    "build": "rm -rf dist && esbuild src/cli.ts --bundle --splitting --platform=node --format=esm --outdir=dist --chunk-names=chunk-[hash] --banner:js=\"$npm_package_config_esm_require_banner\" && chmod +x dist/cli.js",
+    "build:action": "esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='\"1\"' --banner:js=\"$npm_package_config_esm_require_banner\" --outfile=action/index.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
