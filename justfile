@@ -54,7 +54,8 @@ release bump="patch":
     next="$major.$minor.$patch"
     echo "Bumping $current → $next"
     npm version "$next" --no-git-tag-version
-    git add package.json package-lock.json
+    npm run build:action   # the action bundle embeds package.json; keep it in step with the bump
+    git add package.json package-lock.json action/index.mjs
     git commit -m "v$next"
     git tag "v$next"
     git push origin main "v$next"
