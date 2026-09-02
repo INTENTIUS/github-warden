@@ -900,7 +900,7 @@ function diffTokenGrants(policy, grants, opts, out) {
 }
 function evaluateTokenRequest(request, policy) {
   const allowed = new Set(policy.allowedPermissions ?? []);
-  const approvable = request.permissions.every((p) => allowed.has(p));
+  const approvable = policy.allowedPermissions !== void 0 && request.permissions.every((p) => allowed.has(p));
   if (approvable) return "approve";
   return policy.default === "deny" ? "deny" : null;
 }

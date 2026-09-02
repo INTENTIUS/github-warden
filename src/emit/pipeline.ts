@@ -10,7 +10,8 @@
  *   - Runs on PRs that touch the config file (dry-run only).
  *   - Mints a short-lived GitHub App installation token from vars + a secret.
  *   - On PRs: dry-run, posts the change-set summary as a PR comment.
- *   - On the default branch / schedule / dispatch: apply.
+ *   - On schedule / dispatch: apply (no push trigger — the schedule re-applies
+ *     a merged config change).
  *   - All actions pinned to commit SHAs (GHA021/GHA029).
  *   - Least-privilege permissions: read-only at workflow level; write scopes
  *     scoped to the single job that needs them (GHA017/GHA034).

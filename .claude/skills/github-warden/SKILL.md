@@ -8,8 +8,8 @@ description: Set up and operate declarative GitHub org/repo governance in this r
 Use the **`github-warden` CLI** to govern GitHub orgs/repos from a declared
 policy file. This skill is a pointer — read the docs, do not restate them:
 
-- [POLICY.md](../../../POLICY.md) — authoring the governance file (every field,
-  which cycle consumes it, what the v0.3.0 CLI loader actually forwards).
+- [POLICY.md](../../../POLICY.md) — authoring the governance file (every field
+  and which cycle consumes it; the CLI loader validates and forwards them all).
 - [SETUP.md](../../../SETUP.md) — install, GitHub App vs PAT auth, env vars,
   first dry-run.
 - [CLI.md](../../../CLI.md) — every flag of `reconcile` / `audit` / `report`,

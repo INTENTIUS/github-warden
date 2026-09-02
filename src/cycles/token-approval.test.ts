@@ -91,6 +91,15 @@ describe("evaluateTokenRequest", () => {
       evaluateTokenRequest({ id: 1, permissions: ["repository:administration"] }, { allowedPermissions: [] }),
     ).toBeNull();
   });
+
+  it("auto-approves nothing when allowedPermissions is absent", () => {
+    // Even a request with zero flattened permissions (vacuously "all allowed")
+    // must fall through to the default decision — absent means nothing is
+    // auto-approved (see TokenApprovalPolicy.allowedPermissions).
+    expect(evaluateTokenRequest({ id: 1, permissions: [] }, {})).toBeNull();
+    expect(evaluateTokenRequest({ id: 1, permissions: [] }, { default: "deny" })).toBe("deny");
+    expect(evaluateTokenRequest({ id: 1, permissions: ["repository:contents"] }, {})).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

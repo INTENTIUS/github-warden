@@ -22,7 +22,7 @@ npx @intentius/github-warden reconcile \
 
 Warden is selective by omission and manages only what you declare, so delete
 the blocks you don't want managed and add fields as you grow. The
-[config reference](../README.md#config-format) lists every field across all 13
+[policy reference](../POLICY.md) lists every field across all 13
 cycles (teams, members, rulesets, environments, secrets/variables, dependency
 hygiene, repo provisioning, token governance, ...).
 

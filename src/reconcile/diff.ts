@@ -860,13 +860,19 @@ function diffTokenGrants(
  * Decide a single pending PAT request against the approval policy. Returns
  * "approve" (all requested permissions are allowed), "deny" (not approvable and
  * the policy auto-denies), or null (leave pending for a human). Pure.
+ *
+ * An absent `allowedPermissions` means nothing is auto-approved — even a
+ * request with zero flattened permissions (which would otherwise be vacuously
+ * approvable) falls through to the `default` decision.
  */
 export function evaluateTokenRequest(
   request: LiveTokenRequest,
   policy: TokenApprovalPolicy,
 ): "approve" | "deny" | null {
   const allowed = new Set(policy.allowedPermissions ?? []);
-  const approvable = request.permissions.every((p) => allowed.has(p));
+  const approvable =
+    policy.allowedPermissions !== undefined &&
+    request.permissions.every((p) => allowed.has(p));
   if (approvable) return "approve";
   return policy.default === "deny" ? "deny" : null;
 }

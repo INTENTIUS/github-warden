@@ -6,8 +6,8 @@
 #
 # Selective-by-omission: warden manages ONLY what you declare below. Anything
 # you leave out is never read, diffed, or touched — so delete the blocks you
-# don't want managed, and add fields as you grow. See the README "Config
-# format" section for every available field.
+# don't want managed, and add fields as you grow. See POLICY.md for every
+# available field.
 
 orgs:
   my-org: # ← your GitHub org login

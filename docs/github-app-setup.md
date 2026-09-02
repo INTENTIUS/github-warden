@@ -41,10 +41,12 @@ level is enough; **apply** needs *write*.
 
 The Repository **Metadata (read)** permission is mandatory and auto-selected.
 
-> A cycle whose read 403s (a permission you didn't grant, or a feature not on
-> your plan) is skipped rather than crashing; start with a narrow grant, then
-> widen it later. Re-granting requires re-approving the install (see the
-> install step below).
+> A read that 403s (a permission you didn't grant, or a feature not on your
+> plan) never aborts the run: rulesets, secrets-variables, and the token
+> cycles treat it as "nothing live", while other cycles are reported as
+> errored and the rest still complete (the run exits 3). Start with a narrow
+> grant, then widen it later. Re-granting requires re-approving the install
+> (see the install step below).
 
 ## Generate a key and note the IDs
 

@@ -78,8 +78,10 @@ visibility, issues/projects/wiki toggles, merge methods, default branch,
 - Only declared fields are sent; the PATCH is partial.
 - A repo is never created here; a PATCH against a nonexistent repo 404s and is
   recorded as a failed entry. Provisioning belongs to `repo-baseline`.
-- Repo deletion is gated on ownership like everything else: it is only
-  proposed when `repo` is owned (`owned: true` or `owned: [repo, ...]`).
+- Deleting repositories is out of scope for warden entirely: this cycle's
+  apply path ignores delete entries outright, and since the live fetch only
+  reads repos the policy declares, the diff has nothing undeclared to propose
+  removing anyway.
 
 ## membership
 

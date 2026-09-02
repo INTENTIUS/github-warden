@@ -134,7 +134,8 @@ orgs:
               ref_name:
                 include:
                   - "~DEFAULT_BRANCH"
-                exclude: []
+                                           # an empty list (exclude: []) is flow
+                                           # style — author it in JSON
             rules:
               - type: pull_request
 
@@ -170,9 +171,10 @@ orgs:
 
         # ── Dependabot config file ── cycle: dependency-hygiene ─────────────
         # Ensures .github/dependabot.yml exists and matches `content` exactly.
-        # content is multi-line, so author this slice in JSON.
+        # content is multi-line and the built-in YAML reader has no multi-line
+        # scalars (and does not process \n escapes) — author this slice in JSON.
         dependabot:
-          content: "version: 2\n..."
+          content: "..."                   # exact file text; use JSON here
 
     # ── Org rulesets ── cycle: rulesets ─────────────────────────────────────
     rulesets:
@@ -183,7 +185,6 @@ orgs:
           ref_name:
             include:
               - "~DEFAULT_BRANCH"
-            exclude: []
         rules:
           - type: pull_request
 

@@ -137,6 +137,10 @@ omit it to run all.
 Every field is optional; declare only what you want managed. A ready-to-edit
 starter lives in [`examples/governance.yml`](examples/governance.yml).
 
+The CLI's built-in YAML reader is block-style only — no flow style
+(`{ }` / `[ ]`), no multi-line scalars (`|` / `>`), no anchors. Use JSON for
+anything richer, such as the multi-line `dependabot.content`.
+
 ```yaml
 orgs:
   my-org:
@@ -147,46 +151,66 @@ orgs:
 
     # Org members and roles
     members:
-      - { login: alice, role: admin }
-      - { login: bob }                 # defaults to "member"
+      - login: alice
+        role: admin
+      - login: bob                     # role defaults to "member"
 
     # Teams (tree + membership + repo access)
     teams:
       backend:
         privacy: closed
         members:
-          - { login: alice, role: maintainer }
+          - login: alice
+            role: maintainer
         repos:
-          - { name: api, permission: push }
+          - name: api
+            permission: push
 
     # Ensure these repos exist (create from a template if missing)
     repoBaselines:
-      - { name: new-service, template: my-org/service-template, private: true }
+      - name: new-service
+        template: my-org/service-template
+        private: true
 
     # Org-level rulesets / secrets / variables
     rulesets:
       - name: protect-default
         target: branch
         enforcement: active
-        conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } }
-        rules: [{ type: pull_request }]
+        conditions:
+          ref_name:
+            include:
+              - "~DEFAULT_BRANCH"
+        rules:
+          - type: pull_request
     secrets:
-      - { name: ORG_DEPLOY_TOKEN }     # presence only; value provisioned out-of-band
+      - name: ORG_DEPLOY_TOKEN         # presence only; value provisioned out-of-band
     variables:
-      - { name: ENVIRONMENT, value: production }
+      - name: ENVIRONMENT
+        value: production
 
     # Fine-grained PAT governance (GitHub App required)
-    tokenPolicy: { maxLifetimeDays: 90, maxIdleDays: 60, revokeExpired: true }
-    tokenApproval: { allowedPermissions: ["repository:contents"], default: deny }
+    tokenPolicy:
+      maxLifetimeDays: 90
+      maxIdleDays: 60
+      revokeExpired: true
+    tokenApproval:
+      allowedPermissions:
+        - repository:contents
+      default: deny
 
     # Flag seat-consuming machine users (surfaced by `report --identity`)
-    machineUsers: [ci-bot, deploy-bot]
+    machineUsers:
+      - ci-bot
+      - deploy-bot
 
     repos:
       my-repo:
         description: My service
         hasWiki: false
-        topics: [api, go]
+        topics:
+          - api
+          - go
         branchProtection:
           - pattern: main
             requirePullRequestReviews: true
@@ -199,14 +223,11 @@ orgs:
         environments:
           - name: production
             waitTimer: 10
-            reviewers: [{ type: Team, id: 42 }]
-        dependabot:
-          content: |
-            version: 2
-            updates:
-              - package-ecosystem: "npm"
-                directory: "/"
-                schedule: { interval: "weekly" }
+            reviewers:
+              - type: Team
+                id: 42
+        # dependabot.content is a multi-line string — author that slice (or the
+        # whole config) in JSON; the built-in YAML reader has no `|` scalars.
 ```
 
 ## Guardrails
@@ -288,9 +309,9 @@ The action accepts these inputs.
 ### CI workflow generation
 
 The `governancePipeline` export (from the package root) generates a
-`.github/workflows/governance.yml` that runs reconcile on a schedule, dry-run
-on PRs and apply on main, pinned to a warden Action SHA; [the CI
-guide](CI.md) covers it in detail.
+`.github/workflows/governance.yml` that dry-runs on PRs touching the config
+and applies on a schedule and on manual dispatch, pinned to a warden Action
+SHA; [the CI guide](CI.md) covers it in detail.
 
 ## Releasing
 
@@ -322,7 +343,8 @@ required. When the `WARDEN_E2E_*` vars are unset, the whole suite self-skips.
 
 Phase 1 always runs. Per cycle, it runs `fetchLive` + `diff` against the
 provisioned repo/org and asserts that every HTTP call was a `GET` (fetchLive
-never mutates) and that the pipeline composes, which catches API drift.
+never mutates) and that the diff composes a change set, which catches API
+drift.
 Phase 2 is opt-in via `WARDEN_E2E_APPLY=1` and performs one apply through a
 cycle (setting a repo topic), verified by re-fetch and cleaned up by the repo
 teardown.

@@ -73,10 +73,8 @@ export interface BranchProtectionScope {
   /**
    * Subset of repos to fetch live protection for. Typically set to
    * `orgConfig.repos` for the relevant org. Absent → no live fetch (all
-   * desired rules will be emitted as creates).
-   *
-   * When using a multi-org config, leave this unset and let the runner supply
-   * `orgLogin`; the cycle will read repos from the per-org config automatically.
+   * desired rules will be emitted as creates); the cycle does NOT fall back
+   * to reading repos from the per-org config.
    */
   repos?: Record<string, RepoConfig>;
 }
