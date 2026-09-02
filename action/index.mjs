@@ -148,9 +148,10 @@ async function buildAppJwt(appId, key) {
 async function mintInstallationToken(opts) {
   const { appId, privateKeyPem, installationId, fetchImpl } = opts;
   const doFetch = fetchImpl ?? fetch;
+  const apiBase = opts.baseUrl ?? API_BASE;
   const key = await importRsaPrivateKey(privateKeyPem);
   const jwt2 = await buildAppJwt(String(appId), key);
-  const url2 = `${API_BASE}/app/installations/${installationId}/access_tokens`;
+  const url2 = `${apiBase}/app/installations/${installationId}/access_tokens`;
   let res;
   try {
     res = await doFetch(url2, {
@@ -195,6 +196,7 @@ function createAppClient(opts) {
   let cached2 = null;
   let pendingMint = null;
   const doFetch = opts.fetchImpl ?? fetch;
+  const apiBase = opts.baseUrl ?? API_BASE;
   async function getToken() {
     const nowS = Math.floor(Date.now() / 1e3);
     if (cached2) {
@@ -214,7 +216,7 @@ function createAppClient(opts) {
   return {
     async request(method, path, body) {
       const token = await getToken();
-      const url2 = path.startsWith("http") ? path : `${API_BASE}${path}`;
+      const url2 = path.startsWith("http") ? path : `${apiBase}${path}`;
       let res;
       try {
         res = await doFetch(url2, {
@@ -587,6 +589,37 @@ function diff(org, desired, live, opts = {}) {
   });
   return { org, entries };
 }
+function countLiveManaged(desired, live) {
+  let n = 0;
+  if (desired.rulesets !== void 0) n += (live.rulesets ?? []).length;
+  if (desired.secrets !== void 0) n += (live.secrets ?? []).length;
+  if (desired.variables !== void 0) n += (live.variables ?? []).length;
+  if (desired.members !== void 0) n += (live.members ?? []).length;
+  if (desired.teams !== void 0) {
+    const liveTeams = live.teams ?? {};
+    n += Object.keys(liveTeams).length;
+    for (const [slug2, dt] of Object.entries(desired.teams)) {
+      const lt = liveTeams[slug2];
+      if (!lt) continue;
+      if (dt.members !== void 0) n += (lt.members ?? []).length;
+      if (dt.repos !== void 0) n += (lt.repos ?? []).length;
+    }
+  }
+  if (desired.repos !== void 0) {
+    const liveRepos = live.repos ?? {};
+    n += Object.keys(liveRepos).length;
+    for (const [name, dr] of Object.entries(desired.repos)) {
+      const lr = liveRepos[name];
+      if (!lr) continue;
+      if (dr.branchProtection !== void 0) n += (lr.branchProtection ?? []).length;
+      if (dr.rulesets !== void 0) n += (lr.rulesets ?? []).length;
+      if (dr.environments !== void 0) n += (lr.environments ?? []).length;
+      if (dr.secrets !== void 0) n += (lr.secrets ?? []).length;
+      if (dr.variables !== void 0) n += (lr.variables ?? []).length;
+    }
+  }
+  return n;
+}
 function diffSettings(desired, live, out) {
   if (desired === void 0) return;
   if (live === void 0) {
@@ -798,6 +831,27 @@ function diffBranchProtection(repoName, desired, live, opts, out) {
     }
   }
 }
+function dropEmptyValues(value) {
+  if (Array.isArray(value)) return value.map(dropEmptyValues);
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      const nv = dropEmptyValues(v);
+      if (Array.isArray(nv) && nv.length === 0) continue;
+      if (nv !== null && typeof nv === "object" && !Array.isArray(nv) && Object.keys(nv).length === 0) {
+        continue;
+      }
+      out[k] = nv;
+    }
+    return out;
+  }
+  return value;
+}
+function normalizeRulesetConditions(conditions) {
+  if (conditions === void 0) return void 0;
+  const normalized = dropEmptyValues(conditions);
+  return Object.keys(normalized).length === 0 ? void 0 : normalized;
+}
 function diffRulesets(keyPrefix, resourceType, desired, live, opts, out) {
   if (desired === void 0) return;
   diffCollection({
@@ -805,11 +859,21 @@ function diffRulesets(keyPrefix, resourceType, desired, live, opts, out) {
     keyPrefix,
     desired: new Map(desired.map((r) => [r.name, r])),
     live: new Map(live.map((r) => [r.name, r])),
-    compareFields: (dr, lr) => diffObjectKeys(
-      dr,
-      lr,
-      RULESET_FIELDS
-    ),
+    compareFields: (dr, lr) => {
+      const fields = diffObjectKeys(
+        dr,
+        lr,
+        RULESET_FIELDS
+      );
+      if (dr.conditions !== void 0) {
+        const dn = normalizeRulesetConditions(dr.conditions);
+        const ln = normalizeRulesetConditions(lr.conditions);
+        if (!deepEqual(dn, ln)) {
+          fields.push({ field: "conditions", before: lr.conditions, after: dr.conditions });
+        }
+      }
+      return fields;
+    },
     opts,
     out
   });
@@ -977,7 +1041,7 @@ var init_diff = __esm({
       "repo-variable",
       "dependabot"
     ];
-    RULESET_FIELDS = ["target", "enforcement", "bypassActors", "conditions", "rules"];
+    RULESET_FIELDS = ["target", "enforcement", "bypassActors", "rules"];
     ENVIRONMENT_FIELDS = [
       "waitTimer",
       "preventSelfReview",
@@ -989,6 +1053,19 @@ var init_diff = __esm({
 });
 
 // src/reconcile/guardrails.ts
+function removalLiveCap(changeSet, liveManagedTotal, opts = {}) {
+  if (liveManagedTotal === 0) return removalDeltaCap(changeSet, opts);
+  const maxFraction = opts.maxFraction ?? 0.25;
+  const deletes = changeSet.entries.filter((e) => e.kind === "delete").length;
+  const fraction = deletes / liveManagedTotal;
+  if (liveManagedTotal > 0 && fraction > maxFraction) {
+    return {
+      guardrail: "removalLiveCap",
+      message: `${deletes} of ${liveManagedTotal} live managed entries (${Math.round(fraction * 100)}%) would be deleted, exceeding the ${Math.round(maxFraction * 100)}% threshold. Check for typos in config or raise maxFraction to proceed.`
+    };
+  }
+  return null;
+}
 function adminFloor(changeSet, live, opts = {}) {
   const min = opts.min ?? 2;
   const liveMembers = live.members ?? [];
@@ -1043,20 +1120,27 @@ function requireSelf(changeSet, live, opts) {
   }
   return null;
 }
-function runGuardrails(changeSet, live, config2 = {}) {
+function runGuardrails(changeSet, live, config2 = {}, liveManagedTotal = 0) {
   const resolved = resolveRenames(changeSet);
   const diagnostics = [];
-  const cap = removalDeltaCap(resolved, config2.removalDeltaCap);
+  const cap = removalLiveCap(
+    resolved,
+    liveManagedTotal,
+    config2.removalLiveCap ?? config2.removalDeltaCap
+  );
   if (cap) diagnostics.push(cap);
-  const floor = adminFloor(resolved, live, config2.adminFloor);
-  if (floor) diagnostics.push(floor);
-  if (config2.requiredAdmins) {
-    const req = requiredAdmins(resolved, live, config2.requiredAdmins);
-    if (req) diagnostics.push(req);
-  }
-  if (config2.requireSelf) {
-    const self = requireSelf(resolved, live, config2.requireSelf);
-    if (self) diagnostics.push(self);
+  const memberAware = live.members !== void 0 || resolved.entries.some((e) => e.resourceType === "member");
+  if (memberAware) {
+    const floor = adminFloor(resolved, live, config2.adminFloor);
+    if (floor) diagnostics.push(floor);
+    if (config2.requiredAdmins) {
+      const req = requiredAdmins(resolved, live, config2.requiredAdmins);
+      if (req) diagnostics.push(req);
+    }
+    if (config2.requireSelf) {
+      const self = requireSelf(resolved, live, config2.requireSelf);
+      if (self) diagnostics.push(self);
+    }
   }
   if (diagnostics.length > 0) return { ok: false, diagnostics };
   return { ok: true };
@@ -1095,6 +1179,37 @@ var init_guardrails = __esm({
   }
 });
 
+// src/cycles/notes.ts
+function notePermissionGated(cycle, org, slice) {
+  pending.push({
+    cycle,
+    org,
+    note: `NOTE: ${slice}: read was permission-gated (403); planned entries may fail on apply`
+  });
+}
+function drainNotes() {
+  return pending.splice(0, pending.length);
+}
+function isForbidden(err) {
+  if (!(err instanceof Error)) return false;
+  const status = err.statusCode;
+  if (status === 403) return true;
+  return err.message.includes("403");
+}
+function isNotFound(err) {
+  if (!(err instanceof Error)) return false;
+  const status = err.statusCode;
+  if (status === 404) return true;
+  return err.message.includes("404");
+}
+var pending;
+var init_notes = __esm({
+  "src/cycles/notes.ts"() {
+    "use strict";
+    pending = [];
+  }
+});
+
 // src/reconcile/runner.ts
 var runner_exports = {};
 __export(runner_exports, {
@@ -1106,28 +1221,40 @@ function ownedPredicate(owned) {
   return (type, _key) => owned === true || Array.isArray(owned) && owned.includes(type);
 }
 async function runReconcile2(opts) {
-  return runReconcile({
+  let liveManagedTotal = 0;
+  drainNotes();
+  const result = await runReconcile({
     client: opts.client,
     scopes: opts.config.orgs,
     cycles: opts.cycles,
     scope: opts.scope,
     mode: opts.mode,
-    diff: (scopeId, desired, live, dopts) => diff(scopeId, desired, live, {
-      ...dopts,
-      isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
-      nowMs: dopts.nowMs ?? Date.now()
-    }),
-    guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}),
+    diff: (scopeId, desired, live, dopts) => {
+      liveManagedTotal = countLiveManaged(desired, live);
+      return diff(scopeId, desired, live, {
+        ...dopts,
+        isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
+        nowMs: dopts.nowMs ?? Date.now()
+      });
+    },
+    guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}, liveManagedTotal),
     diffOptions: opts.diffOptions,
     allowGuardrailOverride: opts.allowGuardrailOverride,
     requestBudget: opts.requestBudget
   });
+  for (const n of drainNotes()) {
+    const cr = result.cycles.find((c) => c.name === n.cycle && c.org === n.org);
+    if (cr) cr.plan = `${cr.plan}
+${n.note}`;
+  }
+  return result;
 }
 var init_runner = __esm({
   "src/reconcile/runner.ts"() {
     "use strict";
     init_diff();
     init_guardrails();
+    init_notes();
     init_core();
     init_core();
   }
@@ -19561,21 +19688,21 @@ var init_config_wire = __esm({
 // node_modules/@intentius/chant/src/discovery/sandbox/fork.ts
 import { fork } from "node:child_process";
 function lineBuffered(emit) {
-  let pending = "";
+  let pending2 = "";
   return {
     push(chunk) {
-      pending += chunk.toString();
-      let newlineAt = pending.indexOf("\n");
+      pending2 += chunk.toString();
+      let newlineAt = pending2.indexOf("\n");
       while (newlineAt !== -1) {
-        emit(pending.slice(0, newlineAt));
-        pending = pending.slice(newlineAt + 1);
-        newlineAt = pending.indexOf("\n");
+        emit(pending2.slice(0, newlineAt));
+        pending2 = pending2.slice(newlineAt + 1);
+        newlineAt = pending2.indexOf("\n");
       }
     },
     flush() {
-      if (pending.length > 0) {
-        emit(pending);
-        pending = "";
+      if (pending2.length > 0) {
+        emit(pending2);
+        pending2 = "";
       }
     }
   };
@@ -160337,14 +160464,14 @@ ${lanes.join("\n")}
           state.programEmitPending = void 0;
         }
         (_b = state.affectedFilesPendingEmit) == null ? void 0 : _b.forEach((emitKind, path) => {
-          const pending = !isForDtsErrors ? emitKind & 7 : emitKind & (7 | 48);
-          if (!pending) state.affectedFilesPendingEmit.delete(path);
-          else state.affectedFilesPendingEmit.set(path, pending);
+          const pending2 = !isForDtsErrors ? emitKind & 7 : emitKind & (7 | 48);
+          if (!pending2) state.affectedFilesPendingEmit.delete(path);
+          else state.affectedFilesPendingEmit.set(path, pending2);
         });
         if (state.programEmitPending) {
-          const pending = !isForDtsErrors ? state.programEmitPending & 7 : state.programEmitPending & (7 | 48);
-          if (!pending) state.programEmitPending = void 0;
-          else state.programEmitPending = pending;
+          const pending2 = !isForDtsErrors ? state.programEmitPending & 7 : state.programEmitPending & (7 | 48);
+          if (!pending2) state.programEmitPending = void 0;
+          else state.programEmitPending = pending2;
         }
       }
       function getPendingEmitKindWithSeen(optionsOrEmitKind, seenOldOptionsOrEmitKind, emitOnlyDtsFiles, isForDtsErrors) {
@@ -163835,8 +163962,8 @@ ${lanes.join("\n")}
           if (!host.setTimeout || !host.clearTimeout) {
             return resolutionCache.invalidateResolutionsOfFailedLookupLocations();
           }
-          const pending = clearInvalidateResolutionsOfFailedLookupLocations();
-          writeLog(`Scheduling invalidateFailedLookup${pending ? ", Cancelled earlier one" : ""}`);
+          const pending2 = clearInvalidateResolutionsOfFailedLookupLocations();
+          writeLog(`Scheduling invalidateFailedLookup${pending2 ? ", Cancelled earlier one" : ""}`);
           timerToInvalidateFailedLookupResolutions = host.setTimeout(invalidateResolutionsOfFailedLookup, 250, "timerToInvalidateFailedLookupResolutions");
         }
         function invalidateResolutionsOfFailedLookup() {
@@ -233187,7 +233314,8 @@ init_app_client();
 init_runner();
 
 // src/cycles/branch-protection.ts
-async function fetchBranchProtection(client, owner, repo, branch, budget) {
+init_notes();
+async function fetchBranchProtection(client, owner, repo, branch, budget, onGated) {
   budget.use(1);
   let raw;
   try {
@@ -233197,6 +233325,10 @@ async function fetchBranchProtection(client, owner, repo, branch, budget) {
     );
   } catch (err) {
     if (err instanceof Error && (err.message.includes("404") || err.message.includes("Branch not protected"))) {
+      return null;
+    }
+    if (isForbidden(err)) {
+      onGated?.();
       return null;
     }
     throw err;
@@ -233368,7 +233500,18 @@ async function fetchLiveForOrg(client, orgLogin, repos, budget) {
     const liveBranchProtections = [];
     for (const bp of repoConfig.branchProtection) {
       if (budget.exhausted) break;
-      const live = await fetchBranchProtection(client, orgLogin, repoName, bp.pattern, budget);
+      const live = await fetchBranchProtection(
+        client,
+        orgLogin,
+        repoName,
+        bp.pattern,
+        budget,
+        () => notePermissionGated(
+          "branch-protection",
+          orgLogin,
+          `branch-protection/${repoName}/${bp.pattern}`
+        )
+      );
       if (live) liveBranchProtections.push(live);
     }
     liveRepos[repoName] = { branchProtection: liveBranchProtections };
@@ -233377,6 +233520,7 @@ async function fetchLiveForOrg(client, orgLogin, repos, budget) {
 }
 
 // src/cycles/org-settings.ts
+init_notes();
 var VALID_DEFAULT_PERMISSIONS = /* @__PURE__ */ new Set(["none", "read", "write", "admin"]);
 function mapOrgToLive(raw) {
   const live = {};
@@ -233436,7 +233580,11 @@ var orgSettingsCycle = {
     try {
       raw = await client.request("GET", `/orgs/${orgLogin}`);
     } catch (err) {
-      if (err instanceof Error && err.message.includes("404")) {
+      if (isNotFound(err)) {
+        return {};
+      }
+      if (isForbidden(err)) {
+        notePermissionGated("org-settings", orgLogin, "org-settings");
         return {};
       }
       throw err;
@@ -233463,6 +233611,7 @@ var orgSettingsCycle = {
 };
 
 // src/cycles/repo-settings.ts
+init_notes();
 var MANAGED_REPO_KEYS = [
   "description",
   "websiteUrl",
@@ -233573,7 +233722,11 @@ async function fetchLiveRepoSettings(client, orgLogin, repos, budget) {
     try {
       raw = await client.request("GET", `/repos/${orgLogin}/${name}`);
     } catch (err) {
-      if (err instanceof Error && err.message.includes("404")) continue;
+      if (isNotFound(err)) continue;
+      if (isForbidden(err)) {
+        notePermissionGated("repo-settings", orgLogin, `repos/${name}`);
+        continue;
+      }
       throw err;
     }
     liveRepos[name] = mapRepoToLive(raw);
@@ -233582,6 +233735,7 @@ async function fetchLiveRepoSettings(client, orgLogin, repos, budget) {
 }
 
 // src/cycles/membership.ts
+init_notes();
 var PER_PAGE = 100;
 async function listOrgMembers(client, orgLogin, role, budget) {
   const logins = [];
@@ -233609,8 +233763,18 @@ var membershipCycle = {
       const { BudgetExhaustedError: BudgetExhaustedError2 } = await Promise.resolve().then(() => (init_runner(), runner_exports));
       throw new BudgetExhaustedError2();
     }
-    const admins = await listOrgMembers(client, orgLogin, "admin", budget);
-    const members = await listOrgMembers(client, orgLogin, "member", budget);
+    let admins;
+    let members;
+    try {
+      admins = await listOrgMembers(client, orgLogin, "admin", budget);
+      members = await listOrgMembers(client, orgLogin, "member", budget);
+    } catch (err) {
+      if (isForbidden(err)) {
+        notePermissionGated("membership", orgLogin, "members");
+        return { members: [] };
+      }
+      throw err;
+    }
     const live = [
       ...admins.map((login) => ({ login, role: "admin" })),
       ...members.map((login) => ({ login, role: "member" }))
@@ -233641,6 +233805,7 @@ var membershipCycle = {
 };
 
 // src/cycles/teams.ts
+init_notes();
 var PER_PAGE2 = 100;
 var VALID_PRIVACY = /* @__PURE__ */ new Set(["secret", "closed"]);
 var VALID_TEAM_PERMISSIONS = ["admin", "maintain", "push", "triage", "pull"];
@@ -233728,11 +233893,20 @@ var teamsCycle = {
       const { BudgetExhaustedError: BudgetExhaustedError2 } = await Promise.resolve().then(() => (init_runner(), runner_exports));
       throw new BudgetExhaustedError2();
     }
-    const ghTeams = await paginate(
-      client,
-      (page) => `/orgs/${orgLogin}/teams?per_page=${PER_PAGE2}&page=${page}`,
-      budget
-    );
+    let ghTeams;
+    try {
+      ghTeams = await paginate(
+        client,
+        (page) => `/orgs/${orgLogin}/teams?per_page=${PER_PAGE2}&page=${page}`,
+        budget
+      );
+    } catch (err) {
+      if (isForbidden(err)) {
+        notePermissionGated("teams", orgLogin, "teams");
+        return { teams: {} };
+      }
+      throw err;
+    }
     const teams = {};
     for (const t of ghTeams) {
       if (!t || typeof t.slug !== "string") continue;
@@ -233744,10 +233918,22 @@ var teamsCycle = {
       if (t.parent?.slug) live.parentTeamSlug = t.parent.slug;
       const scopeTeam = scope.teams?.[t.slug];
       if (scopeTeam?.members !== void 0 && !budget.exhausted) {
-        live.members = await fetchTeamMembers(client, orgLogin, t.slug, budget);
+        try {
+          live.members = await fetchTeamMembers(client, orgLogin, t.slug, budget);
+        } catch (err) {
+          if (!isForbidden(err)) throw err;
+          notePermissionGated("teams", orgLogin, `teams/${t.slug}/members`);
+          live.members = [];
+        }
       }
       if (scopeTeam?.repos !== void 0 && !budget.exhausted) {
-        live.repos = await fetchTeamRepos(client, orgLogin, t.slug, budget);
+        try {
+          live.repos = await fetchTeamRepos(client, orgLogin, t.slug, budget);
+        } catch (err) {
+          if (!isForbidden(err)) throw err;
+          notePermissionGated("teams", orgLogin, `teams/${t.slug}/repos`);
+          live.repos = [];
+        }
       }
       teams[t.slug] = live;
     }
@@ -233831,8 +234017,9 @@ async function applyTeamRepo(client, entry, org, budget) {
 }
 
 // src/cycles/rulesets.ts
+init_notes();
 var PER_PAGE3 = 100;
-async function fetchRulesets(client, basePath, budget) {
+async function fetchRulesets(client, basePath, budget, onGated) {
   const summaries = [];
   let page = 1;
   for (; ; ) {
@@ -233845,7 +234032,9 @@ async function fetchRulesets(client, basePath, budget) {
         `${basePath}?per_page=${PER_PAGE3}&page=${page}`
       );
     } catch (err) {
-      if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+      if (isNotFound(err)) return [];
+      if (isForbidden(err)) {
+        onGated?.();
         return [];
       }
       throw err;
@@ -233916,12 +234105,22 @@ var rulesetsCycle = {
       const { BudgetExhaustedError: BudgetExhaustedError2 } = await Promise.resolve().then(() => (init_runner(), runner_exports));
       throw new BudgetExhaustedError2();
     }
-    const orgRulesets = await fetchRulesets(client, `/orgs/${orgLogin}/rulesets`, budget);
+    const orgRulesets = await fetchRulesets(
+      client,
+      `/orgs/${orgLogin}/rulesets`,
+      budget,
+      () => notePermissionGated("rulesets", orgLogin, "org-rulesets")
+    );
     const repos = {};
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (repoConfig.rulesets === void 0) continue;
       if (budget.exhausted) break;
-      const rs = await fetchRulesets(client, `/repos/${orgLogin}/${name}/rulesets`, budget);
+      const rs = await fetchRulesets(
+        client,
+        `/repos/${orgLogin}/${name}/rulesets`,
+        budget,
+        () => notePermissionGated("rulesets", orgLogin, `repo-rulesets/${name}`)
+      );
       repos[name] = { rulesets: rs };
     }
     return { rulesets: orgRulesets, repos };
@@ -233960,6 +234159,7 @@ var rulesetsCycle = {
 };
 
 // src/cycles/security-features.ts
+init_notes();
 function hasManagedSecurity(repo) {
   return repo.security !== void 0;
 }
@@ -234037,7 +234237,13 @@ var securityFeaturesCycle = {
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (!hasManagedSecurity(repoConfig)) continue;
       if (budget.exhausted) break;
-      repos[name] = { security: await fetchRepoSecurity(client, orgLogin, name, budget) };
+      try {
+        repos[name] = { security: await fetchRepoSecurity(client, orgLogin, name, budget) };
+      } catch (err) {
+        if (!isForbidden(err)) throw err;
+        notePermissionGated("security-features", orgLogin, `security/${name}`);
+        repos[name] = { security: {} };
+      }
     }
     return { repos };
   },
@@ -234075,6 +234281,7 @@ var securityFeaturesCycle = {
 };
 
 // src/cycles/environments.ts
+init_notes();
 function mapEnvironmentToLive(raw) {
   const live = { name: raw.name };
   for (const rule of raw.protection_rules ?? []) {
@@ -234125,13 +234332,17 @@ function buildEnvironmentBody(desired, live) {
   }
   return body;
 }
-async function fetchRepoEnvironments(client, org, repo, budget) {
+async function fetchRepoEnvironments(client, org, repo, budget, onGated) {
   budget.use(1);
   let data;
   try {
     data = await client.request("GET", `/repos/${org}/${repo}/environments`);
   } catch (err) {
-    if (err instanceof Error && err.message.includes("404")) return [];
+    if (isNotFound(err)) return [];
+    if (isForbidden(err)) {
+      onGated?.();
+      return [];
+    }
     throw err;
   }
   return (data.environments ?? []).map(mapEnvironmentToLive);
@@ -234149,7 +234360,15 @@ var environmentsCycle = {
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (repoConfig.environments === void 0) continue;
       if (budget.exhausted) break;
-      repos[name] = { environments: await fetchRepoEnvironments(client, orgLogin, name, budget) };
+      repos[name] = {
+        environments: await fetchRepoEnvironments(
+          client,
+          orgLogin,
+          name,
+          budget,
+          () => notePermissionGated("environments", orgLogin, `environments/${name}`)
+        )
+      };
     }
     return { repos };
   },
@@ -234197,6 +234416,7 @@ var environmentsCycle = {
 };
 
 // src/cycles/secrets-variables.ts
+init_notes();
 var PER_PAGE4 = 100;
 async function listWrapped(client, makePath, field, budget) {
   const out = [];
@@ -234213,7 +234433,7 @@ async function listWrapped(client, makePath, field, budget) {
   }
   return out;
 }
-async function fetchSecrets(client, basePath, budget) {
+async function fetchSecrets(client, basePath, budget, onGated) {
   try {
     const raw = await listWrapped(
       client,
@@ -234223,11 +234443,15 @@ async function fetchSecrets(client, basePath, budget) {
     );
     return raw.filter((s) => typeof s.name === "string").map((s) => ({ name: s.name }));
   } catch (err) {
-    if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) return [];
+    if (isNotFound(err)) return [];
+    if (isForbidden(err)) {
+      onGated?.();
+      return [];
+    }
     throw err;
   }
 }
-async function fetchVariables(client, basePath, budget) {
+async function fetchVariables(client, basePath, budget, onGated) {
   try {
     const raw = await listWrapped(
       client,
@@ -234237,7 +234461,11 @@ async function fetchVariables(client, basePath, budget) {
     );
     return raw.filter((v) => typeof v.name === "string").map((v) => ({ name: v.name, value: v.value }));
   } catch (err) {
-    if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) return [];
+    if (isNotFound(err)) return [];
+    if (isForbidden(err)) {
+      onGated?.();
+      return [];
+    }
     throw err;
   }
 }
@@ -234310,8 +234538,18 @@ var secretsVariablesCycle = {
       const { BudgetExhaustedError: BudgetExhaustedError2 } = await Promise.resolve().then(() => (init_runner(), runner_exports));
       throw new BudgetExhaustedError2();
     }
-    const secrets = await fetchSecrets(client, `/orgs/${orgLogin}/actions/secrets`, budget);
-    const variables = budget.exhausted ? [] : await fetchVariables(client, `/orgs/${orgLogin}/actions/variables`, budget);
+    const secrets = await fetchSecrets(
+      client,
+      `/orgs/${orgLogin}/actions/secrets`,
+      budget,
+      () => notePermissionGated("secrets-variables", orgLogin, "org-secrets")
+    );
+    const variables = budget.exhausted ? [] : await fetchVariables(
+      client,
+      `/orgs/${orgLogin}/actions/variables`,
+      budget,
+      () => notePermissionGated("secrets-variables", orgLogin, "org-variables")
+    );
     const repos = {};
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       const wantsSecrets = repoConfig.secrets !== void 0;
@@ -234320,10 +234558,20 @@ var secretsVariablesCycle = {
       if (budget.exhausted) break;
       const repoLive = {};
       if (wantsSecrets) {
-        repoLive.secrets = await fetchSecrets(client, `/repos/${orgLogin}/${name}/actions/secrets`, budget);
+        repoLive.secrets = await fetchSecrets(
+          client,
+          `/repos/${orgLogin}/${name}/actions/secrets`,
+          budget,
+          () => notePermissionGated("secrets-variables", orgLogin, `repo-secrets/${name}`)
+        );
       }
       if (wantsVariables && !budget.exhausted) {
-        repoLive.variables = await fetchVariables(client, `/repos/${orgLogin}/${name}/actions/variables`, budget);
+        repoLive.variables = await fetchVariables(
+          client,
+          `/repos/${orgLogin}/${name}/actions/variables`,
+          budget,
+          () => notePermissionGated("secrets-variables", orgLogin, `repo-variables/${name}`)
+        );
       }
       repos[name] = repoLive;
     }
@@ -234364,6 +234612,7 @@ var secretsVariablesCycle = {
 };
 
 // src/cycles/dependency-hygiene.ts
+init_notes();
 var DEPENDABOT_PATH = ".github/dependabot.yml";
 function decodeBase64(b64) {
   return Buffer.from(b64.replace(/\s/g, ""), "base64").toString("utf-8");
@@ -234371,7 +234620,7 @@ function decodeBase64(b64) {
 function encodeBase64(text) {
   return Buffer.from(text, "utf-8").toString("base64");
 }
-async function fetchDependabot(client, org, repo, budget) {
+async function fetchDependabot(client, org, repo, budget, onGated) {
   budget.use(1);
   let data;
   try {
@@ -234380,7 +234629,11 @@ async function fetchDependabot(client, org, repo, budget) {
       `/repos/${org}/${repo}/contents/${DEPENDABOT_PATH}`
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes("404")) return {};
+    if (isNotFound(err)) return {};
+    if (isForbidden(err)) {
+      onGated?.();
+      return {};
+    }
     throw err;
   }
   const live = {};
@@ -234403,7 +234656,15 @@ var dependencyHygieneCycle = {
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (repoConfig.dependabot === void 0) continue;
       if (budget.exhausted) break;
-      repos[name] = { dependabot: await fetchDependabot(client, orgLogin, name, budget) };
+      repos[name] = {
+        dependabot: await fetchDependabot(
+          client,
+          orgLogin,
+          name,
+          budget,
+          () => notePermissionGated("dependency-hygiene", orgLogin, `dependabot/${name}`)
+        )
+      };
     }
     return { repos };
   },
@@ -234439,6 +234700,7 @@ var dependencyHygieneCycle = {
 };
 
 // src/cycles/repo-baseline.ts
+init_notes();
 var PER_PAGE5 = 100;
 async function listOrgRepoNames(client, orgLogin, budget) {
   const repos = {};
@@ -234468,7 +234730,15 @@ var repoBaselineCycle = {
       const { BudgetExhaustedError: BudgetExhaustedError2 } = await Promise.resolve().then(() => (init_runner(), runner_exports));
       throw new BudgetExhaustedError2();
     }
-    return { repos: await listOrgRepoNames(client, orgLogin, budget) };
+    try {
+      return { repos: await listOrgRepoNames(client, orgLogin, budget) };
+    } catch (err) {
+      if (isForbidden(err)) {
+        notePermissionGated("repo-baseline", orgLogin, "repos");
+        return { repos: {} };
+      }
+      throw err;
+    }
   },
   // ── Part 3: buildDesired ───────────────────────────────────────────────────
   buildDesired(orgConfig, _orgLogin, _scope) {
@@ -234506,6 +234776,7 @@ var repoBaselineCycle = {
 };
 
 // src/cycles/token-governance.ts
+init_notes();
 var PER_PAGE6 = 100;
 function toMs(iso) {
   if (!iso) return void 0;
@@ -234545,7 +234816,9 @@ var tokenGovernanceCycle = {
           `/orgs/${orgLogin}/personal-access-tokens?per_page=${PER_PAGE6}&page=${page}`
         );
       } catch (err) {
-        if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+        if (isNotFound(err)) return { tokenGrants: [] };
+        if (isForbidden(err)) {
+          notePermissionGated("token-governance", orgLogin, "token-grants");
           return { tokenGrants: [] };
         }
         throw err;
@@ -234575,6 +234848,7 @@ var tokenGovernanceCycle = {
 };
 
 // src/cycles/token-approval.ts
+init_notes();
 var PER_PAGE7 = 100;
 function flattenRequestPermissions(permissions) {
   const out = [];
@@ -234611,7 +234885,9 @@ var tokenApprovalCycle = {
           `/orgs/${orgLogin}/personal-access-token-requests?per_page=${PER_PAGE7}&page=${page}`
         );
       } catch (err) {
-        if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+        if (isNotFound(err)) return { tokenRequests: [] };
+        if (isForbidden(err)) {
+          notePermissionGated("token-approval", orgLogin, "token-requests");
           return { tokenRequests: [] };
         }
         throw err;

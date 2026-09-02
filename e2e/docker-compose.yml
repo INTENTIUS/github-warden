@@ -1,0 +1,31 @@
+# Hermetic mock-GitHub stack for the compose smoke test.
+#
+# GitHub has no self-hostable edition, so the hermetic layer runs a small
+# stateful mock of the API surface warden's 13 cycles touch
+# (e2e/mock-github/server.mjs — dependency-free node, also runnable without
+# docker: `node e2e/mock-github/server.mjs`). State is in-memory; `down`
+# discards everything.
+#
+#   just e2e-up
+#   GITHUB_WARDEN_E2E_URL=http://localhost:8188 npm run test:e2e
+#   just e2e-down
+services:
+  mock-github:
+    image: node:22-alpine
+    container_name: github-warden-mock
+    command: ["node", "/srv/server.mjs"]
+    volumes:
+      - ./mock-github:/srv:ro
+    environment:
+      PORT: "8188"
+    ports:
+      - "8188:8188"
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://localhost:8188/__mock/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 2s
+      timeout: 3s
+      retries: 30

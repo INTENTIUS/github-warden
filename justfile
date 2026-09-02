@@ -60,6 +60,16 @@ release bump="patch":
     git push origin main "v$next"
     echo "Released v$next — publish workflow triggered (tag pattern v*)"
 
+# Start the hermetic mock-GitHub stack for the compose smoke test.
+# No docker? The mock is plain node: `node e2e/mock-github/server.mjs &`
+e2e-up:
+    docker compose -f e2e/docker-compose.yml up -d --wait
+    @echo "mock GitHub up — run: GITHUB_WARDEN_E2E_URL=http://localhost:8188 npm run test:e2e"
+
+# Stop the mock-GitHub stack and discard its (in-memory) state
+e2e-down:
+    docker compose -f e2e/docker-compose.yml down -v
+
 # Wire the e2e repo secrets from an already-installed GitHub App (the
 # gh-automatable part of e2e setup). Discovers the App id + installation id
 # from the org and sets all four WARDEN_E2E_* secrets.

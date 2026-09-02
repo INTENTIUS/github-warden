@@ -325,10 +325,28 @@ involved, the same way the chant lexicons publish.
 
 ## End-to-end tests
 
-Unit tests (`npm test`) are fully mocked. A separate gated, self-provisioning
-e2e suite exercises every cycle against a **real GitHub org** via a real App
+Unit tests (`npm test`) are fully mocked. Above them sit two gated e2e layers
+(both under `e2e/`, both self-skipping — see [e2e/README.md](e2e/README.md)
+for the cycle-by-cycle coverage table):
+
+The hermetic compose smoke drives every cycle's full loop against a stateful
+mock GitHub (dependency-free node, run via docker compose or directly). Each
+cycle applies its policy slice and then re-plans to convergence, with
+out-of-band drift corrected and deletes exercised under `owned`. The suite
+also trips the `removalLiveCap` block and walks the permission-gated 403 NOTE
+path, and auth runs the real App JWT and installation-token flow against the
+mock.
+
+```bash
+just e2e-up          # or: node e2e/mock-github/server.mjs &
+GITHUB_WARDEN_E2E_URL=http://localhost:8188 npm run test:e2e
+just e2e-down
+```
+
+The real-App e2e is the non-hermetic layer: a gated, self-provisioning suite
+that exercises every cycle against a **real GitHub org** via a real App
 installation; nothing else validates the live API contract (especially the
-App-only token cycles). Neither `npm test` nor PR CI includes the suite.
+App-only token cycles). Neither `npm test` nor PR CI includes it.
 
 ```bash
 WARDEN_E2E_APP_ID=… WARDEN_E2E_INSTALLATION_ID=… \

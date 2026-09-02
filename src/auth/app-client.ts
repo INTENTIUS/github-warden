@@ -168,6 +168,11 @@ export interface MintOptions {
   installationId: string | number;
   /** Injectable fetch for testing. Defaults to the global fetch. */
   fetchImpl?: typeof fetch;
+  /**
+   * API base URL. Defaults to https://api.github.com; override for GHES or a
+   * test double (e.g. the hermetic e2e mock).
+   */
+  baseUrl?: string;
 }
 
 export interface InstallationToken {
@@ -183,11 +188,12 @@ export interface InstallationToken {
 export async function mintInstallationToken(opts: MintOptions): Promise<InstallationToken> {
   const { appId, privateKeyPem, installationId, fetchImpl } = opts;
   const doFetch = fetchImpl ?? fetch;
+  const apiBase = opts.baseUrl ?? API_BASE;
 
   const key = await importRsaPrivateKey(privateKeyPem);
   const jwt = await buildAppJwt(String(appId), key);
 
-  const url = `${API_BASE}/app/installations/${installationId}/access_tokens`;
+  const url = `${apiBase}/app/installations/${installationId}/access_tokens`;
   let res: Response;
   try {
     res = await doFetch(url, {
@@ -257,6 +263,7 @@ export function createAppClient(opts: AppClientOptions): AppClient {
   // reads would double-mint and waste rate-limit quota.
   let pendingMint: Promise<InstallationToken> | null = null;
   const doFetch = opts.fetchImpl ?? fetch;
+  const apiBase = opts.baseUrl ?? API_BASE;
 
   async function getToken(): Promise<string> {
     const nowS = Math.floor(Date.now() / 1000);
@@ -278,7 +285,7 @@ export function createAppClient(opts: AppClientOptions): AppClient {
   return {
     async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
       const token = await getToken();
-      const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+      const url = path.startsWith("http") ? path : `${apiBase}${path}`;
       let res: Response;
       try {
         res = await doFetch(url, {
