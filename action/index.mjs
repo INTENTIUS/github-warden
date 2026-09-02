@@ -232794,6 +232794,53 @@ var init_discover3 = __esm({
 import { readFileSync as readFileSync6, writeFileSync as writeFileSync3 } from "node:fs";
 import { pathToFileURL } from "node:url";
 
+// package.json
+var package_default = {
+  name: "@intentius/github-warden",
+  version: "0.3.1",
+  type: "module",
+  description: "Keep your GitHub org and repos in declared state \u2014 reconcile, guardrails, drift correction",
+  license: "Apache-2.0",
+  repository: {
+    type: "git",
+    url: "git+https://github.com/INTENTIUS/github-warden.git"
+  },
+  homepage: "https://github.com/INTENTIUS/github-warden#readme",
+  bugs: {
+    url: "https://github.com/INTENTIUS/github-warden/issues"
+  },
+  publishConfig: {
+    access: "public"
+  },
+  bin: {
+    "github-warden": "bin/github-warden.js"
+  },
+  files: [
+    "bin",
+    "dist"
+  ],
+  scripts: {
+    tsc: "tsc --noEmit",
+    test: "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    build: "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js && chmod +x dist/cli.js",
+    "build:action": `esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='"1"' --outfile=action/index.mjs`,
+    prepublishOnly: "npm run build"
+  },
+  dependencies: {
+    "@intentius/chant": "^0.44.1",
+    "@intentius/chant-lexicon-github": "^0.44.1"
+  },
+  devDependencies: {
+    "@types/libsodium-wrappers": "^0.7.14",
+    "@types/node": "^22.0.0",
+    esbuild: "^0.28.0",
+    "libsodium-wrappers": "^0.8.4",
+    typescript: "^5.9.3",
+    vitest: "^4.1.9"
+  }
+};
+
 // src/config/load.ts
 var GovernanceConfigError = class extends Error {
   field;
@@ -237573,8 +237620,13 @@ function buildClient(args) {
 }
 async function main(argv = process.argv.slice(2)) {
   const subcommand = argv[0];
-  if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+  if (!subcommand || argv.includes("--help") || argv.includes("-h")) {
     printUsage();
+    process.exit(0);
+  }
+  if (subcommand === "--version" || subcommand === "-v") {
+    process.stdout.write(`${package_default.version}
+`);
     process.exit(0);
   }
   if (subcommand === "audit") {

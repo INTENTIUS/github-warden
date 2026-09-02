@@ -10,7 +10,9 @@ with live GitHub state.
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
 
-Run `github-warden` with no arguments (or `--help`) for the built-in usage text.
+Run `github-warden` with no arguments (or `--help`, anywhere in the argument
+list) for the built-in usage text; `github-warden --version` prints the version
+(inlined from package.json at build time).
 
 ## Config file parsing
 

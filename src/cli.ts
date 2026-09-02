@@ -37,6 +37,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import pkg from "../package.json" with { type: "json" };
 import { loadGovernanceConfig } from "./config/load.js";
 import { createAppClient } from "./auth/app-client.js";
 import { runReconcile } from "./reconcile/runner.js";
@@ -517,8 +518,14 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // Top-level subcommand dispatch.
   const subcommand = argv[0];
-  if (!subcommand || subcommand === "--help" || subcommand === "-h") {
+  if (!subcommand || argv.includes("--help") || argv.includes("-h")) {
     printUsage();
+    process.exit(0);
+  }
+
+  if (subcommand === "--version" || subcommand === "-v") {
+    // Inlined from package.json at build time — always matches the published version.
+    process.stdout.write(`${pkg.version}\n`);
     process.exit(0);
   }
 
