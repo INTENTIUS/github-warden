@@ -418,13 +418,22 @@ only approve or deny; the requested repo scope cannot be changed.
 
 ## What the policy does not declare
 
-- **Guardrail thresholds.** `removalDeltaCap` (default: deletes capped at 25%
-  of the live managed entries in the collections the policy declares),
-  `adminFloor` (default: at least 2 org
-  admins must remain), `requiredAdmins`, and `requireSelf` are configured
-  programmatically (`runReconcile({ guardrails })`), not in the policy file.
-  The CLI runs with the defaults; `--allow-guardrail-override` applies anyway
-  when one trips.
+- **Guardrail thresholds.** `removalDeltaCap` caps deletes per resource type.
+  For each type in the plan (teams, members, environments, org variables, …),
+  the deletes of that type may not exceed 25% of that type's own live entries
+  in the collections the policy declares, and live entries of one type never
+  dilute another's fraction, so many live repos cannot make an environment
+  wipe look small. A type with no live count to measure against is measured
+  against its own planned non-create entries instead. Set the threshold with
+  `--removal-cap-fraction <value>` on `reconcile` (a number in (0,1]) or
+  programmatically via `runReconcile({ guardrails: { removalDeltaCap } })`; a
+  value outside (0,1] is rejected rather than silently disabling the cap.
+  This paragraph is the canonical description of the cap, referenced from
+  [CLI.md](CLI.md) and [CYCLES.md](CYCLES.md). `adminFloor` (at least 2 org
+  admins must remain, by default), `requiredAdmins`, and `requireSelf` are
+  configured programmatically (`runReconcile({ guardrails })`), not in the
+  policy file. The CLI runs with the defaults; `--allow-guardrail-override`
+  applies anyway when one trips.
 - **Secret values.** Only secret presence is declared; values are provisioned
   out-of-band.
 - **Auth.** App/installation IDs, tokens, and private keys come from

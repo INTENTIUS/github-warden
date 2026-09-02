@@ -28,6 +28,7 @@ nav:
   - CI pipelines: CI.md
   - Setup: SETUP.md
   - GitHub App setup: docs/github-app-setup.md
+  - Changelog: CHANGELOG.md
 
 markdown_extensions:
   - admonition

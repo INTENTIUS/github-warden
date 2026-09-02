@@ -21,11 +21,11 @@ Shared behavior, so it isn't repeated thirteen times:
   programmatic `diffOptions.isOwned` predicate overrides the declaration when
   supplied.
 - **Guardrails before apply.** `removalDeltaCap` refuses an apply whose
-  deletes exceed 25% of the live managed entries in the collections the
-  policy declares; with nothing live to measure against it falls back to
-  its plan-relative denominator (deletes over the plan's updates plus
-  deletes). `adminFloor` (at least 2 org admins must remain) always
-  runs too; `requiredAdmins` and `requireSelf` run when configured
+  deletes of any one resource type exceed 25% of that type's live managed
+  entries — see [POLICY.md](POLICY.md#what-the-policy-does-not-declare) for
+  the canonical description of the cap and its `--removal-cap-fraction`
+  threshold. `adminFloor` (at least 2 org admins must remain) always runs
+  too; `requiredAdmins` and `requireSelf` run when configured
   programmatically. `resolveRenames` collapses a `previously`-marked
   delete+create pair into an update first, so a rename is not counted as a
   deletion. A tripped guardrail blocks the apply (exit 1) unless
