@@ -15,6 +15,7 @@ import { diff, countLiveManaged } from "./diff.js";
 import type { LiveOrgState, DiffOptions } from "./diff.js";
 import { runGuardrails } from "./guardrails.js";
 import type { GuardrailConfig } from "./guardrails.js";
+import { drainNotes } from "../cycles/notes.js";
 import { runReconcile as coreRunReconcile } from "./core.js";
 import type {
   Cycle as CoreCycle,
@@ -116,6 +117,16 @@ export async function runReconcile<TScope = unknown>(
     allowGuardrailOverride: opts.allowGuardrailOverride,
     requestBudget: opts.requestBudget,
   });
+
+  // Permission-gated (403) read notes: cycles push them during fetchLive; the
+  // shared loop has already rendered each plan (renderChangeSet), so append
+  // every note to its cycle×org's plan here. Draining also clears notes whose
+  // cycle produced no result (e.g. fetchLive errored later), so nothing leaks
+  // into a subsequent run.
+  for (const n of drainNotes()) {
+    const cr = result.cycles.find((c) => c.name === n.cycle && c.org === n.org);
+    if (cr) cr.plan = `${cr.plan}\n${n.note}`;
+  }
 
   return result;
 }

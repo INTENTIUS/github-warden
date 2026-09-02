@@ -35,6 +35,7 @@ import type {
 } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveEnvironment } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -155,19 +156,28 @@ export function buildEnvironmentBody(
 // Live-state fetch
 // ---------------------------------------------------------------------------
 
-/** Fetch live environments for one repo (one list call). */
+/**
+ * Fetch live environments for one repo (one list call). A 404 (repo/feature
+ * absent) yields an empty list; a 403 (permission-gated read) also yields an
+ * empty list and invokes `onGated` so the caller can record a plan NOTE.
+ */
 async function fetchRepoEnvironments(
   client: AppClient,
   org: string,
   repo: string,
   budget: RateBudget,
+  onGated?: () => void,
 ): Promise<LiveEnvironment[]> {
   budget.use(1);
   let data: GhEnvironmentsList;
   try {
     data = await client.request<GhEnvironmentsList>("GET", `/repos/${org}/${repo}/environments`);
   } catch (err) {
-    if (err instanceof Error && err.message.includes("404")) return [];
+    if (isNotFound(err)) return [];
+    if (isForbidden(err)) {
+      onGated?.();
+      return [];
+    }
     throw err;
   }
   return (data.environments ?? []).map(mapEnvironmentToLive);
@@ -198,7 +208,11 @@ export const environmentsCycle: Cycle<EnvironmentsScope> = {
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (repoConfig.environments === undefined) continue;
       if (budget.exhausted) break;
-      repos[name] = { environments: await fetchRepoEnvironments(client, orgLogin, name, budget) };
+      repos[name] = {
+        environments: await fetchRepoEnvironments(client, orgLogin, name, budget, () =>
+          notePermissionGated("environments", orgLogin, `environments/${name}`),
+        ),
+      };
     }
 
     return { repos };

@@ -29,6 +29,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, RepoConfig, DependabotConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveDependabot } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -67,12 +68,17 @@ function encodeBase64(text: string): string {
 // Live-state fetch
 // ---------------------------------------------------------------------------
 
-/** Fetch the live `.github/dependabot.yml` for one repo (content + sha), or empty on 404. */
+/**
+ * Fetch the live `.github/dependabot.yml` for one repo (content + sha).
+ * Empty on 404 (file absent); empty with `onGated` invoked on a 403
+ * (permission-gated read) so the caller can record a plan NOTE.
+ */
 export async function fetchDependabot(
   client: AppClient,
   org: string,
   repo: string,
   budget: RateBudget,
+  onGated?: () => void,
 ): Promise<LiveDependabot> {
   budget.use(1);
   let data: GhContentsFile;
@@ -82,7 +88,11 @@ export async function fetchDependabot(
       `/repos/${org}/${repo}/contents/${DEPENDABOT_PATH}`,
     );
   } catch (err) {
-    if (err instanceof Error && err.message.includes("404")) return {};
+    if (isNotFound(err)) return {};
+    if (isForbidden(err)) {
+      onGated?.();
+      return {};
+    }
     throw err;
   }
   const live: LiveDependabot = {};
@@ -118,7 +128,11 @@ export const dependencyHygieneCycle: Cycle<DependencyHygieneScope> = {
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (repoConfig.dependabot === undefined) continue;
       if (budget.exhausted) break;
-      repos[name] = { dependabot: await fetchDependabot(client, orgLogin, name, budget) };
+      repos[name] = {
+        dependabot: await fetchDependabot(client, orgLogin, name, budget, () =>
+          notePermissionGated("dependency-hygiene", orgLogin, `dependabot/${name}`),
+        ),
+      };
     }
 
     return { repos };

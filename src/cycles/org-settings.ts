@@ -41,6 +41,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, OrgSettings } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveOrgSettings } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -182,8 +183,13 @@ export const orgSettingsCycle: Cycle<OrgSettingsScope> = {
     } catch (err) {
       // A missing org (404) means there is nothing live to diff against — the
       // diff will emit a create. Surfacing it as empty rather than throwing
-      // keeps the run going for other orgs/cycles.
-      if (err instanceof Error && err.message.includes("404")) {
+      // keeps the run going for other orgs/cycles. A permission-gated read
+      // (403) is likewise tolerated, with a plan NOTE recorded.
+      if (isNotFound(err)) {
+        return {};
+      }
+      if (isForbidden(err)) {
+        notePermissionGated("org-settings", orgLogin, "org-settings");
         return {};
       }
       throw err;

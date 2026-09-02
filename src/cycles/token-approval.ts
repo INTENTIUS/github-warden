@@ -27,6 +27,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveTokenRequest } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -101,7 +102,11 @@ export const tokenApprovalCycle: Cycle<TokenApprovalScope> = {
           `/orgs/${orgLogin}/personal-access-token-requests?per_page=${PER_PAGE}&page=${page}`,
         );
       } catch (err) {
-        if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+        // 404 → no pending requests / feature absent. 403 → permission-gated
+        // read: tolerated, with a plan NOTE recorded.
+        if (isNotFound(err)) return { tokenRequests: [] };
+        if (isForbidden(err)) {
+          notePermissionGated("token-approval", orgLogin, "token-requests");
           return { tokenRequests: [] };
         }
         throw err;

@@ -38,6 +38,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, RepoConfig, RulesetConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveRuleset } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -85,11 +86,13 @@ const PER_PAGE = 100;
  * repo missing) or 403 (the App lacks permission for this rulesets scope — e.g.
  * org rulesets) yields an empty list rather than aborting the cycle, so an
  * inaccessible org-rulesets read never blocks repo-rulesets reconciliation.
+ * On a 403, `onGated` is invoked so the caller can record a plan NOTE.
  */
 export async function fetchRulesets(
   client: AppClient,
   basePath: string,
   budget: RateBudget,
+  onGated?: () => void,
 ): Promise<LiveRuleset[]> {
   // 1. List (paginated).
   const summaries: GhRulesetSummary[] = [];
@@ -104,7 +107,9 @@ export async function fetchRulesets(
         `${basePath}?per_page=${PER_PAGE}&page=${page}`,
       );
     } catch (err) {
-      if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+      if (isNotFound(err)) return [];
+      if (isForbidden(err)) {
+        onGated?.();
         return [];
       }
       throw err;
@@ -210,13 +215,17 @@ export const rulesetsCycle: Cycle<RulesetsScope> = {
       throw new BudgetExhaustedError();
     }
 
-    const orgRulesets = await fetchRulesets(client, `/orgs/${orgLogin}/rulesets`, budget);
+    const orgRulesets = await fetchRulesets(client, `/orgs/${orgLogin}/rulesets`, budget, () =>
+      notePermissionGated("rulesets", orgLogin, "org-rulesets"),
+    );
 
     const repos: NonNullable<LiveOrgState["repos"]> = {};
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (repoConfig.rulesets === undefined) continue;
       if (budget.exhausted) break;
-      const rs = await fetchRulesets(client, `/repos/${orgLogin}/${name}/rulesets`, budget);
+      const rs = await fetchRulesets(client, `/repos/${orgLogin}/${name}/rulesets`, budget, () =>
+        notePermissionGated("rulesets", orgLogin, `repo-rulesets/${name}`),
+      );
       repos[name] = { rulesets: rs };
     }
 

@@ -32,6 +32,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveTokenGrant } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -108,8 +109,11 @@ export const tokenGovernanceCycle: Cycle<TokenGovernanceScope> = {
           `/orgs/${orgLogin}/personal-access-tokens?per_page=${PER_PAGE}&page=${page}`,
         );
       } catch (err) {
-        // No fine-grained PAT grants / no access → nothing to govern.
-        if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) {
+        // No fine-grained PAT grants (404) → nothing to govern. A 403 is a
+        // permission-gated read: tolerated, with a plan NOTE recorded.
+        if (isNotFound(err)) return { tokenGrants: [] };
+        if (isForbidden(err)) {
+          notePermissionGated("token-governance", orgLogin, "token-grants");
           return { tokenGrants: [] };
         }
         throw err;

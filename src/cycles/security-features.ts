@@ -36,6 +36,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, RepoConfig, RepoSecurityConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveRepoSecurity } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -182,7 +183,16 @@ export const securityFeaturesCycle: Cycle<SecurityFeaturesScope> = {
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
       if (!hasManagedSecurity(repoConfig)) continue;
       if (budget.exhausted) break;
-      repos[name] = { security: await fetchRepoSecurity(client, orgLogin, name, budget) };
+      try {
+        repos[name] = { security: await fetchRepoSecurity(client, orgLogin, name, budget) };
+      } catch (err) {
+        // A permission-gated security read (403) is tolerated: the slice is
+        // treated as empty (declared toggles surface in the plan; the apply
+        // may fail) and a plan NOTE is recorded.
+        if (!isForbidden(err)) throw err;
+        notePermissionGated("security-features", orgLogin, `security/${name}`);
+        repos[name] = { security: {} };
+      }
     }
 
     return { repos };

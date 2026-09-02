@@ -30,6 +30,12 @@ Shared behavior, so it isn't repeated thirteen times:
   delete+create pair into an update first, so a rename is not counted as a
   deletion. A tripped guardrail blocks the apply (exit 1) unless
   `--allow-guardrail-override` is set.
+- **Permission-gated reads are tolerated.** A declared slice whose read comes
+  back 403 is skipped as if nothing were live, and the cycle's plan gains a
+  note naming the slice (`read was permission-gated (403); planned entries
+  may fail on apply`). With a narrow App grant the run still exits 0 and the
+  notes list the slices the grant leaves uncovered. A 404 is a silent
+  "nothing live". Any other read error still errors the cycle.
 - **Live-fetch scope.** Cycles that read per-repo live state do so for repos
   passed in their scope. The current CLI wiring passes no scope, so those
   cycles skip the live fetch: every declared entry is planned as a create,

@@ -52,6 +52,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, BranchProtectionConfig, RepoConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveBranchProtectionConfig } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -110,7 +111,9 @@ interface GhBranchProtection {
 
 /**
  * Fetch the branch protection rule for one branch pattern.
- * Returns null when the branch/protection does not exist (404).
+ * Returns null when the branch/protection does not exist (404) or when the
+ * read is permission-gated (403 — `onGated` is invoked so the caller can
+ * record a plan NOTE).
  */
 async function fetchBranchProtection(
   client: AppClient,
@@ -118,6 +121,7 @@ async function fetchBranchProtection(
   repo: string,
   branch: string,
   budget: RateBudget,
+  onGated?: () => void,
 ): Promise<LiveBranchProtectionConfig | null> {
   budget.use(1);
   let raw: GhBranchProtection;
@@ -132,6 +136,10 @@ async function fetchBranchProtection(
       err instanceof Error &&
       (err.message.includes("404") || err.message.includes("Branch not protected"))
     ) {
+      return null;
+    }
+    if (isForbidden(err)) {
+      onGated?.();
       return null;
     }
     throw err;
@@ -457,7 +465,8 @@ export const branchProtectionCycle: Cycle<BranchProtectionScope> = {
  *
  * Repos with no `branchProtection` config are skipped (zero API calls).
  * A 404 for a specific branch means no protection rule is live for it —
- * returned as an absent entry (not an error).
+ * returned as an absent entry (not an error). A 403 is a permission-gated
+ * read: also treated as absent, with a plan NOTE recorded.
  */
 export async function fetchLiveForOrg(
   client: AppClient,
@@ -476,7 +485,13 @@ export async function fetchLiveForOrg(
 
     for (const bp of repoConfig.branchProtection) {
       if (budget.exhausted) break;
-      const live = await fetchBranchProtection(client, orgLogin, repoName, bp.pattern, budget);
+      const live = await fetchBranchProtection(client, orgLogin, repoName, bp.pattern, budget, () =>
+        notePermissionGated(
+          "branch-protection",
+          orgLogin,
+          `branch-protection/${repoName}/${bp.pattern}`,
+        ),
+      );
       if (live) liveBranchProtections.push(live);
     }
 

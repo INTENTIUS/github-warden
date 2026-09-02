@@ -41,11 +41,13 @@ Follow the [App setup checklist](docs/github-app-setup.md). It walks you
 through creating the App with the webhook off, granting per-cycle permissions
 (read is enough for dry-run while apply needs write), generating a private
 key, installing it on the org, then noting the App ID plus installation ID.
-A refused read (403) never aborts the run: some cycles treat it as "nothing
-live" and carry on (rulesets, secrets-variables, the token cycles); the rest
-are reported as errored cycles while the others still complete (the run then
-exits 3). So you can start with a narrow grant and widen later — expect
-`ERROR in <cycle>` lines for the cycles the grant doesn't cover yet.
+A refused read (403) never aborts the run and never errors a cycle: every
+cycle treats it as "nothing live", skips the gated slice, and appends a note
+to that cycle's plan (`NOTE: <slice>: read was permission-gated (403);
+planned entries may fail on apply`). So you can start with a narrow grant and
+widen later — the NOTE lines tell you exactly which slices the grant doesn't
+cover yet, and an apply into a still-gated slice surfaces as failed entries,
+not a crashed run.
 
 ### Environment variables
 

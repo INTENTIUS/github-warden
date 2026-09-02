@@ -33,6 +33,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, MemberConfig, OrgMemberRole } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveMemberConfig } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -116,8 +117,20 @@ export const membershipCycle: Cycle<MembershipScope> = {
       throw new BudgetExhaustedError();
     }
 
-    const admins = await listOrgMembers(client, orgLogin, "admin", budget);
-    const members = await listOrgMembers(client, orgLogin, "member", budget);
+    let admins: string[];
+    let members: string[];
+    try {
+      admins = await listOrgMembers(client, orgLogin, "admin", budget);
+      members = await listOrgMembers(client, orgLogin, "member", budget);
+    } catch (err) {
+      // A permission-gated member read (403) is tolerated: the slice is
+      // skipped (nothing live) and a plan NOTE is recorded.
+      if (isForbidden(err)) {
+        notePermissionGated("membership", orgLogin, "members");
+        return { members: [] };
+      }
+      throw err;
+    }
 
     const live: LiveMemberConfig[] = [
       ...admins.map((login) => ({ login, role: "admin" as const })),

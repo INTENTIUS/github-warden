@@ -35,6 +35,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, RepoConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveRepoConfig } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -268,7 +269,12 @@ export async function fetchLiveRepoSettings(
       raw = await client.request<GhRepo>("GET", `/repos/${orgLogin}/${name}`);
     } catch (err) {
       // 404 → repo not found live; emit no entry (diff will treat as create).
-      if (err instanceof Error && err.message.includes("404")) continue;
+      // 403 → permission-gated read; skip the slice and record a plan NOTE.
+      if (isNotFound(err)) continue;
+      if (isForbidden(err)) {
+        notePermissionGated("repo-settings", orgLogin, `repos/${name}`);
+        continue;
+      }
       throw err;
     }
 

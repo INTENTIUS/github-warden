@@ -32,6 +32,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, RepoBaselineConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveRepoConfig } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -102,7 +103,18 @@ export const repoBaselineCycle: Cycle<RepoBaselineScope> = {
       const { BudgetExhaustedError } = await import("../reconcile/runner.js");
       throw new BudgetExhaustedError();
     }
-    return { repos: await listOrgRepoNames(client, orgLogin, budget) };
+    try {
+      return { repos: await listOrgRepoNames(client, orgLogin, budget) };
+    } catch (err) {
+      // A permission-gated repo list (403) is tolerated: every declared
+      // baseline surfaces as a create (which may fail on apply) and a plan
+      // NOTE is recorded.
+      if (isForbidden(err)) {
+        notePermissionGated("repo-baseline", orgLogin, "repos");
+        return { repos: {} };
+      }
+      throw err;
+    }
   },
 
   // ── Part 3: buildDesired ───────────────────────────────────────────────────

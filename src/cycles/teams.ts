@@ -69,6 +69,7 @@ import type {
   LiveTeamRepo,
 } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -264,11 +265,22 @@ export const teamsCycle: Cycle<TeamsScope> = {
       throw new BudgetExhaustedError();
     }
 
-    const ghTeams = await paginate<GhTeam>(
-      client,
-      (page) => `/orgs/${orgLogin}/teams?per_page=${PER_PAGE}&page=${page}`,
-      budget,
-    );
+    let ghTeams: GhTeam[];
+    try {
+      ghTeams = await paginate<GhTeam>(
+        client,
+        (page) => `/orgs/${orgLogin}/teams?per_page=${PER_PAGE}&page=${page}`,
+        budget,
+      );
+    } catch (err) {
+      // A permission-gated team list (403) is tolerated: the slice is skipped
+      // (nothing live) and a plan NOTE is recorded.
+      if (isForbidden(err)) {
+        notePermissionGated("teams", orgLogin, "teams");
+        return { teams: {} };
+      }
+      throw err;
+    }
 
     const teams: Record<string, LiveTeamConfig> = {};
     for (const t of ghTeams) {
@@ -280,13 +292,26 @@ export const teamsCycle: Cycle<TeamsScope> = {
       }
       if (t.parent?.slug) live.parentTeamSlug = t.parent.slug;
 
-      // Fetch sub-resources only for teams whose config manages them.
+      // Fetch sub-resources only for teams whose config manages them. A 403 on
+      // a sub-read gates just that sub-slice (empty + NOTE).
       const scopeTeam = scope.teams?.[t.slug];
       if (scopeTeam?.members !== undefined && !budget.exhausted) {
-        live.members = await fetchTeamMembers(client, orgLogin, t.slug, budget);
+        try {
+          live.members = await fetchTeamMembers(client, orgLogin, t.slug, budget);
+        } catch (err) {
+          if (!isForbidden(err)) throw err;
+          notePermissionGated("teams", orgLogin, `teams/${t.slug}/members`);
+          live.members = [];
+        }
       }
       if (scopeTeam?.repos !== undefined && !budget.exhausted) {
-        live.repos = await fetchTeamRepos(client, orgLogin, t.slug, budget);
+        try {
+          live.repos = await fetchTeamRepos(client, orgLogin, t.slug, budget);
+        } catch (err) {
+          if (!isForbidden(err)) throw err;
+          notePermissionGated("teams", orgLogin, `teams/${t.slug}/repos`);
+          live.repos = [];
+        }
       }
 
       teams[t.slug] = live;

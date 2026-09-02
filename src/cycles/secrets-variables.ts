@@ -33,6 +33,7 @@ import type { AppClient } from "../auth/app-client.js";
 import type { OrgConfig, RepoConfig, SecretConfig, VariableConfig } from "../config/types.js";
 import type { ChangeSetEntry, LiveOrgState, LiveSecret, LiveVariable } from "../reconcile/diff.js";
 import type { Cycle, RateBudget } from "../reconcile/runner.js";
+import { isForbidden, isNotFound, notePermissionGated } from "./notes.js";
 
 // ---------------------------------------------------------------------------
 // Public scope type
@@ -71,8 +72,16 @@ async function listWrapped<T>(
   return out;
 }
 
-/** Fetch secret names under a base path; tolerate 403/404 as "no access / none". */
-async function fetchSecrets(client: AppClient, basePath: string, budget: RateBudget): Promise<LiveSecret[]> {
+/**
+ * Fetch secret names under a base path; tolerate 403/404 as "no access / none".
+ * A 403 invokes `onGated` so the caller can record a plan NOTE.
+ */
+async function fetchSecrets(
+  client: AppClient,
+  basePath: string,
+  budget: RateBudget,
+  onGated?: () => void,
+): Promise<LiveSecret[]> {
   try {
     const raw = await listWrapped<{ name: string }>(
       client,
@@ -82,13 +91,25 @@ async function fetchSecrets(client: AppClient, basePath: string, budget: RateBud
     );
     return raw.filter((s) => typeof s.name === "string").map((s) => ({ name: s.name }));
   } catch (err) {
-    if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) return [];
+    if (isNotFound(err)) return [];
+    if (isForbidden(err)) {
+      onGated?.();
+      return [];
+    }
     throw err;
   }
 }
 
-/** Fetch variables (name + value) under a base path; tolerate 403/404. */
-async function fetchVariables(client: AppClient, basePath: string, budget: RateBudget): Promise<LiveVariable[]> {
+/**
+ * Fetch variables (name + value) under a base path; tolerate 403/404.
+ * A 403 invokes `onGated` so the caller can record a plan NOTE.
+ */
+async function fetchVariables(
+  client: AppClient,
+  basePath: string,
+  budget: RateBudget,
+  onGated?: () => void,
+): Promise<LiveVariable[]> {
   try {
     const raw = await listWrapped<{ name: string; value?: string }>(
       client,
@@ -100,7 +121,11 @@ async function fetchVariables(client: AppClient, basePath: string, budget: RateB
       .filter((v) => typeof v.name === "string")
       .map((v) => ({ name: v.name, value: v.value }));
   } catch (err) {
-    if (err instanceof Error && (err.message.includes("404") || err.message.includes("403"))) return [];
+    if (isNotFound(err)) return [];
+    if (isForbidden(err)) {
+      onGated?.();
+      return [];
+    }
     throw err;
   }
 }
@@ -215,10 +240,14 @@ export const secretsVariablesCycle: Cycle<SecretsVariablesScope> = {
       throw new BudgetExhaustedError();
     }
 
-    const secrets = await fetchSecrets(client, `/orgs/${orgLogin}/actions/secrets`, budget);
+    const secrets = await fetchSecrets(client, `/orgs/${orgLogin}/actions/secrets`, budget, () =>
+      notePermissionGated("secrets-variables", orgLogin, "org-secrets"),
+    );
     const variables = budget.exhausted
       ? []
-      : await fetchVariables(client, `/orgs/${orgLogin}/actions/variables`, budget);
+      : await fetchVariables(client, `/orgs/${orgLogin}/actions/variables`, budget, () =>
+          notePermissionGated("secrets-variables", orgLogin, "org-variables"),
+        );
 
     const repos: NonNullable<LiveOrgState["repos"]> = {};
     for (const [name, repoConfig] of Object.entries(scope?.repos ?? {})) {
@@ -229,10 +258,20 @@ export const secretsVariablesCycle: Cycle<SecretsVariablesScope> = {
 
       const repoLive: { secrets?: LiveSecret[]; variables?: LiveVariable[] } = {};
       if (wantsSecrets) {
-        repoLive.secrets = await fetchSecrets(client, `/repos/${orgLogin}/${name}/actions/secrets`, budget);
+        repoLive.secrets = await fetchSecrets(
+          client,
+          `/repos/${orgLogin}/${name}/actions/secrets`,
+          budget,
+          () => notePermissionGated("secrets-variables", orgLogin, `repo-secrets/${name}`),
+        );
       }
       if (wantsVariables && !budget.exhausted) {
-        repoLive.variables = await fetchVariables(client, `/repos/${orgLogin}/${name}/actions/variables`, budget);
+        repoLive.variables = await fetchVariables(
+          client,
+          `/repos/${orgLogin}/${name}/actions/variables`,
+          budget,
+          () => notePermissionGated("secrets-variables", orgLogin, `repo-variables/${name}`),
+        );
       }
       repos[name] = repoLive;
     }

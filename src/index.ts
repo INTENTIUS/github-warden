@@ -105,6 +105,8 @@ export type {
 export { runReconcile, BudgetExhaustedError } from "./reconcile/runner.js";
 
 // Cycles
+export type { CycleNote } from "./cycles/notes.js";
+export { notePermissionGated, drainNotes, isForbidden, isNotFound } from "./cycles/notes.js";
 export { branchProtectionCycle, fetchLiveForOrg } from "./cycles/branch-protection.js";
 export { orgSettingsCycle, buildOrgPatchBody } from "./cycles/org-settings.js";
 export type { OrgSettingsScope } from "./cycles/org-settings.js";
