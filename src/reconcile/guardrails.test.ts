@@ -649,3 +649,47 @@ describe("removalLiveCap", () => {
     expect(custom.ok).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// member-visibility gate for the member-aware guardrails
+// ---------------------------------------------------------------------------
+
+describe("runGuardrails — member-visibility gate", () => {
+  it("does not run adminFloor for a cycle with no member visibility", () => {
+    // A repo-security create from a cycle that never reads membership: no live
+    // roster, no member entries. Before the gate this read as "0 admins" and
+    // blocked every non-membership apply.
+    const cs = makeChangeSet([
+      { kind: "create", resourceType: "repo-security", key: "app", after: {} },
+    ]);
+    expect(runGuardrails(cs, emptyLive())).toEqual({ ok: true });
+    // requireSelf/requiredAdmins are likewise gated.
+    const result = runGuardrails(cs, emptyLive(), {
+      requireSelf: { selfLogin: "bot" },
+      requiredAdmins: { logins: ["bot"] },
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("still runs the member guardrails when the plan carries member entries", () => {
+    const cs = makeChangeSet([
+      { kind: "delete", resourceType: "member", key: "only-admin", before: { login: "only-admin", role: "admin" } },
+    ]);
+    // No live roster, but the plan touches members → the floor evaluates.
+    const result = runGuardrails(cs, emptyLive(), {}, 10);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics.map((d) => d.guardrail)).toContain("adminFloor");
+    }
+  });
+
+  it("still runs the member guardrails when a live roster is present", () => {
+    const cs = makeChangeSet([]);
+    const result = runGuardrails(makeChangeSet([]), liveWithMembers([{ login: "solo", role: "admin" }]));
+    void cs;
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.diagnostics[0]!.guardrail).toBe("adminFloor");
+    }
+  });
+});

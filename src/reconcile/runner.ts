@@ -97,6 +97,9 @@ export async function runReconcile<TScope = unknown>(
   // live total (a sequencing assumption locked by a runner test).
   let liveManagedTotal = 0;
 
+  // Clear notes a previous (crashed/errored) run may have left behind.
+  drainNotes();
+
   const result = await coreRunReconcile<AppClient, OrgConfig, LiveOrgState, TScope>({
     client: opts.client,
     scopes: opts.config.orgs,

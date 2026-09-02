@@ -273,17 +273,27 @@ export function runGuardrails(
   );
   if (cap) diagnostics.push(cap);
 
-  const floor = adminFloor(resolved, live, config.adminFloor);
-  if (floor) diagnostics.push(floor);
+  // The member-aware guardrails only make sense for a change set with member
+  // visibility: a live member roster, or member entries in the plan. A cycle
+  // that never reads or writes membership (branch-protection, rulesets, …)
+  // cannot change the admin count, and evaluating the floor against its
+  // member-less live snapshot would read as "0 admins" and block every apply.
+  const memberAware =
+    live.members !== undefined || resolved.entries.some((e) => e.resourceType === "member");
 
-  if (config.requiredAdmins) {
-    const req = requiredAdmins(resolved, live, config.requiredAdmins);
-    if (req) diagnostics.push(req);
-  }
+  if (memberAware) {
+    const floor = adminFloor(resolved, live, config.adminFloor);
+    if (floor) diagnostics.push(floor);
 
-  if (config.requireSelf) {
-    const self = requireSelf(resolved, live, config.requireSelf);
-    if (self) diagnostics.push(self);
+    if (config.requiredAdmins) {
+      const req = requiredAdmins(resolved, live, config.requiredAdmins);
+      if (req) diagnostics.push(req);
+    }
+
+    if (config.requireSelf) {
+      const self = requireSelf(resolved, live, config.requireSelf);
+      if (self) diagnostics.push(self);
+    }
   }
 
   if (diagnostics.length > 0) return { ok: false, diagnostics };
