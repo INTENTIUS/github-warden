@@ -1,9 +1,9 @@
 # CLI reference
 
-The `github-warden` binary has four subcommands. `reconcile`, `audit` and
+The `github-warden` binary has five subcommands. `reconcile`, `audit` and
 `report` load the policy file (`--config`) and authenticate the same way; they
-differ in what they do with live GitHub state. `codeowners` reads a chant
-workspace from disk and touches neither GitHub nor the policy file.
+differ in what they do with live GitHub state. `codeowners` and `lifecycle` read
+a chant workspace from disk and touch neither GitHub nor the policy file.
 
 | Subcommand | What it does | Mutates? |
 |---|---|---|
@@ -11,6 +11,7 @@ workspace from disk and touches neither GitHub nor the policy file.
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
 | `codeowners` | Generate CODEOWNERS from the members of a chant workspace. | Only the `--out` file, and not with `--check`. |
+| `lifecycle` | Show the `chant/lifecycle` ledger paths, or print the ruleset that protects the branch. | Never. |
 
 `github-warden --help` (or no arguments, or `--help` after a subcommand)
 prints usage; `github-warden --version` prints the version (inlined from
@@ -172,6 +173,29 @@ missing (reason `dir-missing`) is skipped with a note on stderr. A name in the
 owners file that the workspace has no member for exits 2. A failed chant read
 exits 3.
 
-Not yet covered: required status checks per member pipeline and a ruleset for
-the `chant/lifecycle` branch. Both need the generated job names, which no
-contract document carries yet (INTENTIUS/chant#3050).
+Not yet covered: required status checks per member pipeline. They need the
+generated job names, which no contract document carries yet
+(INTENTIUS/chant#3050).
+
+## `lifecycle`
+
+```
+github-warden lifecycle --env <environment> [--dir <path>] [--format paths|ruleset] [--name <ruleset>]
+```
+
+Reads `chant workspace status <environment> --json`, which needs chant 0.81 or
+newer. The branch name comes from `lifecycle.ref` in that document, and each
+member's release ledger and gate ledger paths from `members[].environments[].ledger.path`
+and `members[].gateLedger.path`. Nothing is hard-coded.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--env <name>` | **required** | The environment chant reads ledgers for. |
+| `--dir <path>` | `.` | Where chant starts looking for the workspace declaration. |
+| `--format paths\|ruleset` | `paths` | `paths` prints the branch and the ledger paths. `ruleset` prints the ruleset as JSON. |
+| `--name <ruleset>` | `chant-lifecycle` | The ruleset's name, its identity key in the repo. |
+
+The ruleset targets `refs/heads/<lifecycle.ref>` with the rules `deletion` and
+`non_fast_forward`. The branch can't be deleted and its history can't be rewritten. Appending
+commits stays allowed, and that is how chant records releases and gate facts. Put the output under `repos.<repo>.rulesets` in the policy file and the
+`rulesets` cycle reconciles it like any other ruleset.

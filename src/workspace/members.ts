@@ -128,21 +128,34 @@ export function chantLauncher(): string | null {
 }
 
 /**
+ * Run a chant command that prints a read-contract document and return its
+ * stdout. A failed read still prints a JSON failure document (exit 1), so only
+ * empty output is an error here. `what` names the command in messages.
+ */
+export async function runChantJson(
+  dir: string,
+  args: string[],
+  what: string,
+  run: CommandRunner = defaultRunner,
+): Promise<string> {
+  let result;
+  try {
+    result = await run(chantLauncher() ?? "chant", args, dir);
+  } catch (err) {
+    throw new WorkspaceReadError(`could not run chant: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (result.stdout.trim() === "") {
+    throw new WorkspaceReadError(
+      `\`${what}\` printed nothing (exit ${result.code}); chant 0.81.0 or newer is required. ${result.stderr.trim()}`.trim(),
+    );
+  }
+  return result.stdout;
+}
+
+/**
  * Run `chant workspace ls --json` in `dir` and return the workspace.
  * Uses the chant installed beside the warden, else `chant` on PATH.
  */
 export async function readWorkspace(dir: string, run: CommandRunner = defaultRunner): Promise<Workspace> {
-  let result;
-  try {
-    result = await run(chantLauncher() ?? "chant", ["workspace", "ls", "--json"], dir);
-  } catch (err) {
-    throw new WorkspaceReadError(`could not run chant: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  // A failed read still prints a JSON failure document, with exit code 1.
-  if (result.stdout.trim() === "") {
-    throw new WorkspaceReadError(
-      `\`chant workspace ls --json\` printed nothing (exit ${result.code}); chant 0.81.0 or newer is required. ${result.stderr.trim()}`.trim(),
-    );
-  }
-  return parseLsDocument(result.stdout);
+  return parseLsDocument(await runChantJson(dir, ["workspace", "ls", "--json"], "chant workspace ls --json", run));
 }

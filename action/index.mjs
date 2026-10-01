@@ -254025,19 +254025,76 @@ function chantLauncher() {
   }
   return null;
 }
-async function readWorkspace(dir, run4 = defaultRunner) {
+async function runChantJson(dir, args, what, run4 = defaultRunner) {
   let result;
   try {
-    result = await run4(chantLauncher() ?? "chant", ["workspace", "ls", "--json"], dir);
+    result = await run4(chantLauncher() ?? "chant", args, dir);
   } catch (err) {
     throw new WorkspaceReadError(`could not run chant: ${err instanceof Error ? err.message : String(err)}`);
   }
   if (result.stdout.trim() === "") {
     throw new WorkspaceReadError(
-      `\`chant workspace ls --json\` printed nothing (exit ${result.code}); chant 0.81.0 or newer is required. ${result.stderr.trim()}`.trim()
+      `\`${what}\` printed nothing (exit ${result.code}); chant 0.81.0 or newer is required. ${result.stderr.trim()}`.trim()
     );
   }
-  return parseLsDocument(result.stdout);
+  return result.stdout;
+}
+async function readWorkspace(dir, run4 = defaultRunner) {
+  return parseLsDocument(await runChantJson(dir, ["workspace", "ls", "--json"], "chant workspace ls --json", run4));
+}
+
+// src/workspace/lifecycle.ts
+function ledger(o) {
+  if (!o || typeof o !== "object") return null;
+  const l = o;
+  if (typeof l["path"] !== "string") return null;
+  return { path: l["path"], layout: l["layout"] === "members" ? "members" : "flat" };
+}
+function parseStatusDocument(stdout) {
+  let doc;
+  try {
+    doc = JSON.parse(stdout);
+  } catch {
+    throw new WorkspaceReadError("`chant workspace status --json` did not print JSON");
+  }
+  const d = doc ?? {};
+  if (d["contract"] !== READ_CONTRACT) {
+    throw new WorkspaceReadError(
+      `read contract ${String(d["contract"])} is not supported, this warden reads contract ${READ_CONTRACT}`
+    );
+  }
+  if (d["error"] && typeof d["error"] === "object") {
+    const e = d["error"];
+    throw new WorkspaceReadError(`chant could not read the workspace: ${String(e.code)}: ${String(e.message)}`);
+  }
+  const lc = d["lifecycle"];
+  if (!lc || typeof lc["ref"] !== "string" || !Array.isArray(d["members"])) {
+    throw new WorkspaceReadError("`chant workspace status --json` document lacks lifecycle or members");
+  }
+  const members = d["members"].map((m, i) => {
+    if (typeof m["name"] !== "string") throw new WorkspaceReadError(`members[${i}] lacks a name`);
+    const envs = Array.isArray(m["environments"]) ? m["environments"] : [];
+    const releases = [];
+    for (const e of envs) {
+      const l = ledger(e["ledger"]);
+      if (l && typeof e["env"] === "string") releases.push({ env: e["env"], ...l });
+    }
+    return { name: m["name"], releases, gates: ledger(m["gateLedger"]) };
+  });
+  return { ref: lc["ref"], commit: typeof lc["commit"] === "string" ? lc["commit"] : null, members };
+}
+async function readLifecycle(dir, env2, run4 = defaultRunner) {
+  const out = await runChantJson(dir, ["workspace", "status", env2, "--json"], `chant workspace status ${env2} --json`, run4);
+  return parseStatusDocument(out);
+}
+function lifecycleRuleset(ref, name = "chant-lifecycle") {
+  return {
+    name,
+    target: "branch",
+    enforcement: "active",
+    conditions: { ref_name: { include: [`refs/heads/${ref}`], exclude: [] } },
+    rules: [{ type: "deletion" }, { type: "non_fast_forward" }]
+  };
 }
 
 // src/workspace/codeowners.ts
@@ -254476,8 +254533,12 @@ async function main(argv = process.argv.slice(2)) {
     await runCodeowners(argv.slice(1));
     return;
   }
+  if (subcommand === "lifecycle") {
+    await runLifecycle(argv.slice(1));
+    return;
+  }
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", or "codeowners"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", or "lifecycle"?`);
   }
   let args;
   try {
@@ -254986,6 +255047,64 @@ async function runCodeowners(argv) {
 `);
   process.exit(0);
 }
+function parseLifecycleArgs(argv) {
+  const args = { env: "", dir: ".", format: "paths", name: "chant-lifecycle" };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i];
+    const value = () => {
+      const v = argv[++i];
+      if (!v || v.startsWith("--")) throw new CliError(2, `${flag} requires a value`);
+      return v;
+    };
+    switch (flag) {
+      case "--env":
+        args.env = value();
+        break;
+      case "--dir":
+        args.dir = value();
+        break;
+      case "--name":
+        args.name = value();
+        break;
+      case "--format": {
+        const f = value();
+        if (f !== "paths" && f !== "ruleset") throw new CliError(2, `--format must be paths or ruleset, got ${f}`);
+        args.format = f;
+        break;
+      }
+      default:
+        throw new CliError(2, `unknown flag for lifecycle: ${flag}`);
+    }
+  }
+  if (!args.env) throw new CliError(2, "lifecycle requires --env <environment>");
+  return args;
+}
+async function runLifecycle(argv) {
+  let args;
+  try {
+    args = parseLifecycleArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+  let lc;
+  try {
+    lc = await readLifecycle(args.dir, args.env);
+  } catch (err) {
+    die(err instanceof WorkspaceReadError ? 3 : 2, errMsg2(err));
+  }
+  if (args.format === "ruleset") {
+    process.stdout.write(JSON.stringify(lifecycleRuleset(lc.ref, args.name), null, 2) + "\n");
+    process.exit(0);
+  }
+  const lines = [`branch ${lc.ref}${lc.commit ? ` at ${lc.commit.slice(0, 8)}` : " (not in this checkout)"}`, ""];
+  for (const m of lc.members) {
+    for (const r of m.releases) lines.push(`${m.name}  releases (${r.env})  ${r.path}`);
+    if (m.gates) lines.push(`${m.name}  gates  ${m.gates.path}`);
+  }
+  process.stdout.write(lines.join("\n") + "\n");
+  process.exit(0);
+}
 function printUsage() {
   process.stdout.write(
     [
@@ -254996,6 +255115,7 @@ function printUsage() {
       "  audit       Audit managed repos for security/correctness posture.",
       "  report      Aggregate cycle drift (+ optional audit) into a compliance snapshot.",
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
+      "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -255030,6 +255150,12 @@ function printUsage() {
       "  --dir <path>                  Where chant looks for the workspace (default: .).",
       "  --out <path>                  Write the file here instead of stdout.",
       "  --check                       With --out: exit 4 when the file differs. Writes nothing.",
+      "",
+      "Flags (lifecycle):",
+      "  --env <name>                  Environment passed to chant workspace status. Required.",
+      "  --dir <path>                  Where chant starts looking for the workspace (default: .).",
+      "  --format paths|ruleset        Ledger paths (default) or the branch ruleset as JSON.",
+      "  --name <ruleset>              Ruleset name (default: chant-lifecycle).",
       "",
       "Exit codes:",
       "  0   Success.",

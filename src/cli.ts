@@ -8,6 +8,7 @@
  *   reconcile   Load config, build an authed client, run selected cycles.
  *   audit       Run chant's posture-audit engine over all managed repos.
  *   codeowners  Generate CODEOWNERS from a chant workspace's members.
+ *   lifecycle   Show the chant/lifecycle ledger paths and its ruleset.
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
@@ -57,6 +58,7 @@ import type { Cycle, ReconcileResult } from "./reconcile/runner.js";
 import { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
 import { buildIdentityReport, type RawInstallation } from "./report/identity.js";
 import { readWorkspace, WorkspaceReadError } from "./workspace/members.js";
+import { readLifecycle, lifecycleRuleset } from "./workspace/lifecycle.js";
 import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./workspace/codeowners.js";
 
 // ---------------------------------------------------------------------------
@@ -576,8 +578,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
 
+  if (subcommand === "lifecycle") {
+    await runLifecycle(argv.slice(1));
+    return;
+  }
+
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", or "codeowners"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", or "lifecycle"?`);
   }
 
   let args: ReconcileArgs;
@@ -1274,6 +1281,72 @@ async function runCodeowners(argv: string[]): Promise<void> {
   process.exit(0);
 }
 
+export interface LifecycleArgs {
+  env: string;
+  dir: string;
+  format: "paths" | "ruleset";
+  name: string;
+}
+
+/** Parse lifecycle argv (everything after the `lifecycle` subcommand). */
+export function parseLifecycleArgs(argv: string[]): LifecycleArgs {
+  const args: LifecycleArgs = { env: "", dir: ".", format: "paths", name: "chant-lifecycle" };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i]!;
+    const value = (): string => {
+      const v = argv[++i];
+      if (!v || v.startsWith("--")) throw new CliError(2, `${flag} requires a value`);
+      return v;
+    };
+    switch (flag) {
+      case "--env": args.env = value(); break;
+      case "--dir": args.dir = value(); break;
+      case "--name": args.name = value(); break;
+      case "--format": {
+        const f = value();
+        if (f !== "paths" && f !== "ruleset") throw new CliError(2, `--format must be paths or ruleset, got ${f}`);
+        args.format = f;
+        break;
+      }
+      default: throw new CliError(2, `unknown flag for lifecycle: ${flag}`);
+    }
+  }
+  if (!args.env) throw new CliError(2, "lifecycle requires --env <environment>");
+  return args;
+}
+
+/**
+ * Run `lifecycle`: read the branch name and ledger paths from
+ * `chant workspace status <env> --json`. `--format ruleset` prints the ruleset
+ * for the branch as JSON, to put under `repos.<repo>.rulesets`.
+ */
+async function runLifecycle(argv: string[]): Promise<void> {
+  let args: LifecycleArgs;
+  try {
+    args = parseLifecycleArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+  let lc;
+  try {
+    lc = await readLifecycle(args.dir, args.env);
+  } catch (err) {
+    die(err instanceof WorkspaceReadError ? 3 : 2, errMsg(err));
+  }
+  if (args.format === "ruleset") {
+    process.stdout.write(JSON.stringify(lifecycleRuleset(lc.ref, args.name), null, 2) + "\n");
+    process.exit(0);
+  }
+  const lines = [`branch ${lc.ref}${lc.commit ? ` at ${lc.commit.slice(0, 8)}` : " (not in this checkout)"}`, ""];
+  for (const m of lc.members) {
+    for (const r of m.releases) lines.push(`${m.name}  releases (${r.env})  ${r.path}`);
+    if (m.gates) lines.push(`${m.name}  gates  ${m.gates.path}`);
+  }
+  process.stdout.write(lines.join("\n") + "\n");
+  process.exit(0);
+}
+
 function printUsage() {
   process.stdout.write(
     [
@@ -1284,6 +1357,7 @@ function printUsage() {
       "  audit       Audit managed repos for security/correctness posture.",
       "  report      Aggregate cycle drift (+ optional audit) into a compliance snapshot.",
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
+      "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -1318,6 +1392,12 @@ function printUsage() {
       "  --dir <path>                  Where chant looks for the workspace (default: .).",
       "  --out <path>                  Write the file here instead of stdout.",
       "  --check                       With --out: exit 4 when the file differs. Writes nothing.",
+      "",
+      "Flags (lifecycle):",
+      "  --env <name>                  Environment passed to chant workspace status. Required.",
+      "  --dir <path>                  Where chant starts looking for the workspace (default: .).",
+      "  --format paths|ruleset        Ledger paths (default) or the branch ruleset as JSON.",
+      "  --name <ruleset>              Ruleset name (default: chant-lifecycle).",
       "",
       "Exit codes:",
       "  0   Success.",

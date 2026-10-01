@@ -5,6 +5,9 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- New `lifecycle` subcommand reads the `chant/lifecycle` branch name and each member's
+  ledger paths from `chant workspace status --json`, and prints the ruleset that
+  protects the branch (no deletion, no force push) for the `rulesets` cycle.
 - New `codeowners` subcommand generates CODEOWNERS with one rule per member of a
   chant workspace. Members are read through chant's read contract
   (`chant workspace ls --json`), and owners are declared by member name in an
