@@ -7,6 +7,7 @@
  * Subcommands:
  *   reconcile   Load config, build an authed client, run selected cycles.
  *   audit       Run chant's posture-audit engine over all managed repos.
+ *   codeowners  Generate CODEOWNERS from a chant workspace's members.
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
@@ -38,7 +39,7 @@
  *   4   Audit: findings exceed --fail-on threshold.
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import pkg from "../package.json" with { type: "json" };
 import { loadGovernanceConfig } from "./config/load.js";
@@ -55,6 +56,8 @@ import { renderPostureSummary, shouldFail, type FailOn } from "./audit/summary.j
 import type { Cycle, ReconcileResult } from "./reconcile/runner.js";
 import { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
 import { buildIdentityReport, type RawInstallation } from "./report/identity.js";
+import { readWorkspace, WorkspaceReadError } from "./workspace/members.js";
+import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./workspace/codeowners.js";
 
 // ---------------------------------------------------------------------------
 // Arg parser
@@ -568,8 +571,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
 
+  if (subcommand === "codeowners") {
+    await runCodeowners(argv.slice(1));
+    return;
+  }
+
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", or "report"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", or "codeowners"?`);
   }
 
   let args: ReconcileArgs;
@@ -1190,6 +1198,82 @@ async function runReport(argv: string[]): Promise<void> {
   process.exit(0);
 }
 
+// ---------------------------------------------------------------------------
+// Codeowners subcommand
+// ---------------------------------------------------------------------------
+
+export interface CodeownersArgs {
+  owners: string;
+  dir: string;
+  out: string | undefined;
+  check: boolean;
+}
+
+/** Parse codeowners argv (everything after the `codeowners` subcommand). */
+export function parseCodeownersArgs(argv: string[]): CodeownersArgs {
+  const args: CodeownersArgs = { owners: "", dir: ".", out: undefined, check: false };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i]!;
+    const value = (): string => {
+      const v = argv[++i];
+      if (!v || v.startsWith("--")) throw new CliError(2, `${flag} requires a value`);
+      return v;
+    };
+    switch (flag) {
+      case "--owners": args.owners = value(); break;
+      case "--dir": args.dir = value(); break;
+      case "--out": args.out = value(); break;
+      case "--check": args.check = true; break;
+      default: throw new CliError(2, `unknown flag for codeowners: ${flag}`);
+    }
+  }
+  if (!args.owners) throw new CliError(2, "codeowners requires --owners <path>");
+  if (args.check && !args.out) throw new CliError(2, "--check requires --out <path>");
+  return args;
+}
+
+/**
+ * Run `codeowners`: read members with `chant workspace ls --json`, build the
+ * file from the owners file, then print it, write it (--out) or compare it
+ * with the committed one (--out --check, exit 4 when it differs).
+ */
+async function runCodeowners(argv: string[]): Promise<void> {
+  let args: CodeownersArgs;
+  try {
+    args = parseCodeownersArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+  let text: string;
+  try {
+    const owners = parseOwnersConfig(parseConfigFile(args.owners, readFileSync(args.owners, "utf8")));
+    const ws = await readWorkspace(args.dir);
+    const result = buildCodeowners(ws, owners);
+    for (const s of result.skipped) process.stderr.write(`github-warden: skipped member ${s.name}: ${s.reason}\n`);
+    text = result.text;
+  } catch (err) {
+    if (err instanceof OwnersConfigError) die(2, errMsg(err));
+    if (err instanceof WorkspaceReadError) die(3, errMsg(err));
+    die(2, errMsg(err));
+  }
+  if (!args.out) {
+    process.stdout.write(text);
+    process.exit(0);
+  }
+  if (args.check) {
+    const current = existsSync(args.out) ? readFileSync(args.out, "utf8") : null;
+    if (current !== text) {
+      process.stderr.write(`github-warden: ${args.out} is out of date; run codeowners --out ${args.out}\n`);
+      process.exit(4);
+    }
+    process.exit(0);
+  }
+  writeFileSync(args.out, text);
+  process.stdout.write(`wrote ${args.out}\n`);
+  process.exit(0);
+}
+
 function printUsage() {
   process.stdout.write(
     [
@@ -1199,6 +1283,7 @@ function printUsage() {
       "  reconcile   Load config, authenticate, and run governance cycles.",
       "  audit       Audit managed repos for security/correctness posture.",
       "  report      Aggregate cycle drift (+ optional audit) into a compliance snapshot.",
+      "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -1228,12 +1313,18 @@ function printUsage() {
       "  --identity                    Include an identity & service-account hygiene pass.",
       "  --fail-on none|attention      Exit 4 when the report needs attention (default: none).",
       "",
+      "Flags (codeowners):",
+      "  --owners <path>               Owners by workspace member name (YAML or JSON). Required.",
+      "  --dir <path>                  Where chant looks for the workspace (default: .).",
+      "  --out <path>                  Write the file here instead of stdout.",
+      "  --check                       With --out: exit 4 when the file differs. Writes nothing.",
+      "",
       "Exit codes:",
       "  0   Success.",
       "  1   Guardrail block (apply mode, override not set).",
       "  2   Argument or config error.",
       "  3   Runtime error.",
-      "  4   Audit/report: threshold exceeded or report needs attention.",
+      "  4   Audit/report: threshold exceeded or report needs attention. Codeowners --check: file differs.",
       "",
     ].join("\n"),
   );

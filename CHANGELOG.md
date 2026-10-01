@@ -3,6 +3,15 @@
 Notable changes to `@intentius/github-warden`. Versions follow semver, and
 releases before `0.4.1` are not recorded here.
 
+## Unreleased
+
+- New `codeowners` subcommand generates CODEOWNERS with one rule per member of a
+  chant workspace. Members are read through chant's read contract
+  (`chant workspace ls --json`), and owners are declared by member name in an
+  owners file. See [CLI.md](CLI.md#codeowners).
+- The `@intentius/chant` and `@intentius/chant-lexicon-github` range moves from
+  `^0.72.1` to `^0.100.0`, since the read contract starts at chant 0.81.
+
 ## 0.5.0 (2026-09-02)
 
 The removal cap is now evaluated per collection. Deletes of each resource type
