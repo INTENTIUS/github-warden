@@ -478,3 +478,20 @@ describe("parseCodeownersArgs", () => {
     expect(() => parseCodeownersArgs(["--owners", "o.json", "--bogus"])).toThrow(/unknown flag/);
   });
 });
+
+describe("parseLifecycleArgs", () => {
+  it("parses env, dir, format and name", async () => {
+    const { parseLifecycleArgs } = await import("../cli.js");
+    expect(parseLifecycleArgs(["--env", "prod", "--format", "ruleset", "--name", "lc", "--dir", "ws"])).toEqual({
+      env: "prod",
+      dir: "ws",
+      format: "ruleset",
+      name: "lc",
+    });
+  });
+  it("requires --env and a known format", async () => {
+    const { parseLifecycleArgs } = await import("../cli.js");
+    expect(() => parseLifecycleArgs([])).toThrow(/--env/);
+    expect(() => parseLifecycleArgs(["--env", "p", "--format", "x"])).toThrow(/paths or ruleset/);
+  });
+});
