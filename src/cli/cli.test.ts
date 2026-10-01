@@ -495,3 +495,21 @@ describe("parseLifecycleArgs", () => {
     expect(() => parseLifecycleArgs(["--env", "p", "--format", "x"])).toThrow(/paths or ruleset/);
   });
 });
+
+describe("parseChecksArgs", () => {
+  it("parses members, branch, name and format", async () => {
+    const { parseChecksArgs } = await import("../cli.js");
+    expect(parseChecksArgs(["--members", "a, b", "--branch", "main", "--format", "contexts"])).toEqual({
+      dir: ".",
+      members: ["a", "b"],
+      branch: "main",
+      name: "chant-required-checks",
+      format: "contexts",
+    });
+  });
+  it("rejects a bad format and unknown flags", async () => {
+    const { parseChecksArgs } = await import("../cli.js");
+    expect(() => parseChecksArgs(["--format", "x"])).toThrow(/ruleset or contexts/);
+    expect(() => parseChecksArgs(["--x"])).toThrow(/unknown flag/);
+  });
+});

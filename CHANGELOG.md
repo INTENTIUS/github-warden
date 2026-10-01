@@ -5,6 +5,9 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- New `checks` subcommand reads each member's generated pipeline job names from
+  `chant workspace ls --json` and prints the ruleset that requires them as
+  status checks. The chant range moves to `^0.101.0`, which publishes the names.
 - New `lifecycle` subcommand reads the `chant/lifecycle` branch name and each member's
   ledger paths from `chant workspace status --json`, and prints the ruleset that
   protects the branch (no deletion, no force push) for the `rulesets` cycle.

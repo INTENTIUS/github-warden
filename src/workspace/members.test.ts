@@ -25,8 +25,8 @@ describe("parseLsDocument", () => {
     expect(ws.root).toBe("sub");
     expect(ws.chant).toBe("0.100.0");
     expect(ws.members).toEqual([
-      { name: "api", dir: "packages/api", kind: "other", readable: true, reason: null },
-      { name: "gone", dir: "old", kind: "other", readable: false, reason: "dir-missing" },
+      { name: "api", dir: "packages/api", kind: "other", readable: true, reason: null, generated: [] },
+      { name: "gone", dir: "old", kind: "other", readable: false, reason: "dir-missing", generated: [] },
     ]);
   });
 
