@@ -3438,20 +3438,20 @@ var require_picomatch2 = __commonJS({
 });
 
 // node_modules/@intentius/chant/src/project-root.ts
-import { existsSync } from "fs";
-import { dirname, join, resolve } from "path";
+import { existsSync as existsSync2 } from "fs";
+import { dirname as dirname2, join as join2, resolve } from "path";
 function findProjectConfig(startDir) {
   const resolvedStart = resolve(startDir);
   let dir = resolvedStart;
   for (; ; ) {
-    const tsPath = join(dir, "chant.config.ts");
-    if (existsSync(tsPath)) return { dir, configPath: tsPath };
-    const jsonPath = join(dir, "chant.config.json");
-    if (existsSync(jsonPath)) return { dir, configPath: jsonPath };
-    if (existsSync(join(dir, ".git")) || existsSync(join(dir, "package.json"))) {
+    const tsPath = join2(dir, "chant.config.ts");
+    if (existsSync2(tsPath)) return { dir, configPath: tsPath };
+    const jsonPath = join2(dir, "chant.config.json");
+    if (existsSync2(jsonPath)) return { dir, configPath: jsonPath };
+    if (existsSync2(join2(dir, ".git")) || existsSync2(join2(dir, "package.json"))) {
       return { dir };
     }
-    const parent = dirname(dir);
+    const parent = dirname2(dir);
     if (parent === dir) {
       return { dir: resolvedStart };
     }
@@ -3461,21 +3461,21 @@ function findProjectConfig(startDir) {
 function findWorkspaceRoot(startDir) {
   const start = resolve(startDir);
   let top;
-  for (let dir = start; ; dir = dirname(dir)) {
-    if (existsSync(join(dir, ".git"))) {
+  for (let dir = start; ; dir = dirname2(dir)) {
+    if (existsSync2(join2(dir, ".git"))) {
       top = dir;
       break;
     }
-    if (dirname(dir) === dir) break;
+    if (dirname2(dir) === dir) break;
   }
-  for (let dir = start; ; dir = dirname(dir)) {
-    const [json2, jsonc] = WORKSPACE_DECLARATION_FILES.map((name) => join(dir, name));
-    const hasJson = existsSync(json2);
-    const hasJsonc = existsSync(jsonc);
+  for (let dir = start; ; dir = dirname2(dir)) {
+    const [json2, jsonc] = WORKSPACE_DECLARATION_FILES.map((name) => join2(dir, name));
+    const hasJson = existsSync2(json2);
+    const hasJsonc = existsSync2(jsonc);
     if (hasJson && hasJsonc) return { dir, file: json2, conflicting: jsonc };
     if (hasJson) return { dir, file: json2 };
     if (hasJsonc) return { dir, file: jsonc };
-    if (top === void 0 || dir === top || dirname(dir) === dir) return void 0;
+    if (top === void 0 || dir === top || dirname2(dir) === dir) return void 0;
   }
 }
 var WORKSPACE_DECLARATION_FILES;
@@ -18750,7 +18750,7 @@ var init_bom_writer = __esm({
 
 // node_modules/@intentius/chant/src/components/verbs/lockfile-sbom-generator.ts
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname as dirname2, join as join2 } from "node:path";
+import { dirname as dirname3, join as join3 } from "node:path";
 function parseNpmPackageLock(content) {
   const lock = JSON.parse(content);
   const seen = /* @__PURE__ */ new Map();
@@ -18809,7 +18809,7 @@ function parsePomXml(content) {
 }
 function findManifest(dir) {
   for (const [kind, filename] of [["npm", "package-lock.json"], ["maven", "pom.xml"]]) {
-    const candidate = join2(dir, filename);
+    const candidate = join3(dir, filename);
     try {
       readFileSync(candidate, "utf-8");
       return { kind, path: candidate };
@@ -18820,7 +18820,7 @@ function findManifest(dir) {
   return void 0;
 }
 function sbomOutputPath(dir, format) {
-  return join2(dir, `sbom.${format}.json`);
+  return join3(dir, `sbom.${format}.json`);
 }
 function createLockfileSbomGenerator(options = {}) {
   const now = options.now ?? (() => /* @__PURE__ */ new Date());
@@ -18849,10 +18849,10 @@ function createLockfileSbomGenerator(options = {}) {
       throw new SbomGeneratorNotImplementedError("forImage");
     },
     async forJar(input) {
-      return generateFromDir(dirname2(input.jarPath), input.jarPath, input.digest, input.format);
+      return generateFromDir(dirname3(input.jarPath), input.jarPath, input.digest, input.format);
     },
     async forZip(input) {
-      return generateFromDir(dirname2(input.zipPath), input.zipPath, input.digest, input.format);
+      return generateFromDir(dirname3(input.zipPath), input.zipPath, input.digest, input.format);
     },
     async forDir(input) {
       return generateFromDir(input.path, input.path, void 0, input.format);
@@ -21407,10 +21407,10 @@ error: ${text}`);
 });
 
 // node_modules/@intentius/chant/src/discovery/sandbox/bundle.ts
-import { existsSync as existsSync2, mkdtempSync, readFileSync as readFileSync2, realpathSync, rmSync, statSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { createRequire } from "node:module";
+import { existsSync as existsSync3, mkdtempSync, readFileSync as readFileSync2, realpathSync, rmSync, statSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { createRequire as createRequire2 } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname as dirname3, join as join3, resolve as resolvePath } from "node:path";
+import { dirname as dirname4, join as join4, resolve as resolvePath } from "node:path";
 function getExternalPackagePathCache() {
   const g = globalThis;
   return g.__chantExternalPackagePathCache ??= /* @__PURE__ */ new Map();
@@ -21418,10 +21418,10 @@ function getExternalPackagePathCache() {
 function fastResolvePackage(specifier, fromDir) {
   let dir = fromDir;
   for (; ; ) {
-    const packageDir = join3(dir, "node_modules", specifier);
-    if (existsSync2(packageDir)) {
-      const pkgJsonPath = join3(packageDir, "package.json");
-      if (!existsSync2(pkgJsonPath)) return void 0;
+    const packageDir = join4(dir, "node_modules", specifier);
+    if (existsSync3(packageDir)) {
+      const pkgJsonPath = join4(packageDir, "package.json");
+      if (!existsSync3(pkgJsonPath)) return void 0;
       let pkg;
       try {
         pkg = JSON.parse(readFileSync2(pkgJsonPath, "utf-8"));
@@ -21434,14 +21434,14 @@ function fastResolvePackage(specifier, fromDir) {
       const main3 = pkg.main;
       const entry = typeof main3 === "string" ? main3 : "index.js";
       const resolved = resolvePath(packageDir, entry);
-      if (!existsSync2(resolved) || !statSync(resolved).isFile()) return void 0;
+      if (!existsSync3(resolved) || !statSync(resolved).isFile()) return void 0;
       try {
         return realpathSync(resolved);
       } catch {
         return void 0;
       }
     }
-    const parent = dirname3(dir);
+    const parent = dirname4(dir);
     if (parent === dir) return void 0;
     dir = parent;
   }
@@ -21459,7 +21459,7 @@ function externalTrustedPackagesPlugin() {
       }
       if (path === void 0) continue;
       resolved.set(name, path);
-      readPaths.push(dirname3(path));
+      readPaths.push(dirname4(path));
     } catch {
       pathCache.set(name, void 0);
     }
@@ -21476,10 +21476,10 @@ function externalTrustedPackagesPlugin() {
   return { plugin, readPaths };
 }
 async function bundleDriver(driverSource) {
-  const bundleDir = realpathSync(mkdtempSync(join3(tmpdir(), "chant-sandbox-")));
-  const entryPath = join3(bundleDir, "driver.mts");
+  const bundleDir = realpathSync(mkdtempSync(join4(tmpdir(), "chant-sandbox-")));
+  const entryPath = join4(bundleDir, "driver.mts");
   writeFileSync2(entryPath, driverSource, "utf-8");
-  const outfile = join3(bundleDir, "child.mjs");
+  const outfile = join4(bundleDir, "child.mjs");
   const { plugin, readPaths } = externalTrustedPackagesPlugin();
   const start = performance.now();
   try {
@@ -21506,7 +21506,7 @@ var init_bundle = __esm({
   "node_modules/@intentius/chant/src/discovery/sandbox/bundle.ts"() {
     esbuild = __toESM(require_main(), 1);
     HERE = import.meta.dirname;
-    require2 = createRequire(import.meta.url);
+    require2 = createRequire2(import.meta.url);
     EXTERNAL_PACKAGES = ["typescript", "@cdktn/hcl2json"];
   }
 });
@@ -21524,7 +21524,7 @@ var init_params = __esm({
 });
 
 // node_modules/@intentius/chant/src/discovery/sandbox/driver.ts
-import { dirname as dirname4, join as join4 } from "node:path";
+import { dirname as dirname5, join as join5 } from "node:path";
 function lit(value) {
   return JSON.stringify(value);
 }
@@ -21715,16 +21715,16 @@ var init_driver = __esm({
   "node_modules/@intentius/chant/src/discovery/sandbox/driver.ts"() {
     init_params();
     HERE2 = import.meta.dirname;
-    DISCOVERY_DIR = join4(HERE2, "..");
-    COLLECT_MODULE = join4(DISCOVERY_DIR, "collect.ts");
-    RESOLVE_MODULE = join4(DISCOVERY_DIR, "resolve.ts");
-    ENTITY_WIRE_CODEC_MODULE = join4(DISCOVERY_DIR, "entity-wire-codec.ts");
-    CHILD_ERRORS_MODULE = join4(HERE2, "child-errors.ts");
-    PROVENANCE_MODULE = join4(dirname4(DISCOVERY_DIR), "provenance.ts");
-    CONFIG_WIRE_MODULE = join4(HERE2, "config-wire.ts");
-    POLICY_WIRE_MODULE = join4(HERE2, "policy-wire.ts");
-    POST_SYNTH_MODULE = join4(dirname4(DISCOVERY_DIR), "lint", "post-synth.ts");
-    PARAMS_MODULE = join4(dirname4(DISCOVERY_DIR), "params.ts");
+    DISCOVERY_DIR = join5(HERE2, "..");
+    COLLECT_MODULE = join5(DISCOVERY_DIR, "collect.ts");
+    RESOLVE_MODULE = join5(DISCOVERY_DIR, "resolve.ts");
+    ENTITY_WIRE_CODEC_MODULE = join5(DISCOVERY_DIR, "entity-wire-codec.ts");
+    CHILD_ERRORS_MODULE = join5(HERE2, "child-errors.ts");
+    PROVENANCE_MODULE = join5(dirname5(DISCOVERY_DIR), "provenance.ts");
+    CONFIG_WIRE_MODULE = join5(HERE2, "config-wire.ts");
+    POLICY_WIRE_MODULE = join5(HERE2, "policy-wire.ts");
+    POST_SYNTH_MODULE = join5(dirname5(DISCOVERY_DIR), "lint", "post-synth.ts");
+    PARAMS_MODULE = join5(dirname5(DISCOVERY_DIR), "params.ts");
   }
 });
 
@@ -21942,11 +21942,11 @@ var init_config_run = __esm({
 });
 
 // node_modules/@intentius/chant/src/config-sandbox.ts
-import { dirname as dirname5 } from "node:path";
+import { dirname as dirname6 } from "node:path";
 function selectConfigExport(namespace) {
   return namespace.default ?? namespace.config ?? namespace;
 }
-async function evaluateProjectConfig(configPath, projectRoot = dirname5(configPath)) {
+async function evaluateProjectConfig(configPath, projectRoot = dirname6(configPath)) {
   if (!armed) {
     return selectConfigExport(await importConfigModule(configPath));
   }
@@ -21966,8 +21966,8 @@ var init_config_sandbox = __esm({
 });
 
 // node_modules/@intentius/chant/src/lexicon-module.ts
-import { createRequire as createRequire2 } from "node:module";
-import { dirname as dirname6, isAbsolute, join as join5, relative, resolve as resolve3, sep } from "node:path";
+import { createRequire as createRequire3 } from "node:module";
+import { dirname as dirname7, isAbsolute, join as join6, relative, resolve as resolve3, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 function lexiconDeclarationName(entry) {
   return typeof entry === "string" ? entry : entry.name;
@@ -21982,7 +21982,7 @@ function isWithin(path, dir) {
 function pathLexiconRoot(entry, baseDir, sourceDir = ".") {
   const modulePath = isAbsolute(entry.module) ? entry.module : resolve3(baseDir, entry.module);
   const declared = entry.root !== void 0;
-  const candidate = declared ? isAbsolute(entry.root) ? resolve3(entry.root) : resolve3(baseDir, entry.root) : dirname6(modulePath);
+  const candidate = declared ? isAbsolute(entry.root) ? resolve3(entry.root) : resolve3(baseDir, entry.root) : dirname7(modulePath);
   const project2 = resolve3(baseDir);
   const source = resolve3(baseDir, sourceDir);
   let problem;
@@ -22051,7 +22051,7 @@ function isPackageNotFound(err, pkg) {
 }
 function resolveFromProject(spec, fromDir = process.cwd()) {
   try {
-    return createRequire2(join5(fromDir, "package.json")).resolve(spec);
+    return createRequire3(join6(fromDir, "package.json")).resolve(spec);
   } catch {
     return void 0;
   }
@@ -22141,8 +22141,8 @@ __export(config_exports, {
   resolveSigningDefaults: () => resolveSigningDefaults,
   resolveVulnPolicy: () => resolveVulnPolicy
 });
-import { existsSync as existsSync3, readFileSync as readFileSync3 } from "fs";
-import { dirname as dirname7, join as join6 } from "path";
+import { existsSync as existsSync4, readFileSync as readFileSync3 } from "fs";
+import { dirname as dirname8, join as join7 } from "path";
 function environmentName(entry) {
   return typeof entry === "string" ? entry : entry.name;
 }
@@ -22178,13 +22178,13 @@ function environmentEndpoint(environments, name) {
   return found && typeof found !== "string" ? found.endpoint : void 0;
 }
 async function loadChantConfig(dir) {
-  const tsPath = join6(dir, "chant.config.ts");
-  if (existsSync3(tsPath)) {
+  const tsPath = join7(dir, "chant.config.ts");
+  if (existsSync4(tsPath)) {
     const config2 = await evaluateProjectConfig(tsPath, dir);
     return { config: normalizeConfig(config2, tsPath), configPath: tsPath };
   }
-  const jsonPath = join6(dir, "chant.config.json");
-  if (existsSync3(jsonPath)) {
+  const jsonPath = join7(dir, "chant.config.json");
+  if (existsSync4(jsonPath)) {
     const { readFileSync: readFileSync14 } = await import("fs");
     const content = readFileSync14(jsonPath, "utf-8");
     const parsed = JSON.parse(content);
@@ -22200,7 +22200,7 @@ async function loadChantConfigUpward(startDir) {
 function findProjectConfigPastFragments(startDir) {
   let { dir, configPath } = findProjectConfig(startDir);
   while (configPath && isLintOnlyFragment(configPath)) {
-    const parent = dirname7(dir);
+    const parent = dirname8(dir);
     if (parent === dir) break;
     ({ dir, configPath } = findProjectConfig(parent));
   }
@@ -22333,7 +22333,7 @@ function resolveVulnPolicy(config2) {
   return out;
 }
 function resolveKnowledgeDir(config2, projectPath) {
-  return join6(projectPath, config2.knowledge?.dir ?? "knowledge");
+  return join7(projectPath, config2.knowledge?.dir ?? "knowledge");
 }
 function normalizeConfig(raw, source) {
   if (typeof raw !== "object" || raw === null) {
@@ -22350,7 +22350,7 @@ function normalizeConfig(raw, source) {
     );
   }
   const lexicons = raw.lexicons;
-  const baseDir = source !== void 0 ? dirname7(source) : process.cwd();
+  const baseDir = source !== void 0 ? dirname8(source) : process.cwd();
   const sourceDir = raw.sourceDir;
   for (const [i, entry] of (lexicons ?? []).entries()) {
     if (typeof entry === "string" || entry.root === void 0) continue;
@@ -23350,7 +23350,7 @@ __export(tree_exports, {
 });
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync as readFileSync4, statSync as statSync2 } from "node:fs";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 function joinPath(...parts) {
   return parts.filter((p) => p !== "" && p !== ".").join("/");
 }
@@ -23359,7 +23359,7 @@ function workingTree(root) {
     label: "",
     stat(path) {
       try {
-        const s = statSync2(join7(root, path));
+        const s = statSync2(join8(root, path));
         return s.isDirectory() ? "dir" : s.isFile() ? "file" : void 0;
       } catch {
         return void 0;
@@ -23368,7 +23368,7 @@ function workingTree(root) {
     list(path) {
       let dirents;
       try {
-        dirents = readdirSync(join7(root, path), { withFileTypes: true });
+        dirents = readdirSync(join8(root, path), { withFileTypes: true });
       } catch {
         return void 0;
       }
@@ -23377,7 +23377,7 @@ function workingTree(root) {
         let type = d.isDirectory() ? "dir" : d.isFile() ? "file" : void 0;
         if (!type && d.isSymbolicLink()) {
           try {
-            const s = statSync2(join7(root, path, d.name));
+            const s = statSync2(join8(root, path, d.name));
             type = s.isDirectory() ? "dir" : s.isFile() ? "file" : void 0;
           } catch {
           }
@@ -23387,10 +23387,10 @@ function workingTree(root) {
       return out;
     },
     read(path) {
-      return readFileSync4(join7(root, path), "utf-8");
+      return readFileSync4(join8(root, path), "utf-8");
     },
     bytes(path) {
-      return readFileSync4(join7(root, path));
+      return readFileSync4(join8(root, path));
     }
   };
 }
@@ -23951,7 +23951,7 @@ __export(declaration_exports, {
   rootExclusions: () => rootExclusions
 });
 import { readFileSync as readFileSync5 } from "node:fs";
-import { createRequire as createRequire3 } from "node:module";
+import { createRequire as createRequire4 } from "node:module";
 import { fileURLToPath } from "node:url";
 function readerVersion() {
   readerVersionCache ??= JSON.parse(readFileSync5(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf-8")).version;
@@ -23972,7 +23972,7 @@ function compareVersions(a, b) {
 }
 function validator() {
   if (compiled) return compiled;
-  const require3 = createRequire3(import.meta.url);
+  const require3 = createRequire4(import.meta.url);
   const mod = require3("ajv/dist/2020");
   const Ajv = mod.default ?? mod;
   compiled = new Ajv({ allErrors: true, strict: true }).compile(declaration_schema_default);
@@ -24501,8 +24501,8 @@ var init_declaration = __esm({
 
 // node_modules/@intentius/chant/src/discovery/walk.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { closeSync, existsSync as existsSync4, openSync, readdirSync as readdirSync2, readSync, statSync as statSync3 } from "node:fs";
-import { isAbsolute as isAbsolute2, join as join8, relative as relative2, resolve as resolve4, sep as sep2 } from "node:path";
+import { closeSync, existsSync as existsSync5, openSync, readdirSync as readdirSync2, readSync, statSync as statSync3 } from "node:fs";
+import { isAbsolute as isAbsolute2, join as join9, relative as relative2, resolve as resolve4, sep as sep2 } from "node:path";
 function partsBelow(home, full) {
   const rel = relative2(home, resolve4(full));
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep2}`) || isAbsolute2(rel)) return void 0;
@@ -24549,14 +24549,14 @@ function gitIgnoredBelow(root) {
     if (entry === "") continue;
     const rel = entry.endsWith("/") ? entry.slice(0, -1) : entry;
     if (rel === "." || rel === "") return /* @__PURE__ */ new Set();
-    ignored.add(join8(abs, rel));
+    ignored.add(join9(abs, rel));
   }
   return ignored;
 }
 function isProjectBoundary(dir) {
-  if (existsSync4(join8(dir, "chant.config.ts"))) return true;
-  const json2 = join8(dir, "chant.config.json");
-  return existsSync4(json2) && !isLintOnlyFragment(json2);
+  if (existsSync5(join9(dir, "chant.config.ts"))) return true;
+  const json2 = join9(dir, "chant.config.json");
+  return existsSync5(json2) && !isLintOnlyFragment(json2);
 }
 function childProjectsAreBoundaries(walker, root) {
   return walker === "ops" || findProjectConfig(root).configPath !== void 0;
@@ -24614,7 +24614,7 @@ function walkDiscovery(opts) {
     if (e.isFile()) return "file";
     if (opts.followSymlinks && e.isSymbolicLink()) {
       try {
-        const s = statSync3(join8(dir, e.name));
+        const s = statSync3(join9(dir, e.name));
         return s.isDirectory() ? "dir" : s.isFile() ? "file" : void 0;
       } catch {
         return void 0;
@@ -24632,7 +24632,7 @@ function walkDiscovery(opts) {
     if (opts.sorted) entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
     for (const e of entries) {
       if (limit?.truncated) return false;
-      const full = join8(dir, e.name);
+      const full = join9(dir, e.name);
       const type = kind(dir, e);
       if (type === "dir") {
         if (NEVER_ENTER.has(e.name) || excludeDirs.has(resolve4(full))) continue;
@@ -236353,7 +236353,7 @@ var init_fold = __esm({
 });
 
 // node_modules/@intentius/chant/src/config-static.ts
-import { existsSync as existsSync5, readFileSync as readFileSync6 } from "node:fs";
+import { existsSync as existsSync6, readFileSync as readFileSync6 } from "node:fs";
 function readLexiconDeclarationsStatically(startDir) {
   const { configPath } = findProjectConfigPastFragments(startDir);
   if (configPath === void 0) return { status: "no-config" };
@@ -237210,13 +237210,13 @@ var init_import = __esm({
 });
 
 // node_modules/@intentius/chant/src/discovery/collect.ts
-import { basename, dirname as dirname8, relative as relative4, resolve as resolve5 } from "node:path";
+import { basename, dirname as dirname9, relative as relative4, resolve as resolve5 } from "node:path";
 function exportKey(rawName, file2) {
   if (rawName !== "default") return rawName;
   return basename(file2).replace(/\.ts$/, "").replace(/\.op$/, "");
 }
 function stackPrefix(file2, buildRoot) {
-  const dir = dirname8(file2);
+  const dir = dirname9(file2);
   const rel = buildRoot ? relative4(resolve5(buildRoot), resolve5(dir)) : dir;
   const segments = rel.split(/[^A-Za-z0-9]+/).filter((s) => s.length > 0);
   return segments.map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join("");
@@ -237266,7 +237266,7 @@ function collectEntities(modules, buildRoot) {
   const entries = enumerateEntries(modules);
   const dirsByKey = /* @__PURE__ */ new Map();
   for (const { bareKey, value, file: file2 } of entries) {
-    const dir = dirname8(file2);
+    const dir = dirname9(file2);
     let byDir = dirsByKey.get(bareKey);
     if (!byDir) {
       byDir = /* @__PURE__ */ new Map();
@@ -237289,7 +237289,7 @@ function collectEntities(modules, buildRoot) {
   const entities = /* @__PURE__ */ new Map();
   const claimedByDir = /* @__PURE__ */ new Map();
   for (const { bareKey, value, file: file2, provenance } of entries) {
-    const dir = dirname8(file2);
+    const dir = dirname9(file2);
     let perDir = claimedByDir.get(bareKey);
     if (!perDir) {
       perDir = /* @__PURE__ */ new Map();
@@ -237778,10 +237778,10 @@ var init_param_deps = __esm({
 
 // node_modules/@intentius/chant/src/discovery/fold-import.ts
 import { readFile } from "node:fs/promises";
-import { existsSync as existsSync6, statSync as statSync4, readFileSync as readFileSync7, realpathSync as realpathSync3 } from "node:fs";
-import { dirname as dirname9, basename as basename2, join as join9, sep as sep3, isAbsolute as isAbsolute3, resolve as resolvePath2 } from "node:path";
+import { existsSync as existsSync7, statSync as statSync4, readFileSync as readFileSync7, realpathSync as realpathSync3 } from "node:fs";
+import { dirname as dirname10, basename as basename2, join as join10, sep as sep3, isAbsolute as isAbsolute3, resolve as resolvePath2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { createRequire as createRequire4 } from "node:module";
+import { createRequire as createRequire5 } from "node:module";
 function lexiconPackageName(lexiconName) {
   return `@intentius/chant-lexicon-${lexiconName}`;
 }
@@ -237820,7 +237820,7 @@ function resolveModulePathMemoized(specifier, fromFile, resolvePathCache) {
     bareSpecifierPathCache.set(specifier, resolved2);
     return resolved2;
   }
-  const key = `${dirname9(fromFile)}\0${specifier}`;
+  const key = `${dirname10(fromFile)}\0${specifier}`;
   const cached2 = resolvePathCache.get(key);
   if (cached2 !== void 0) return cached2;
   const resolved = resolveModulePath(specifier, fromFile);
@@ -238005,28 +238005,28 @@ function collectImports(sourceFile) {
   return { named, namespaces };
 }
 function fastResolveBareSpecifier(specifier, fromFile) {
-  let dir = dirname9(fromFile);
+  let dir = dirname10(fromFile);
   for (; ; ) {
-    const packageDir = join9(dir, "node_modules", specifier);
-    if (existsSync6(packageDir)) {
+    const packageDir = join10(dir, "node_modules", specifier);
+    if (existsSync7(packageDir)) {
       const entry = fastResolvePackageEntry(packageDir);
       if (entry === void 0) return void 0;
       const resolved = resolvePath2(packageDir, entry);
-      if (!existsSync6(resolved) || !statSync4(resolved).isFile()) return void 0;
+      if (!existsSync7(resolved) || !statSync4(resolved).isFile()) return void 0;
       try {
         return realpathSync3(resolved);
       } catch {
         return void 0;
       }
     }
-    const parent = dirname9(dir);
+    const parent = dirname10(dir);
     if (parent === dir) return void 0;
     dir = parent;
   }
 }
 function fastResolvePackageEntry(packageDir) {
-  const pkgJsonPath = join9(packageDir, "package.json");
-  if (!existsSync6(pkgJsonPath)) return void 0;
+  const pkgJsonPath = join10(packageDir, "package.json");
+  if (!existsSync7(pkgJsonPath)) return void 0;
   let pkg;
   try {
     pkg = JSON.parse(readFileSync7(pkgJsonPath, "utf-8"));
@@ -238059,24 +238059,24 @@ function fastResolvePackageEntry(packageDir) {
 }
 function resolveModulePath(specifier, fromFile) {
   if (specifier.startsWith(".") || isAbsolute3(specifier)) {
-    const base = specifier.startsWith(".") ? resolvePath2(dirname9(fromFile), specifier) : specifier;
+    const base = specifier.startsWith(".") ? resolvePath2(dirname10(fromFile), specifier) : specifier;
     const candidates = [
       base,
       `${base}.ts`,
       `${base}.tsx`,
       `${base}.js`,
       `${base}.mjs`,
-      join9(base, "index.ts"),
-      join9(base, "index.js")
+      join10(base, "index.ts"),
+      join10(base, "index.js")
     ];
     for (const candidate of candidates) {
-      if (existsSync6(candidate) && statSync4(candidate).isFile()) return candidate;
+      if (existsSync7(candidate) && statSync4(candidate).isFile()) return candidate;
     }
     return base;
   }
   const fast = fastResolveBareSpecifier(specifier, fromFile);
   if (fast !== void 0) return fast;
-  return createRequire4(fromFile).resolve(specifier);
+  return createRequire5(fromFile).resolve(specifier);
 }
 function paramsModulePath() {
   if (paramsModulePathMemo === void 0) {
@@ -238868,7 +238868,7 @@ function sandboxedExecutionRefusal(binding, ctx, name, what) {
   return `${what} "${name}" is imported from "${binding.specifier}", which is neither chant's own nor an active lexicon \u2014 under --sandbox it is executed in the sandboxed child, not in this process`;
 }
 function chantCoreRoot() {
-  chantCoreRootMemo ??= dirname9(dirname9(fileURLToPath2(import.meta.url)));
+  chantCoreRootMemo ??= dirname10(dirname10(fileURLToPath2(import.meta.url)));
   return chantCoreRootMemo;
 }
 async function reviveFoldedProps(props, ctx, requireLiveRefs) {
@@ -239615,8 +239615,8 @@ var init_run = __esm({
 
 // node_modules/@intentius/chant/src/discovery/index.ts
 import { relative as relative5 } from "node:path";
-import { existsSync as existsSync7, readFileSync as readFileSync8 } from "node:fs";
-import { dirname as dirname10, join as join10, parse as parse3 } from "node:path";
+import { existsSync as existsSync8, readFileSync as readFileSync8 } from "node:fs";
+import { dirname as dirname11, join as join11, parse as parse3 } from "node:path";
 function warnIfParamsCannotReachProject(path, values) {
   if (Object.keys(values).length === 0) return;
   try {
@@ -239636,10 +239636,10 @@ function findPackageJsonUpward(startDir) {
   let dir = startDir;
   const { root } = parse3(dir);
   for (; ; ) {
-    const candidate = join10(dir, "package.json");
-    if (existsSync7(candidate)) return candidate;
+    const candidate = join11(dir, "package.json");
+    if (existsSync8(candidate)) return candidate;
     if (dir === root) return void 0;
-    const parent = dirname10(dir);
+    const parent = dirname11(dir);
     if (parent === dir) return void 0;
     dir = parent;
   }
@@ -241273,10 +241273,10 @@ var init_format = __esm({
 });
 
 // node_modules/@intentius/chant/src/runtime-adapter.ts
-import { dirname as dirname11 } from "path";
+import { dirname as dirname12 } from "path";
 import { fileURLToPath as fileURLToPath3 } from "url";
 function moduleDir(importMetaUrl) {
-  return dirname11(fileURLToPath3(importMetaUrl));
+  return dirname12(fileURLToPath3(importMetaUrl));
 }
 var init_runtime_adapter = __esm({
   "node_modules/@intentius/chant/src/runtime-adapter.ts"() {
@@ -241653,7 +241653,7 @@ var init_strict = __esm({
 });
 
 // node_modules/@intentius/chant/src/lint/config.ts
-import { join as join11, dirname as dirname12, resolve as resolve8 } from "path";
+import { join as join12, dirname as dirname13, resolve as resolve8 } from "path";
 var BUILTIN_PRESETS, SeveritySchema, RuleConfigSchema, LintConfigSchema, DEFAULT_CONFIG;
 var init_config2 = __esm({
   "node_modules/@intentius/chant/src/lint/config.ts"() {
@@ -241769,7 +241769,7 @@ var init_build_archive = __esm({
 import { exec } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { isAbsolute as isAbsolute5, join as join12 } from "node:path";
+import { isAbsolute as isAbsolute5, join as join13 } from "node:path";
 function run(command) {
   return execFileAsync(command, { maxBuffer: 64 * 1024 * 1024 });
 }
@@ -241808,7 +241808,7 @@ var init_cloud_executor = __esm({
       async build(args) {
         const parts = [`docker build`, `-t ${q(args.tag)}`];
         if (args.dockerfile) {
-          const dockerfilePath = isAbsolute5(args.dockerfile) ? args.dockerfile : join12(args.context, args.dockerfile);
+          const dockerfilePath = isAbsolute5(args.dockerfile) ? args.dockerfile : join13(args.context, args.dockerfile);
           parts.push(`-f ${q(dockerfilePath)}`);
         }
         if (args.target) parts.push(`--target ${q(args.target)}`);
@@ -242020,8 +242020,8 @@ var init_sbom = __esm({
 });
 
 // node_modules/@intentius/chant/src/components/verbs/tool-sbom-generator.ts
-import { basename as basename3, dirname as dirname13, join as join13 } from "node:path";
-import { existsSync as existsSync8 } from "node:fs";
+import { basename as basename3, dirname as dirname14, join as join14 } from "node:path";
+import { existsSync as existsSync9 } from "node:fs";
 function countPackages(format, bytes) {
   try {
     const doc = JSON.parse(bytes);
@@ -242034,7 +242034,7 @@ function countPackages(format, bytes) {
 function scratchPath(workDir, subject, format) {
   const dir = workDir ?? "/tmp/chant-sbom";
   const safeName = basename3(subject).replace(/[^a-zA-Z0-9_.-]/g, "_");
-  return join13(dir, `${safeName}.${Date.now()}.${format}.json`);
+  return join14(dir, `${safeName}.${Date.now()}.${format}.json`);
 }
 function createToolSbomGenerator(options = {}) {
   const runner = options.runner ?? defaultProcessRunner();
@@ -242048,14 +242048,14 @@ function createToolSbomGenerator(options = {}) {
   return {
     async forImage(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
-      const buildContext = dirname13(input.imagePath);
-      const hasDockerfile = existsSync8(join13(buildContext, "Dockerfile"));
+      const buildContext = dirname14(input.imagePath);
+      const hasDockerfile = existsSync9(join14(buildContext, "Dockerfile"));
       if (hasDockerfile && await runner.available("docker")) {
         const out = scratchPath(options.workDir, input.imagePath, format);
         await runner.run(
           `docker buildx build --sbom=true --output type=local,dest=${q2(out)} ${q2(buildContext)}`
         );
-        const { stdout } = await runner.run(`cat ${q2(join13(out, "sbom.spdx.json"))}`);
+        const { stdout } = await runner.run(`cat ${q2(join14(out, "sbom.spdx.json"))}`);
         return {
           format,
           mediaType: SBOM_MEDIA_TYPES[format],
@@ -242069,13 +242069,13 @@ function createToolSbomGenerator(options = {}) {
     },
     async forJar(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
-      const projectDir = dirname13(input.jarPath);
-      const hasPom = existsSync8(join13(projectDir, "pom.xml"));
+      const projectDir = dirname14(input.jarPath);
+      const hasPom = existsSync9(join14(projectDir, "pom.xml"));
       if (hasPom && await runner.available("mvn")) {
         await requireTool(runner, "mvn", `run cyclonedx-maven against ${projectDir}`);
         const out = scratchPath(options.workDir, input.jarPath, "cyclonedx");
         await runner.run(
-          `mvn -f ${q2(join13(projectDir, "pom.xml"))} org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json -DoutputName=${q2(basename3(out, ".json"))}`,
+          `mvn -f ${q2(join14(projectDir, "pom.xml"))} org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json -DoutputName=${q2(basename3(out, ".json"))}`,
           { cwd: projectDir }
         );
         const { stdout } = await runner.run(`cat ${q2(out)}`);
@@ -242617,7 +242617,7 @@ var init_r2_sync = __esm({
 // node_modules/@intentius/chant/src/components/verbs/vuln-scan.ts
 import { readFileSync as readFileSync10, writeFileSync as writeFileSync3 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join14 } from "node:path";
+import { join as join15 } from "node:path";
 import { createHash as createHash3 } from "node:crypto";
 function normalizeSeverity(raw) {
   const s = (raw ?? "").toLowerCase();
@@ -242673,7 +242673,7 @@ function createToolVulnScanner(tool = "grype", processRunner = defaultProcessRun
       await requireTool(processRunner, tool, `scan the SBOM for known vulnerabilities`);
       const hash2 = createHash3("sha256").update(input.sbom.bytes).digest("hex").slice(0, 16);
       const ext = input.sbom.format === "cyclonedx" ? "cdx.json" : "spdx.json";
-      const path = join14(tmpdir2(), `chant-scan-${hash2}.${ext}`);
+      const path = join15(tmpdir2(), `chant-scan-${hash2}.${ext}`);
       writeFileSync3(path, input.sbom.bytes);
       if (tool === "trivy") {
         const { stdout: stdout2 } = await processRunner.run(`trivy sbom --quiet --format json ${q2(path)}`);
@@ -243164,11 +243164,11 @@ var init_rule_loader = __esm({
 });
 
 // node_modules/@intentius/chant/src/lint/discover.ts
-import { createRequire as createRequire5 } from "module";
+import { createRequire as createRequire6 } from "module";
 var init_discover = __esm({
   "node_modules/@intentius/chant/src/lint/discover.ts"() {
     try {
-      const _req = createRequire5(import.meta.url);
+      const _req = createRequire6(import.meta.url);
       const { register } = _req("tsx/cjs/api");
       register();
     } catch {
@@ -246285,7 +246285,7 @@ var init_behaviour_predict = __esm({
 // node_modules/@intentius/chant/src/op/activities/predict-behaviour.ts
 import { exec as exec13 } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
-import { join as join15, resolve as resolve9 } from "node:path";
+import { join as join16, resolve as resolve9 } from "node:path";
 import { promisify as promisify15 } from "node:util";
 function shellQuote2(s) {
   return `'${s.replace(/'/g, "'\\''")}'`;
@@ -246371,7 +246371,7 @@ async function checkoutBase(base, signal) {
   } catch {
     commitish = base;
   }
-  const dir = await mkdtemp(join15(root, ".chant-behaviour-base-"));
+  const dir = await mkdtemp(join16(root, ".chant-behaviour-base-"));
   try {
     await execAsync12(`git worktree add --detach ${shellQuote2(dir)} ${shellQuote2(commitish)}`, { signal });
   } catch (err) {
@@ -246381,7 +246381,7 @@ async function checkoutBase(base, signal) {
     );
   }
   return {
-    projectPath: prefix ? join15(dir, prefix) : dir,
+    projectPath: prefix ? join16(dir, prefix) : dir,
     async cleanup() {
       try {
         await execAsync12(`git worktree remove --force ${shellQuote2(dir)}`);
@@ -247290,13 +247290,13 @@ __export(plugins_exports, {
   resolveProjectLexicons: () => resolveProjectLexicons,
   unknownPathLexiconsNotice: () => unknownPathLexiconsNotice
 });
-import { createRequire as createRequire6 } from "node:module";
-import { dirname as dirname14, join as join16, resolve as resolve10 } from "node:path";
+import { createRequire as createRequire7 } from "node:module";
+import { dirname as dirname15, join as join17, resolve as resolve10 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
-import { existsSync as existsSync9, readdirSync as readdirSync3, readFileSync as readFileSync11 } from "node:fs";
+import { existsSync as existsSync10, readdirSync as readdirSync3, readFileSync as readFileSync11 } from "node:fs";
 function recordProjectLexicons(dir) {
   const read = readLexiconDeclarationsStatically(dir);
-  if (read.status === "read") registerLexiconDeclarations(read.entries, dirname14(read.configPath));
+  if (read.status === "read") registerLexiconDeclarations(read.entries, dirname15(read.configPath));
   return read;
 }
 async function loadPlugin(lexiconName) {
@@ -247340,11 +247340,11 @@ async function loadPlugin(lexiconName) {
 }
 function listInstalledLexicons(projectDir = process.cwd()) {
   const names = /* @__PURE__ */ new Set();
-  const starts = [dirname14(fileURLToPath4(import.meta.url)), resolve10(projectDir)];
+  const starts = [dirname15(fileURLToPath4(import.meta.url)), resolve10(projectDir)];
   for (const start of starts) {
     let dir = start;
     for (; ; ) {
-      const scope = join16(dir, "node_modules", "@intentius");
+      const scope = join17(dir, "node_modules", "@intentius");
       let entries = [];
       try {
         entries = readdirSync3(scope, { withFileTypes: true });
@@ -247356,7 +247356,7 @@ function listInstalledLexicons(projectDir = process.cwd()) {
         const name = entry.name.slice(LEXICON_PACKAGE_PREFIX.length);
         if (name !== "") names.add(name);
       }
-      const parent = dirname14(dir);
+      const parent = dirname15(dir);
       if (parent === dir) break;
       dir = parent;
     }
@@ -247364,7 +247364,7 @@ function listInstalledLexicons(projectDir = process.cwd()) {
   return [...names].sort();
 }
 function resolveLexiconVersions(lexiconNames2) {
-  const require_ = createRequire6(import.meta.url);
+  const require_ = createRequire7(import.meta.url);
   const versions = {};
   for (const name of lexiconNames2) {
     if (lexiconModulePath(name) !== void 0) continue;
@@ -247377,17 +247377,17 @@ function resolveLexiconVersions(lexiconNames2) {
         entry = resolveFromProject(packageName);
         if (entry === void 0) throw err;
       }
-      let dir = dirname14(entry);
+      let dir = dirname15(entry);
       for (let depth = 0; depth < 10; depth++) {
-        const candidate = join16(dir, "package.json");
-        if (existsSync9(candidate)) {
+        const candidate = join17(dir, "package.json");
+        if (existsSync10(candidate)) {
           const pkg = JSON.parse(readFileSync11(candidate, "utf-8"));
           if (pkg.name === packageName && pkg.version) {
             versions[name] = pkg.version;
             break;
           }
         }
-        const parent = dirname14(dir);
+        const parent = dirname15(dir);
         if (parent === dir) break;
         dir = parent;
       }
@@ -247474,7 +247474,7 @@ __export(discover_exports, {
   walkCandidates: () => walkCandidates
 });
 import { readFileSync as readFileSync12, statSync as statSync5 } from "fs";
-import { basename as basename4, join as join17, relative as relative7, resolve as resolve11 } from "path";
+import { basename as basename4, join as join18, relative as relative7, resolve as resolve11 } from "path";
 async function loadAuditPlugins(names = AUDIT_LEXICONS) {
   const { loadPlugin: loadPlugin2 } = await Promise.resolve().then(() => (init_plugins(), plugins_exports));
   const plugins = [];
@@ -247748,10 +247748,10 @@ function collectCandidates(root) {
 function walkCandidates(root, opts = {}) {
   const state = { max: opts.maxFiles ?? DEFAULT_MAX_WALK_FILES, truncated: false };
   const all = walkFiles(root, state, opts.excludeDirs);
-  const gitignore = readSafe(join17(root, ".gitignore")) ?? "";
+  const gitignore = readSafe(join18(root, ".gitignore")) ?? "";
   const nestedBodies = /* @__PURE__ */ new Map();
   const nestedGitignoreAt = (dir) => {
-    if (!nestedBodies.has(dir)) nestedBodies.set(dir, readSafe(join17(root, dir, ".gitignore")));
+    if (!nestedBodies.has(dir)) nestedBodies.set(dir, readSafe(join18(root, dir, ".gitignore")));
     return nestedBodies.get(dir);
   };
   const files = [];
@@ -251729,7 +251729,7 @@ var init_engine = __esm({
 });
 
 // src/cli.ts
-import { existsSync as existsSync10, readFileSync as readFileSync13, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync11, readFileSync as readFileSync13, writeFileSync as writeFileSync4 } from "node:fs";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
 
 // package.json
@@ -253950,6 +253950,9 @@ function complianceArtifact(report2) {
 
 // src/workspace/members.ts
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 var READ_CONTRACT = 1;
 var WorkspaceReadError = class extends Error {
   constructor(message) {
@@ -254011,10 +254014,21 @@ function parseLsDocument(stdout) {
     members
   };
 }
+function chantLauncher() {
+  try {
+    let dir = dirname(createRequire(import.meta.url).resolve("@intentius/chant"));
+    for (let i = 0; i < 6; i++, dir = dirname(dir)) {
+      const bin = join(dir, "bin", "chant");
+      if (existsSync(join(dir, "package.json")) && existsSync(bin)) return bin;
+    }
+  } catch {
+  }
+  return null;
+}
 async function readWorkspace(dir, run4 = defaultRunner) {
   let result;
   try {
-    result = await run4("npx", ["--no-install", "chant", "workspace", "ls", "--json"], dir);
+    result = await run4(chantLauncher() ?? "chant", ["workspace", "ls", "--json"], dir);
   } catch (err) {
     throw new WorkspaceReadError(`could not run chant: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -254959,7 +254973,7 @@ async function runCodeowners(argv) {
     process.exit(0);
   }
   if (args.check) {
-    const current = existsSync10(args.out) ? readFileSync13(args.out, "utf8") : null;
+    const current = existsSync11(args.out) ? readFileSync13(args.out, "utf8") : null;
     if (current !== text) {
       process.stderr.write(`github-warden: ${args.out} is out of date; run codeowners --out ${args.out}
 `);

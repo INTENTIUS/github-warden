@@ -141,7 +141,7 @@ Generates a CODEOWNERS file with one rule per workspace member directory. The
 members come from chant's workspace read contract: the warden runs
 `chant workspace ls --json` (contract 1, chant 0.81.0 or newer) and never reads
 `chant.workspace.json` itself. The chant that runs is the one installed beside
-the warden, resolved with `npx --no-install`.
+the warden, else `chant` on PATH.
 
 | Flag | Default | Meaning |
 |---|---|---|

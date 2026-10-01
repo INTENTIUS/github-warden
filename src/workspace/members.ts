@@ -8,6 +8,9 @@
  */
 
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 
 /** The contract version this reader knows. */
 export const READ_CONTRACT = 1;
@@ -108,13 +111,30 @@ export function parseLsDocument(stdout: string): Workspace {
 }
 
 /**
+ * The chant launcher installed beside the warden, found from the warden's own
+ * dependency rather than from the workspace directory, which may sit anywhere.
+ */
+export function chantLauncher(): string | null {
+  try {
+    let dir = dirname(createRequire(import.meta.url).resolve("@intentius/chant"));
+    for (let i = 0; i < 6; i++, dir = dirname(dir)) {
+      const bin = join(dir, "bin", "chant");
+      if (existsSync(join(dir, "package.json")) && existsSync(bin)) return bin;
+    }
+  } catch {
+    // not resolvable: fall back to PATH
+  }
+  return null;
+}
+
+/**
  * Run `chant workspace ls --json` in `dir` and return the workspace.
- * `npx --no-install` resolves the chant installed beside the warden.
+ * Uses the chant installed beside the warden, else `chant` on PATH.
  */
 export async function readWorkspace(dir: string, run: CommandRunner = defaultRunner): Promise<Workspace> {
   let result;
   try {
-    result = await run("npx", ["--no-install", "chant", "workspace", "ls", "--json"], dir);
+    result = await run(chantLauncher() ?? "chant", ["workspace", "ls", "--json"], dir);
   } catch (err) {
     throw new WorkspaceReadError(`could not run chant: ${err instanceof Error ? err.message : String(err)}`);
   }

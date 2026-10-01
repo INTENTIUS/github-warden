@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLsDocument, readWorkspace, WorkspaceReadError, type CommandRunner } from "./members.js";
+import { chantLauncher, parseLsDocument, readWorkspace, WorkspaceReadError, type CommandRunner } from "./members.js";
 
 const doc = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
@@ -54,7 +54,8 @@ describe("readWorkspace", () => {
     };
     const ws = await readWorkspace("/repo", run);
     expect(ws.members).toHaveLength(2);
-    expect(calls).toEqual([["npx", ["--no-install", "chant", "workspace", "ls", "--json"], "/repo"]]);
+    expect(calls).toEqual([[chantLauncher(), ["workspace", "ls", "--json"], "/repo"]]);
+    expect(chantLauncher()).toMatch(/@intentius\/chant\/bin\/chant$/);
   });
 
   it("names the chant floor when chant prints nothing", async () => {
