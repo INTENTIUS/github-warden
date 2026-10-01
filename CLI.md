@@ -1,14 +1,16 @@
 # CLI reference
 
-The `github-warden` binary has three subcommands. All of them load the policy
-file (`--config`) and authenticate the same way; they differ in what they do
-with live GitHub state.
+The `github-warden` binary has four subcommands. `reconcile`, `audit` and
+`report` load the policy file (`--config`) and authenticate the same way; they
+differ in what they do with live GitHub state. `codeowners` reads a chant
+workspace from disk and touches neither GitHub nor the policy file.
 
 | Subcommand | What it does | Mutates? |
 |---|---|---|
 | `reconcile` | Diff desired vs live per cycle, guardrail-check, print the plan (`dry-run`) or apply it. | Only with `--mode apply`. |
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
+| `codeowners` | Generate CODEOWNERS from the members of a chant workspace. | Only the `--out` file, and not with `--check`. |
 
 `github-warden --help` (or no arguments, or `--help` after a subcommand)
 prints usage; `github-warden --version` prints the version (inlined from
@@ -128,3 +130,48 @@ several org administration endpoints are callable only by a GitHub App. See
 | 2 | Argument or config error (unknown flag, unknown cycle, invalid config shape, missing auth). |
 | 3 | Runtime error (unreadable config file, API failure, an errored cycle, or failed apply entries). |
 | 4 | `audit`: findings exceed `--fail-on`; `report`: needs attention with `--fail-on attention`. |
+
+## `codeowners`
+
+```
+github-warden codeowners --owners <path> [--dir <path>] [--out <path>] [--check]
+```
+
+Generates a CODEOWNERS file with one rule per workspace member directory. The
+members come from chant's workspace read contract: the warden runs
+`chant workspace ls --json` (contract 1, chant 0.81.0 or newer) and never reads
+`chant.workspace.json` itself. The chant that runs is the one installed beside
+the warden, else `chant` on PATH.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--owners <path>` | **required** | Owners file (YAML or JSON), described below. |
+| `--dir <path>` | `.` | Where chant starts looking for the workspace declaration. |
+| `--out <path>` | stdout | Write the file here, for example `.github/CODEOWNERS`. |
+| `--check` | off | With `--out`, write nothing and exit 4 when the file differs from what would be generated. |
+
+The owners file names owners by member name, so a member that moves keeps its
+owners. Every list must be non-empty and hold `@user`, `@org/team` or email
+owners.
+
+```json
+{
+  "default": ["@acme/maintainers"],
+  "members": {
+    "api": ["@acme/api"],
+    "docs": ["@acme/docs", "@writer"]
+  }
+}
+```
+
+`default` becomes a `*` rule. Each member becomes a rule on its directory,
+prefixed with the workspace root when the workspace sits below the git root.
+GitHub applies the last matching rule, so shallower directories come first and
+a nested member's rule overrides its parent's. A member whose directory is
+missing (reason `dir-missing`) is skipped with a note on stderr. A name in the
+owners file that the workspace has no member for exits 2. A failed chant read
+exits 3.
+
+Not yet covered: required status checks per member pipeline and a ruleset for
+the `chant/lifecycle` branch. Both need the generated job names, which no
+contract document carries yet (INTENTIUS/chant#3050).

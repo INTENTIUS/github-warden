@@ -460,3 +460,21 @@ describe("pipeline.ts ↔ CLI flag consistency", () => {
     expect(args.cycles).toEqual(["branch-protection"]);
   });
 });
+
+describe("parseCodeownersArgs", () => {
+  it("parses owners, dir, out and check", async () => {
+    const { parseCodeownersArgs } = await import("../cli.js");
+    expect(parseCodeownersArgs(["--owners", "o.json", "--dir", "ws", "--out", ".github/CODEOWNERS", "--check"])).toEqual({
+      owners: "o.json",
+      dir: "ws",
+      out: ".github/CODEOWNERS",
+      check: true,
+    });
+  });
+  it("requires --owners, and --out with --check", async () => {
+    const { parseCodeownersArgs } = await import("../cli.js");
+    expect(() => parseCodeownersArgs([])).toThrow(CliError);
+    expect(() => parseCodeownersArgs(["--owners", "o.json", "--check"])).toThrow(/--out/);
+    expect(() => parseCodeownersArgs(["--owners", "o.json", "--bogus"])).toThrow(/unknown flag/);
+  });
+});
