@@ -23,6 +23,17 @@ export interface WorkspaceMember {
   readable: boolean;
   /** Reason code when the member can't be read, else null. */
   reason: string | null;
+  /** Generated files with their CI job names. Empty from a chant older than 0.101. */
+  generated: GeneratedFile[];
+}
+
+export interface GeneratedFile {
+  /** From the repository root, "/" separators. */
+  path: string;
+  command: string;
+  env: string | null;
+  /** Check names of a forge CI file, null when unknown. */
+  jobs: string[] | null;
 }
 
 export interface Workspace {
@@ -59,6 +70,22 @@ export const defaultRunner: CommandRunner = (cmd, args, cwd) =>
       resolve({ stdout, stderr, code: typeof code === "number" ? code : 1 });
     });
   });
+
+function parseGenerated(raw: unknown): GeneratedFile[] {
+  if (!Array.isArray(raw)) return [];
+  const out: GeneratedFile[] = [];
+  for (const g of raw as Record<string, unknown>[]) {
+    if (!g || typeof g["path"] !== "string") continue;
+    const jobs = Array.isArray(g["jobs"]) ? (g["jobs"] as unknown[]).filter((j): j is string => typeof j === "string") : null;
+    out.push({
+      path: g["path"],
+      command: typeof g["command"] === "string" ? g["command"] : "",
+      env: typeof g["env"] === "string" ? g["env"] : null,
+      jobs,
+    });
+  }
+  return out;
+}
 
 /**
  * Parse one `chant workspace ls --json` document. Pure, so tests need no chant.
@@ -100,6 +127,7 @@ export function parseLsDocument(stdout: string): Workspace {
       kind: typeof o["kind"] === "string" ? o["kind"] : "other",
       readable: o["readable"] !== false,
       reason: typeof o["reason"] === "string" ? o["reason"] : null,
+      generated: parseGenerated(o["generated"]),
     };
   });
   return {

@@ -11,10 +11,10 @@ const ws = (root = "."): Workspace => ({
   root,
   chant: "0.100.0",
   members: [
-    { name: "app", dir: ".", kind: "chant", readable: true, reason: null },
-    { name: "api", dir: "packages/api", kind: "other", readable: true, reason: null },
-    { name: "core", dir: "packages", kind: "other", readable: true, reason: null },
-    { name: "gone", dir: "old", kind: "other", readable: false, reason: "dir-missing" },
+    { name: "app", dir: ".", kind: "chant", readable: true, reason: null, generated: [] },
+    { name: "api", dir: "packages/api", kind: "other", readable: true, reason: null, generated: [] },
+    { name: "core", dir: "packages", kind: "other", readable: true, reason: null, generated: [] },
+    { name: "gone", dir: "old", kind: "other", readable: false, reason: "dir-missing", generated: [] },
   ],
 });
 

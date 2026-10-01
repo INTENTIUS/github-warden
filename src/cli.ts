@@ -9,6 +9,7 @@
  *   audit       Run chant's posture-audit engine over all managed repos.
  *   codeowners  Generate CODEOWNERS from a chant workspace's members.
  *   lifecycle   Show the chant/lifecycle ledger paths and its ruleset.
+ *   checks      Required status checks from the members' pipeline job names.
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
@@ -58,6 +59,7 @@ import type { Cycle, ReconcileResult } from "./reconcile/runner.js";
 import { buildComplianceReport, renderComplianceReport, complianceArtifact } from "./report/compliance.js";
 import { buildIdentityReport, type RawInstallation } from "./report/identity.js";
 import { readWorkspace, WorkspaceReadError } from "./workspace/members.js";
+import { memberChecks, requiredChecksRuleset } from "./workspace/checks.js";
 import { readLifecycle, lifecycleRuleset } from "./workspace/lifecycle.js";
 import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./workspace/codeowners.js";
 
@@ -578,13 +580,18 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
 
+  if (subcommand === "checks") {
+    await runChecks(argv.slice(1));
+    return;
+  }
+
   if (subcommand === "lifecycle") {
     await runLifecycle(argv.slice(1));
     return;
   }
 
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", or "lifecycle"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", "lifecycle", or "checks"?`);
   }
 
   let args: ReconcileArgs;
@@ -1347,6 +1354,71 @@ async function runLifecycle(argv: string[]): Promise<void> {
   process.exit(0);
 }
 
+export interface ChecksArgs {
+  dir: string;
+  members: string[] | undefined;
+  branch: string;
+  name: string;
+  format: "ruleset" | "contexts";
+}
+
+/** Parse checks argv (everything after the `checks` subcommand). */
+export function parseChecksArgs(argv: string[]): ChecksArgs {
+  const args: ChecksArgs = { dir: ".", members: undefined, branch: "~DEFAULT_BRANCH", name: "chant-required-checks", format: "ruleset" };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i]!;
+    const value = (): string => {
+      const v = argv[++i];
+      if (!v || v.startsWith("--")) throw new CliError(2, `${flag} requires a value`);
+      return v;
+    };
+    switch (flag) {
+      case "--dir": args.dir = value(); break;
+      case "--members": args.members = value().split(",").map((m) => m.trim()).filter(Boolean); break;
+      case "--branch": args.branch = value(); break;
+      case "--name": args.name = value(); break;
+      case "--format": {
+        const f = value();
+        if (f !== "ruleset" && f !== "contexts") throw new CliError(2, `--format must be ruleset or contexts, got ${f}`);
+        args.format = f;
+        break;
+      }
+      default: throw new CliError(2, `unknown flag for checks: ${flag}`);
+    }
+  }
+  return args;
+}
+
+/**
+ * Run `checks`: read each member's generated GitHub workflow job names from
+ * `chant workspace ls --json` and print the ruleset that requires them
+ * (or, with `--format contexts`, the names per member).
+ */
+async function runChecks(argv: string[]): Promise<void> {
+  let args: ChecksArgs;
+  try {
+    args = parseChecksArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+  let result;
+  try {
+    const ws = await readWorkspace(args.dir);
+    result = memberChecks(ws, args.members);
+  } catch (err) {
+    die(err instanceof WorkspaceReadError ? 3 : 2, errMsg(err));
+  }
+  for (const s of result.skipped) process.stderr.write(`github-warden: skipped member ${s.member}: ${s.reason}\n`);
+  if (result.members.length === 0) die(2, "no member has a generated GitHub workflow with readable job names");
+  if (args.format === "contexts") {
+    for (const m of result.members) process.stdout.write(`${m.member}  ${m.contexts.join(", ")}\n`);
+  } else {
+    process.stdout.write(JSON.stringify(requiredChecksRuleset(result, args.branch, args.name), null, 2) + "\n");
+  }
+  process.exit(0);
+}
+
 function printUsage() {
   process.stdout.write(
     [
@@ -1358,6 +1430,7 @@ function printUsage() {
       "  report      Aggregate cycle drift (+ optional audit) into a compliance snapshot.",
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
       "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
+      "  checks      Print the ruleset requiring each member pipeline's job names.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -1392,6 +1465,13 @@ function printUsage() {
       "  --dir <path>                  Where chant looks for the workspace (default: .).",
       "  --out <path>                  Write the file here instead of stdout.",
       "  --check                       With --out: exit 4 when the file differs. Writes nothing.",
+      "",
+      "Flags (checks):",
+      "  --dir <path>                  Where chant starts looking for the workspace (default: .).",
+      "  --members <a,b>               Only these members (default: all with a pipeline).",
+      "  --branch <name>               Branch to protect (default: the repo's default branch).",
+      "  --name <ruleset>              Ruleset name (default: chant-required-checks).",
+      "  --format ruleset|contexts     Ruleset as JSON (default) or the names per member.",
       "",
       "Flags (lifecycle):",
       "  --env <name>                  Environment passed to chant workspace status. Required.",

@@ -5720,7 +5720,7 @@ var init_schemas = __esm({
           inst._zod.run = inst._zod.parse;
         });
       } else {
-        const runChecks2 = (payload, checks2, ctx) => {
+        const runChecks3 = (payload, checks2, ctx) => {
           let isAborted = aborted(payload);
           let asyncResult;
           for (const ch of checks2) {
@@ -5767,7 +5767,7 @@ var init_schemas = __esm({
             canary.aborted = true;
             return canary;
           }
-          const checkResult = runChecks2(payload, checks, ctx);
+          const checkResult = runChecks3(payload, checks, ctx);
           if (checkResult instanceof Promise) {
             if (ctx.async === false)
               throw new $ZodAsyncError();
@@ -5792,9 +5792,9 @@ var init_schemas = __esm({
           if (result instanceof Promise) {
             if (ctx.async === false)
               throw new $ZodAsyncError();
-            return result.then((result2) => runChecks2(result2, checks, ctx));
+            return result.then((result2) => runChecks3(result2, checks, ctx));
           }
-          return runChecks2(result, checks, ctx);
+          return runChecks3(result, checks, ctx);
         };
       }
       defineLazy(inst, "~standard", () => ({
@@ -22575,6 +22575,36 @@ var init_declaration_schema = __esm({
               }
             }
           }
+        },
+        writeScope: {
+          type: "object",
+          additionalProperties: false,
+          description: "Who may write what (#2524 D5, #2548, ws-067): for each principal class, the members whose files it may write and the record kinds it may write, with which verbs. A class with no entry is not restricted. An agent is always bound to its session's member (agents); its entry can only narrow the record kinds and verbs. chant workspace records new, amend, review and close and the MCP record tools refuse a write outside the writer's scope with write-scope-member or write-scope-kind, and chant workspace check --changes reports each commit that writes outside its author's scope, read from the declaration and the trust policy at the range's base. Added in schema 1 by chant 0.101.0, so a declaration that uses it sets minReader to 0.101.0 or newer.",
+          properties: {
+            human: {
+              $ref: "#/$defs/classScope",
+              description: "Principals holding none of the agent, runner and service roles in the trust policy at base."
+            },
+            agent: {
+              $ref: "#/$defs/agentScope",
+              description: "An agent session (agents), or a principal holding the agent role in the trust policy at base."
+            },
+            runner: {
+              $ref: "#/$defs/classScope",
+              description: "Principals holding the runner role in the trust policy at base, such as a CI job's signing identity."
+            },
+            service: {
+              $ref: "#/$defs/classScope",
+              description: "Principals holding the service role in the trust policy at base."
+            }
+          }
+        },
+        agents: {
+          type: "array",
+          description: "The agent sessions the workspace declares (#2524 D20, #2548, ws-067). Each is bound to one member: it writes that member's files and the records of kinds that member or the workspace declares, as writeScope.agent allows. A session resumes from chant workspace agent <name> --json, which prints its member, its scope and the spec, read from the repository alone. A write names its session with the CHANT_AGENT environment variable, or a commit with a Chant-Agent trailer. Added in schema 1 by chant 0.101.0, so a declaration that uses it sets minReader to 0.101.0 or newer.",
+          items: {
+            $ref: "#/$defs/agent"
+          }
         }
       },
       patternProperties: {
@@ -22647,7 +22677,7 @@ var init_declaration_schema = __esm({
         },
         link: {
           type: "object",
-          description: "A member link: this member reads output of member (#2539).",
+          description: "A member link: this member reads output of member (#2539), or sends its telemetry to a pipeline of its collector (#2558).",
           required: [
             "member",
             "output"
@@ -22659,11 +22689,19 @@ var init_declaration_schema = __esm({
             },
             output: {
               $ref: "#/$defs/outputName",
-              description: "The producer's output, matched exactly. It must be one the producer's kind exposes."
+              description: "The producer's output, matched exactly. It must be one the producer's kind exposes. For a telemetry link, the id of a pipeline or an exporter in the producer's collector."
             },
             kind: {
               $ref: "#/$defs/kindName",
-              description: "The link kind. output, the default, is the only one so far: the consumer reads the named output."
+              description: "The link kind. output, the default: the consumer reads the named output. telemetry (#2558): the consumer sends its telemetry to the named pipeline or exporter of the producer's collector, and chant workspace graph checks that it exists and, when protocol is given, that it speaks it. A declaration that uses telemetry sets minReader to 0.101.0 or newer."
+            },
+            protocol: {
+              enum: [
+                "grpc",
+                "http/protobuf",
+                "http/json"
+              ],
+              description: "For a telemetry link, the OTLP protocol the consumer sends, as OTEL_EXPORTER_OTLP_PROTOCOL names it. Refused on any other kind. Added in schema 1 by chant 0.101.0."
             }
           },
           patternProperties: {
@@ -22793,6 +22831,10 @@ var init_declaration_schema = __esm({
               type: "string",
               minLength: 1,
               description: "Where an embedded member's files come from. Versions live in the lock."
+            },
+            travel: {
+              type: "boolean",
+              description: "Whether the member goes with an export (#2524 D10, #2552). chant workspace export writes only members that set travel to true into the export member, and refuses to name one that does not. Added in schema 1 by chant 0.101.0, so a declaration that uses it sets minReader to 0.101.0 or newer."
             },
             because: {
               type: "string",
@@ -23332,6 +23374,99 @@ var init_declaration_schema = __esm({
           type: "string",
           description: "A glob over file paths, relative to the workspace root: * and ? within one segment, ** across segments, [...] classes and {a,b} alternatives. No leading /, no . or .. segments.",
           pattern: "^(?!\\.\\.?(/|$))[^/\\\\]+(/(?!\\.\\.?(/|$))[^/\\\\]+)*$"
+        },
+        recordScope: {
+          type: "object",
+          description: "Record kind names, as the kind file's recordKind.name or the name the declaration gives it, each with the verbs the class may write it with: new, amend, review and close (a review session). A kind left out may not be written at all. A record file a commit deletes is never in scope.",
+          propertyNames: {
+            $ref: "#/$defs/kindName"
+          },
+          additionalProperties: {
+            type: "array",
+            uniqueItems: true,
+            items: {
+              enum: [
+                "new",
+                "amend",
+                "review",
+                "close"
+              ]
+            }
+          }
+        },
+        classScope: {
+          type: "object",
+          description: "A principal class's write scope.",
+          properties: {
+            members: {
+              description: "The members whose files the class may write, by name, or * for every path. Without it, every path. A path in no member is in scope only under *.",
+              oneOf: [
+                {
+                  const: "*"
+                },
+                {
+                  type: "array",
+                  uniqueItems: true,
+                  items: {
+                    $ref: "#/$defs/name"
+                  }
+                }
+              ]
+            },
+            records: {
+              $ref: "#/$defs/recordScope",
+              description: "The record kinds the class may write, and how. Without it, every kind in reach, with every verb. A kind a member declares is in reach when that member is; the workspace's own kinds always are."
+            }
+          },
+          patternProperties: {
+            "^x-": true
+          },
+          additionalProperties: false
+        },
+        agentScope: {
+          type: "object",
+          description: "The agent class's write scope. Its members are always its session's one member, so only the record kinds can be set.",
+          properties: {
+            records: {
+              $ref: "#/$defs/recordScope",
+              description: "The record kinds an agent may write, and how. Without it, every kind in reach of its member, with every verb."
+            }
+          },
+          patternProperties: {
+            "^x-": true
+          },
+          additionalProperties: false
+        },
+        agent: {
+          type: "object",
+          description: "An agent session (#2548).",
+          required: [
+            "name",
+            "member"
+          ],
+          properties: {
+            name: {
+              $ref: "#/$defs/name",
+              description: "The session's name, unique among agents: what CHANT_AGENT and a Chant-Agent trailer give."
+            },
+            member: {
+              $ref: "#/$defs/name",
+              description: "The one member the session is bound to. It must be a declared member, not an example group."
+            },
+            principals: {
+              type: "array",
+              uniqueItems: true,
+              items: {
+                type: "string",
+                minLength: 1
+              },
+              description: "Principals that write only as this session: a commit attested by one, or a write whose by names one, is judged as the session. A principal is listed by one session at most."
+            }
+          },
+          patternProperties: {
+            "^x-": true
+          },
+          additionalProperties: false
         }
       }
     };
@@ -23660,6 +23795,12 @@ var init_workspace_kinds_schema = __esm({
   }
 });
 
+// node_modules/@intentius/chant/src/workspace/pin-integrity.ts
+var init_pin_integrity = __esm({
+  "node_modules/@intentius/chant/src/workspace/pin-integrity.ts"() {
+  }
+});
+
 // node_modules/@intentius/chant/src/workspace/kinds.ts
 function holdsChantProject(tree, dir) {
   const pkg = joinPath(dir, "package.json");
@@ -23684,13 +23825,15 @@ function holdsChantProject(tree, dir) {
 function isChantPackage(name) {
   return name === "@intentius/chant" || name.startsWith("@intentius/chant-lexicon-");
 }
-var KINDS_SCHEMA_ID, EXAMPLES_KIND, BUILTIN_KINDS, BUILTIN_KIND_NAMES, CONFIG_FILES, PROJECT_SEARCH_DEPTH;
+var KINDS_SCHEMA_ID, EXAMPLES_KIND, DESIGN_KIND, BUILTIN_KINDS, BUILTIN_KIND_NAMES, CONFIG_FILES, PROJECT_SEARCH_DEPTH;
 var init_kinds = __esm({
   "node_modules/@intentius/chant/src/workspace/kinds.ts"() {
     init_workspace_kinds_schema();
     init_tree();
+    init_pin_integrity();
     KINDS_SCHEMA_ID = workspace_kinds_schema_default.$id;
     EXAMPLES_KIND = "examples";
+    DESIGN_KIND = "design";
     BUILTIN_KINDS = [
       {
         name: "chant",
@@ -23703,7 +23846,7 @@ var init_kinds = __esm({
       },
       {
         name: "workspace",
-        description: "a nested workspace, with its own chant.workspace.json; opaque to the outer one",
+        description: "a nested workspace, with its own chant.workspace.json; the outer one reads it through its own chant workspace graph and never writes inside it",
         probe: { anyFile: ["chant.workspace.json", "chant.workspace.jsonc"] },
         precedence: 1e3,
         shape: "member",
@@ -23713,6 +23856,15 @@ var init_kinds = __esm({
       {
         name: "other",
         description: "a directory chant does not read; the entry says why in `because`",
+        probe: { directory: true },
+        precedence: 0,
+        shape: "member",
+        outputs: { from: "declared", names: [] },
+        source: "builtin"
+      },
+      {
+        name: DESIGN_KIND,
+        description: "a data member holding the design artifacts the workspace owns; chant reads its files for record pins and builds nothing",
         probe: { directory: true },
         precedence: 0,
         shape: "member",
@@ -23933,8 +24085,10 @@ __export(declaration_exports, {
   DEFAULT_STATE_ROOT: () => DEFAULT_STATE_ROOT,
   DIAGRAM_TOOLS: () => DIAGRAM_TOOLS,
   NAME_PATTERN: () => NAME_PATTERN,
+  PRINCIPAL_CLASSES: () => PRINCIPAL_CLASSES,
   RESERVED_NAMES: () => RESERVED_NAMES,
   WORKSPACE_ERROR_CODES: () => WORKSPACE_ERROR_CODES,
+  WRITE_VERBS: () => WRITE_VERBS,
   WorkspaceReadError: () => WorkspaceReadError2,
   boxServicesProblem: () => boxServicesProblem,
   compareVersions: () => compareVersions,
@@ -24087,6 +24241,7 @@ function parseDeclaration(text, file2, reader = readerVersion(), options = {}) {
       member: l.member,
       output: l.output,
       kind: l.kind ?? null,
+      protocol: l.protocol ?? null,
       pointer: `${pointer}/links/${j}`
     }));
     const records = recordKindsOf(e.records, e.dir, e.name, `${pointer}/records`);
@@ -24106,6 +24261,7 @@ function parseDeclaration(text, file2, reader = readerVersion(), options = {}) {
       box,
       upstream: e.upstream ?? null,
       because: e.because ?? null,
+      travel: e.travel === true,
       suppress,
       pointer
     };
@@ -24196,6 +24352,8 @@ function parseDeclaration(text, file2, reader = readerVersion(), options = {}) {
     byDiagramName.set(d.name, d);
   }
   const hosts = hostsOf(obj, members, at);
+  const writeScope = writeScopeOf(obj.writeScope, members, at);
+  const agents = agentsOf(obj.agents, members, at);
   const pins = (obj.pins ?? []).map((p) => ({
     package: p.package ?? null,
     version: p.version ?? null,
@@ -24216,8 +24374,61 @@ function parseDeclaration(text, file2, reader = readerVersion(), options = {}) {
     diagrams: ownDiagrams,
     hosts,
     changes: changesOf(obj.changes),
+    writeScope,
+    agents,
     file: file2
   };
+}
+function writeScopeOf(raw, members, at) {
+  if (raw === void 0) return null;
+  const block2 = raw;
+  const out = {};
+  for (const cls of PRINCIPAL_CLASSES) {
+    const entry = block2[cls];
+    if (entry === void 0) continue;
+    const pointer = `/writeScope/${cls}`;
+    const list = entry.members === void 0 || entry.members === "*" ? null : [...entry.members];
+    for (const [i, name] of (list ?? []).entries()) {
+      if (!members.some((m) => m.name === name)) {
+        throw new WorkspaceReadError2(
+          "declaration-invalid",
+          `writeScope.${cls} names the member ${JSON.stringify(name)}, which the declaration does not declare; declared members: ${members.map((m) => m.name).join(", ") || "none"}`,
+          at(`${pointer}/members/${i}`)
+        );
+      }
+    }
+    const records = entry.records === void 0 ? null : Object.fromEntries(Object.entries(entry.records).map(([k, v]) => [k, [...v]]));
+    out[cls] = { members: list, records, pointer };
+  }
+  return out;
+}
+function agentsOf(raw, members, at) {
+  const agents = (raw ?? []).map((a, i) => ({
+    name: a.name,
+    member: a.member,
+    principals: [...a.principals ?? []],
+    pointer: `/agents/${i}`
+  }));
+  const byName = /* @__PURE__ */ new Map();
+  const byPrincipal = /* @__PURE__ */ new Map();
+  for (const a of agents) {
+    const first = byName.get(a.name);
+    if (first) throw new WorkspaceReadError2("declaration-invalid", `the agent name ${JSON.stringify(a.name)} is already used by the agent at ${first.pointer}`, at(`${a.pointer}/name`));
+    byName.set(a.name, a);
+    if (!members.some((m) => m.name === a.member)) {
+      throw new WorkspaceReadError2(
+        "declaration-invalid",
+        `agent ${a.name} is bound to ${JSON.stringify(a.member)}, which is not a declared member; an agent session is bound to one member, not an example group`,
+        at(`${a.pointer}/member`)
+      );
+    }
+    for (const [i, p] of a.principals.entries()) {
+      const other = byPrincipal.get(p);
+      if (other) throw new WorkspaceReadError2("declaration-invalid", `the principal ${JSON.stringify(p)} is already listed by agent ${other.name}`, at(`${a.pointer}/principals/${i}`));
+      byPrincipal.set(p, a);
+    }
+  }
+  return agents;
 }
 function changesOf(block2) {
   if (block2 === void 0) return null;
@@ -24443,7 +24654,7 @@ function rootExclusions(declaration, groups) {
   }
   return out.sort((a, b) => a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0);
 }
-var DECLARATION_SCHEMA_ID, DECLARATION_FILES, DECLARATION_SCHEMA_VERSION, RESERVED_NAMES, NAME_PATTERN, WORKSPACE_ERROR_CODES, WorkspaceReadError2, DIAGRAM_TOOLS, DEFAULT_STATE_ROOT, CHANT_PACKAGE, readerVersionCache, SEMVER, compiled, SUMMARY_KEYWORDS;
+var DECLARATION_SCHEMA_ID, DECLARATION_FILES, DECLARATION_SCHEMA_VERSION, RESERVED_NAMES, NAME_PATTERN, WORKSPACE_ERROR_CODES, WorkspaceReadError2, PRINCIPAL_CLASSES, WRITE_VERBS, DIAGRAM_TOOLS, DEFAULT_STATE_ROOT, CHANT_PACKAGE, readerVersionCache, SEMVER, compiled, SUMMARY_KEYWORDS;
 var init_declaration = __esm({
   "node_modules/@intentius/chant/src/workspace/declaration.ts"() {
     init_declaration_schema();
@@ -24491,6 +24702,8 @@ var init_declaration = __esm({
         return l ? `${l.file}:${l.line}:${l.column}: ${this.message}` : this.message;
       }
     };
+    PRINCIPAL_CLASSES = ["human", "agent", "runner", "service"];
+    WRITE_VERBS = ["new", "amend", "review", "close"];
     DIAGRAM_TOOLS = ["d2", "mermaid", "graphviz", "excalidraw"];
     DEFAULT_STATE_ROOT = "${XDG_STATE_HOME}/chant/boxes";
     CHANT_PACKAGE = "@intentius/chant";
@@ -240346,6 +240559,7 @@ async function buildFromDiscoveryResult(discoveryResult, resolvedPathForChildSta
       const serialized = serializer.serialize(applyBound, lexiconLexiconOutputs, {
         ownership: options?.ownership,
         config: options?.config,
+        ...options?.telemetry ? { telemetry: options.telemetry } : {},
         ...receipts.size > 0 ? { receipts } : {}
       });
       if (typeof serialized !== "string" && serialized.warnings) {
@@ -245814,6 +246028,7 @@ var init_gate_origin = __esm({
 // node_modules/@intentius/chant/src/lifecycle/gate-ledger.ts
 var init_gate_ledger = __esm({
   "node_modules/@intentius/chant/src/lifecycle/gate-ledger.ts"() {
+    init_plan_digest();
     init_utils();
     init_gate_origin();
     init_git();
@@ -246656,6 +246871,7 @@ var init_activity_contracts = __esm({
         base: external_exports.string().optional(),
         remote: external_exports.string().optional(),
         allowCode: external_exports.boolean().optional(),
+        source: external_exports.string().optional(),
         cwd: external_exports.string().optional()
       }),
       external_exports.object({
@@ -251770,8 +251986,8 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.100.0",
-    "@intentius/chant-lexicon-github": "^0.100.0"
+    "@intentius/chant": "^0.101.0",
+    "@intentius/chant-lexicon-github": "^0.101.0"
   },
   devDependencies: {
     "@types/libsodium-wrappers": "^0.7.14",
@@ -253970,6 +254186,21 @@ var defaultRunner = (cmd, args, cwd) => new Promise((resolve12, reject) => {
     resolve12({ stdout, stderr, code: typeof code === "number" ? code : 1 });
   });
 });
+function parseGenerated(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const g of raw) {
+    if (!g || typeof g["path"] !== "string") continue;
+    const jobs = Array.isArray(g["jobs"]) ? g["jobs"].filter((j) => typeof j === "string") : null;
+    out.push({
+      path: g["path"],
+      command: typeof g["command"] === "string" ? g["command"] : "",
+      env: typeof g["env"] === "string" ? g["env"] : null,
+      jobs
+    });
+  }
+  return out;
+}
 function parseLsDocument(stdout) {
   let doc;
   try {
@@ -254004,7 +254235,8 @@ function parseLsDocument(stdout) {
       dir: o["dir"],
       kind: typeof o["kind"] === "string" ? o["kind"] : "other",
       readable: o["readable"] !== false,
-      reason: typeof o["reason"] === "string" ? o["reason"] : null
+      reason: typeof o["reason"] === "string" ? o["reason"] : null,
+      generated: parseGenerated(o["generated"])
     };
   });
   return {
@@ -254041,6 +254273,56 @@ async function runChantJson(dir, args, what, run4 = defaultRunner) {
 }
 async function readWorkspace(dir, run4 = defaultRunner) {
   return parseLsDocument(await runChantJson(dir, ["workspace", "ls", "--json"], "chant workspace ls --json", run4));
+}
+
+// src/workspace/checks.ts
+var GITHUB_WORKFLOW = /^\.github\/workflows\/[^/]+$/;
+function memberChecks(ws, only) {
+  const known = new Set(ws.members.map((m) => m.name));
+  for (const name of only ?? []) {
+    if (!known.has(name)) throw new Error(`[checks] workspace "${ws.name}" has no member "${name}" (members: ${[...known].join(", ")})`);
+  }
+  const members = [];
+  const skipped = [];
+  for (const m of ws.members) {
+    if (only && !only.includes(m.name)) continue;
+    const files = m.generated.filter((g) => GITHUB_WORKFLOW.test(g.path));
+    if (files.length === 0) {
+      skipped.push({ member: m.name, reason: "no generated GitHub workflow (chant older than 0.101 lists none)" });
+      continue;
+    }
+    const unknown2 = files.filter((g) => g.jobs === null);
+    const known2 = files.filter((g) => g.jobs !== null);
+    if (known2.length === 0) {
+      skipped.push({ member: m.name, reason: `job names unreadable in ${unknown2.map((g) => g.path).join(", ")}` });
+      continue;
+    }
+    members.push({
+      member: m.name,
+      files: known2.map((g) => g.path),
+      contexts: [...new Set(known2.flatMap((g) => g.jobs))]
+    });
+  }
+  return { members, skipped };
+}
+function requiredChecksRuleset(checks, branch = "~DEFAULT_BRANCH", name = "chant-required-checks") {
+  const contexts = [...new Set(checks.members.flatMap((m) => m.contexts))];
+  const ref = branch === "~DEFAULT_BRANCH" || branch.startsWith("refs/") ? branch : `refs/heads/${branch}`;
+  return {
+    name,
+    target: "branch",
+    enforcement: "active",
+    conditions: { ref_name: { include: [ref], exclude: [] } },
+    rules: [
+      {
+        type: "required_status_checks",
+        parameters: {
+          strict_required_status_checks_policy: false,
+          required_status_checks: contexts.map((context2) => ({ context: context2 }))
+        }
+      }
+    ]
+  };
 }
 
 // src/workspace/lifecycle.ts
@@ -254533,12 +254815,16 @@ async function main(argv = process.argv.slice(2)) {
     await runCodeowners(argv.slice(1));
     return;
   }
+  if (subcommand === "checks") {
+    await runChecks2(argv.slice(1));
+    return;
+  }
   if (subcommand === "lifecycle") {
     await runLifecycle(argv.slice(1));
     return;
   }
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", or "lifecycle"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", "lifecycle", or "checks"?`);
   }
   let args;
   try {
@@ -255105,6 +255391,66 @@ async function runLifecycle(argv) {
   process.stdout.write(lines.join("\n") + "\n");
   process.exit(0);
 }
+function parseChecksArgs(argv) {
+  const args = { dir: ".", members: void 0, branch: "~DEFAULT_BRANCH", name: "chant-required-checks", format: "ruleset" };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i];
+    const value = () => {
+      const v = argv[++i];
+      if (!v || v.startsWith("--")) throw new CliError(2, `${flag} requires a value`);
+      return v;
+    };
+    switch (flag) {
+      case "--dir":
+        args.dir = value();
+        break;
+      case "--members":
+        args.members = value().split(",").map((m) => m.trim()).filter(Boolean);
+        break;
+      case "--branch":
+        args.branch = value();
+        break;
+      case "--name":
+        args.name = value();
+        break;
+      case "--format": {
+        const f = value();
+        if (f !== "ruleset" && f !== "contexts") throw new CliError(2, `--format must be ruleset or contexts, got ${f}`);
+        args.format = f;
+        break;
+      }
+      default:
+        throw new CliError(2, `unknown flag for checks: ${flag}`);
+    }
+  }
+  return args;
+}
+async function runChecks2(argv) {
+  let args;
+  try {
+    args = parseChecksArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+  let result;
+  try {
+    const ws = await readWorkspace(args.dir);
+    result = memberChecks(ws, args.members);
+  } catch (err) {
+    die(err instanceof WorkspaceReadError ? 3 : 2, errMsg2(err));
+  }
+  for (const s of result.skipped) process.stderr.write(`github-warden: skipped member ${s.member}: ${s.reason}
+`);
+  if (result.members.length === 0) die(2, "no member has a generated GitHub workflow with readable job names");
+  if (args.format === "contexts") {
+    for (const m of result.members) process.stdout.write(`${m.member}  ${m.contexts.join(", ")}
+`);
+  } else {
+    process.stdout.write(JSON.stringify(requiredChecksRuleset(result, args.branch, args.name), null, 2) + "\n");
+  }
+  process.exit(0);
+}
 function printUsage() {
   process.stdout.write(
     [
@@ -255116,6 +255462,7 @@ function printUsage() {
       "  report      Aggregate cycle drift (+ optional audit) into a compliance snapshot.",
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
       "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
+      "  checks      Print the ruleset requiring each member pipeline's job names.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Path to governance config file (YAML or JSON).",
@@ -255150,6 +255497,13 @@ function printUsage() {
       "  --dir <path>                  Where chant looks for the workspace (default: .).",
       "  --out <path>                  Write the file here instead of stdout.",
       "  --check                       With --out: exit 4 when the file differs. Writes nothing.",
+      "",
+      "Flags (checks):",
+      "  --dir <path>                  Where chant starts looking for the workspace (default: .).",
+      "  --members <a,b>               Only these members (default: all with a pipeline).",
+      "  --branch <name>               Branch to protect (default: the repo's default branch).",
+      "  --name <ruleset>              Ruleset name (default: chant-required-checks).",
+      "  --format ruleset|contexts     Ruleset as JSON (default) or the names per member.",
       "",
       "Flags (lifecycle):",
       "  --env <name>                  Environment passed to chant workspace status. Required.",

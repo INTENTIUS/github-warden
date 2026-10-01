@@ -1,8 +1,8 @@
 # CLI reference
 
-The `github-warden` binary has five subcommands. `reconcile`, `audit` and
+The `github-warden` binary has six subcommands. `reconcile`, `audit` and
 `report` load the policy file (`--config`) and authenticate the same way; they
-differ in what they do with live GitHub state. `codeowners` and `lifecycle` read
+differ in what they do with live GitHub state. `codeowners`, `lifecycle` and `checks` read
 a chant workspace from disk and touch neither GitHub nor the policy file.
 
 | Subcommand | What it does | Mutates? |
@@ -11,6 +11,7 @@ a chant workspace from disk and touch neither GitHub nor the policy file.
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
 | `codeowners` | Generate CODEOWNERS from the members of a chant workspace. | Only the `--out` file, and not with `--check`. |
+| `checks` | Print the ruleset that requires each member pipeline's job names as status checks. | Never. |
 | `lifecycle` | Show the `chant/lifecycle` ledger paths, or print the ruleset that protects the branch. | Never. |
 
 `github-warden --help` (or no arguments, or `--help` after a subcommand)
@@ -173,10 +174,6 @@ missing (reason `dir-missing`) is skipped with a note on stderr. A name in the
 owners file that the workspace has no member for exits 2. A failed chant read
 exits 3.
 
-Not yet covered: required status checks per member pipeline. They need the
-generated job names, which no contract document carries yet
-(INTENTIUS/chant#3050).
-
 ## `lifecycle`
 
 ```
@@ -199,3 +196,27 @@ The ruleset targets `refs/heads/<lifecycle.ref>` with the rules `deletion` and
 `non_fast_forward`. The branch can't be deleted and its history can't be rewritten. Appending
 commits stays allowed, and that is how chant records releases and gate facts. Put the output under `repos.<repo>.rulesets` in the policy file and the
 `rulesets` cycle reconciles it like any other ruleset.
+
+## `checks`
+
+```
+github-warden checks [--dir <path>] [--members <a,b>] [--branch <name>] [--name <ruleset>] [--format ruleset|contexts]
+```
+
+The names come from `members[].generated[].jobs` in `chant workspace ls --json`
+(chant 0.101 or newer). Chant lists each generated file a member owns and, for a
+forge CI file, the check names it declares. The warden uses the GitHub workflow
+files under `.github/workflows/` and prints a ruleset that requires those names
+as status checks. A member with no such file, or whose names chant could not
+read, is skipped with a note on stderr.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--dir <path>` | `.` | Where chant starts looking for the workspace declaration. |
+| `--members <a,b>` | all | Only these members. A name the workspace doesn't have exits 2. |
+| `--branch <name>` | default branch | The branch the checks are required on. |
+| `--name <ruleset>` | `chant-required-checks` | The ruleset's name, its identity key in the repo. |
+| `--format ruleset\|contexts` | `ruleset` | `ruleset` prints the ruleset as JSON. `contexts` prints each member and its names. |
+
+Add the output to `repos.<repo>.rulesets` in the policy file. A required name is the job's `name`, else its
+id, which is what GitHub shows as the check.
