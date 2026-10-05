@@ -5,6 +5,11 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- New `reconcile --plan-json <file>` writes the change sets a run planned, one per
+  cycle and org, as a JSON array of chant's reconcile `ChangeSet`. chant's
+  change-set document reads it (`readChangeSetPart` with `planner: "warden"`).
+  It cannot be combined with `--mode apply`. `runReconcile` also returns them
+  as `changeSets`.
 - New `checks` subcommand reads each member's generated pipeline job names from
   `chant workspace ls --json` and prints the ruleset that requires them as
   status checks. The chant range moves to `^0.101.0`, which publishes the names.

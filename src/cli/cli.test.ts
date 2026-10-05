@@ -132,6 +132,18 @@ describe("parseReconcileArgs", () => {
     ).toBe(1);
   });
 
+  it("parses --plan-json, defaulting to undefined, and refuses it with --mode apply", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    expect(parseReconcileArgs(base).planJson).toBeUndefined();
+    expect(parseReconcileArgs([...base, "--plan-json", "plan.json"]).planJson).toBe("plan.json");
+    expect(() => parseReconcileArgs([...base, "--plan-json"])).toThrow(
+      expect.objectContaining({ code: 2 }),
+    );
+    expect(() => parseReconcileArgs([...base, "--mode", "apply", "--plan-json", "plan.json"])).toThrow(
+      expect.objectContaining({ code: 2 }),
+    );
+  });
+
   it("throws code 2 for a --removal-cap-fraction outside (0, 1]", () => {
     const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
     for (const bad of ["0", "-0.5", "1.5", "abc"]) {
@@ -321,6 +333,19 @@ describe("runReconcile integration (mocked client)", () => {
     for (const cr of result.cycles) {
       expect(typeof cr.plan).toBe("string");
     }
+  });
+
+  it("returns the change set it planned, one per cycle and org", async () => {
+    const result = await runReconcile({
+      config: makeSimpleConfig(),
+      client: makeMockClient(),
+      cycles: [makeCreateCycle()],
+      mode: "dry-run",
+    });
+
+    expect(result.changeSets).toHaveLength(result.cycles.length);
+    expect(result.changeSets.map((cs) => cs.org)).toEqual(result.cycles.map((cr) => cr.org));
+    expect(result.changeSets.flatMap((cs) => cs.entries).length).toBeGreaterThan(0);
   });
 
   it("apply mode applies entries and records them", async () => {

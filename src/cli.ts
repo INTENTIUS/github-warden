@@ -23,6 +23,9 @@
  *   --removal-cap-fraction <v>    Max fraction of live managed entries the plan
  *                                 may delete per resource type, in (0,1].
  *                                 Default: 0.25.
+ *   --plan-json <file>            Write the reconcile ChangeSets this run planned
+ *                                 (one per cycle and org) as a JSON array, for
+ *                                 chant's change-set document. Dry-run only.
  *
  * Auth modes (mutually exclusive, precedence: token-env > app-id-env):
  *   1. --token-env GH_TOKEN
@@ -77,6 +80,8 @@ export interface ReconcileArgs {
   allowGuardrailOverride: boolean;
   /** removalDeltaCap threshold in (0,1]; undefined keeps chant's default. */
   removalCapFraction: number | undefined;
+  /** File to write the planned reconcile ChangeSets to, as JSON. */
+  planJson: string | undefined;
 }
 
 /**
@@ -113,6 +118,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     tokenEnv: undefined,
     allowGuardrailOverride: false,
     removalCapFraction: undefined,
+    planJson: undefined,
   };
 
   const knownFlags = new Set([
@@ -124,6 +130,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     "--token-env",
     "--allow-guardrail-override",
     "--removal-cap-fraction",
+    "--plan-json",
   ]);
 
   let i = 0;
@@ -206,12 +213,22 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
         args.removalCapFraction = fraction;
         break;
       }
+      case "--plan-json": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--plan-json requires a value");
+        args.planJson = val;
+        break;
+      }
     }
     i++;
   }
 
   // Validate required flags.
   if (!args.config) throw new CliError(2, "--config is required");
+  if (args.planJson !== undefined && args.mode === "apply") {
+    throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
+  }
 
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
@@ -665,6 +682,14 @@ async function main(argv: string[] = process.argv.slice(2)) {
   }
 
   // ── Output ────────────────────────────────────────────────────────────────
+
+  if (args.planJson !== undefined) {
+    try {
+      writeFileSync(args.planJson, `${JSON.stringify(result.changeSets, null, 2)}\n`, "utf-8");
+    } catch (err) {
+      die(3, `failed to write plan to "${args.planJson}": ${errMsg(err)}`);
+    }
+  }
 
   // Print plan summary for every cycle that ran.
   for (const cr of result.cycles) {

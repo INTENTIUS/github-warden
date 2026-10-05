@@ -18,6 +18,7 @@ import type { GuardrailConfig } from "./guardrails.js";
 import { drainNotes } from "../cycles/notes.js";
 import { runReconcile as coreRunReconcile } from "./core.js";
 import type {
+  ChangeSet,
   Cycle as CoreCycle,
   ReconcileResult,
 } from "./core.js";
@@ -89,9 +90,13 @@ function ownedPredicate(
  */
 export async function runReconcile<TScope = unknown>(
   opts: RunReconcileOptions<TScope>,
-): Promise<ReconcileResult> {
+): Promise<ReconcileResult & { changeSets: ChangeSet[] }> {
   // Clear notes a previous (crashed/errored) run may have left behind.
   drainNotes();
+
+  // Every change set the run diffed, one per cycle and org, in run order.
+  // This is the plan chant's change-set document reads (`--plan-json`).
+  const changeSets: ChangeSet[] = [];
 
   const result = await coreRunReconcile<AppClient, OrgConfig, LiveOrgState, TScope>({
     client: opts.client,
@@ -103,12 +108,15 @@ export async function runReconcile<TScope = unknown>(
     // removalDeltaCap) on each change set it returns, so every guardrail
     // evaluation carries its own live counts — no side channel between the
     // diff and guardrail callbacks.
-    diff: (scopeId, desired, live, dopts) =>
-      diff(scopeId, desired, live, {
+    diff: (scopeId, desired, live, dopts) => {
+      const changeSet = diff(scopeId, desired, live, {
         ...dopts,
         isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
         nowMs: dopts.nowMs ?? Date.now(),
-      }),
+      });
+      changeSets.push(changeSet);
+      return changeSet;
+    },
     guardrails: (changeSet, live) =>
       runGuardrails(changeSet, live, opts.guardrails ?? {}),
     diffOptions: opts.diffOptions,
@@ -126,5 +134,5 @@ export async function runReconcile<TScope = unknown>(
     if (cr) cr.plan = `${cr.plan}\n${n.note}`;
   }
 
-  return result;
+  return { ...result, changeSets };
 }
