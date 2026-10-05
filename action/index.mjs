@@ -1235,6 +1235,7 @@ function ownedPredicate(owned) {
 }
 async function runReconcile2(opts) {
   drainNotes();
+  const changeSets = [];
   const result = await runReconcile({
     client: opts.client,
     scopes: opts.config.orgs,
@@ -1245,11 +1246,15 @@ async function runReconcile2(opts) {
     // removalDeltaCap) on each change set it returns, so every guardrail
     // evaluation carries its own live counts — no side channel between the
     // diff and guardrail callbacks.
-    diff: (scopeId, desired, live, dopts) => diff(scopeId, desired, live, {
-      ...dopts,
-      isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
-      nowMs: dopts.nowMs ?? Date.now()
-    }),
+    diff: (scopeId, desired, live, dopts) => {
+      const changeSet = diff(scopeId, desired, live, {
+        ...dopts,
+        isOwned: dopts.isOwned ?? ownedPredicate(opts.config.orgs[scopeId]?.owned),
+        nowMs: dopts.nowMs ?? Date.now()
+      });
+      changeSets.push(changeSet);
+      return changeSet;
+    },
     guardrails: (changeSet, live) => runGuardrails(changeSet, live, opts.guardrails ?? {}),
     diffOptions: opts.diffOptions,
     allowGuardrailOverride: opts.allowGuardrailOverride,
@@ -1260,7 +1265,7 @@ async function runReconcile2(opts) {
     if (cr) cr.plan = `${cr.plan}
 ${n.note}`;
   }
-  return result;
+  return { ...result, changeSets };
 }
 var init_runner = __esm({
   "src/reconcile/runner.ts"() {
@@ -254473,7 +254478,8 @@ function parseReconcileArgs(argv) {
     installationIdEnv: void 0,
     tokenEnv: void 0,
     allowGuardrailOverride: false,
-    removalCapFraction: void 0
+    removalCapFraction: void 0,
+    planJson: void 0
   };
   const knownFlags = /* @__PURE__ */ new Set([
     "--config",
@@ -254483,7 +254489,8 @@ function parseReconcileArgs(argv) {
     "--installation-id-env",
     "--token-env",
     "--allow-guardrail-override",
-    "--removal-cap-fraction"
+    "--removal-cap-fraction",
+    "--plan-json"
   ]);
   let i = 0;
   while (i < argv.length) {
@@ -254556,10 +254563,20 @@ function parseReconcileArgs(argv) {
         args.removalCapFraction = fraction;
         break;
       }
+      case "--plan-json": {
+        const val = argv[++i];
+        if (val === void 0 || val.startsWith("--"))
+          throw new CliError(2, "--plan-json requires a value");
+        args.planJson = val;
+        break;
+      }
     }
     i++;
   }
   if (!args.config) throw new CliError(2, "--config is required");
+  if (args.planJson !== void 0 && args.mode === "apply") {
+    throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
+  }
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
   if (!hasTokenAuth && !hasAppAuth) {
@@ -254878,6 +254895,14 @@ async function main(argv = process.argv.slice(2)) {
     });
   } catch (err) {
     die(3, `reconcile failed: ${errMsg2(err)}`);
+  }
+  if (args.planJson !== void 0) {
+    try {
+      writeFileSync4(args.planJson, `${JSON.stringify(result.changeSets, null, 2)}
+`, "utf-8");
+    } catch (err) {
+      die(3, `failed to write plan to "${args.planJson}": ${errMsg2(err)}`);
+    }
   }
   for (const cr of result.cycles) {
     process.stdout.write(`
