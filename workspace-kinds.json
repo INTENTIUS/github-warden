@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "kinds": [
+    {
+      "name": "forge-governance",
+      "description": "a directory holding a github-warden governance policy (governance.yml), which keeps a GitHub org and its repos in declared state",
+      "precedence": 200,
+      "probe": { "anyFile": ["governance.yml"] },
+      "outputs": ["repos", "teams"],
+      "memberFile": { "path": "governance.yml", "schema": "schemas/governance.schema.json" }
+    }
+  ]
+}
