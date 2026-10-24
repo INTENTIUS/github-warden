@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://intentius.io/github-warden/schemas/governance.schema.json",
+  "title": "github-warden governance config",
+  "description": "The governance YAML github-warden reconciles. It mirrors what loadGovernanceConfig accepts: a field the loader does not know is dropped there and refused here, so a typo fails the check.",
+  "type": "object",
+  "required": ["orgs"],
+  "additionalProperties": false,
+  "properties": {
+    "orgs": {
+      "type": "object",
+      "description": "The orgs to manage, keyed by org login",
+      "additionalProperties": { "$ref": "#/$defs/org" }
+    }
+  },
+  "$defs": {
+    "stringList": { "type": "array", "items": { "type": "string" } },
+    "org": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "owned": { "oneOf": [{ "type": "boolean" }, { "$ref": "#/$defs/stringList" }] },
+        "settings": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": { "type": "string" },
+            "email": { "type": "string" },
+            "websiteUrl": { "type": "string" },
+            "membersCanCreatePublicRepositories": { "type": "boolean" },
+            "membersCanCreatePrivateRepositories": { "type": "boolean" },
+            "membersCanCreateInternalRepositories": { "type": "boolean" },
+            "defaultRepositoryPermission": { "enum": ["none", "read", "write", "admin"] },
+            "requireTwoFactorAuthentication": { "type": "boolean" }
+          }
+        },
+        "teams": { "type": "object", "additionalProperties": { "$ref": "#/$defs/team" } },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["login"],
+            "additionalProperties": false,
+            "properties": { "login": { "type": "string" }, "role": { "enum": ["member", "admin"] } }
+          }
+        },
+        "repos": { "type": "object", "additionalProperties": { "$ref": "#/$defs/repo" } },
+        "rulesets": { "$ref": "#/$defs/rulesets" },
+        "secrets": { "$ref": "#/$defs/secrets" },
+        "variables": { "$ref": "#/$defs/variables" },
+        "repoBaselines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": { "name": { "type": "string" }, "template": { "type": "string" }, "private": { "type": "boolean" } }
+          }
+        },
+        "machineUsers": { "$ref": "#/$defs/stringList" },
+        "tokenPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "revokeExpired": { "type": "boolean" },
+            "maxLifetimeDays": { "type": "number" },
+            "maxIdleDays": { "type": "number" }
+          }
+        },
+        "tokenApproval": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allowedPermissions": { "$ref": "#/$defs/stringList" },
+            "default": { "enum": ["deny", "manual"] }
+          }
+        }
+      }
+    },
+    "team": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "privacy": { "enum": ["secret", "closed"] },
+        "parentTeamSlug": { "type": "string" },
+        "previously": { "type": "string" },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["login"],
+            "additionalProperties": false,
+            "properties": { "login": { "type": "string" }, "role": { "enum": ["member", "maintainer"] } }
+          }
+        },
+        "repos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "permission"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "permission": { "enum": ["pull", "triage", "push", "maintain", "admin"] }
+            }
+          }
+        }
+      }
+    },
+    "repo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": { "type": "string" },
+        "websiteUrl": { "type": "string" },
+        "private": { "type": "boolean" },
+        "hasIssues": { "type": "boolean" },
+        "hasProjects": { "type": "boolean" },
+        "hasWiki": { "type": "boolean" },
+        "defaultBranch": { "type": "string" },
+        "allowSquashMerge": { "type": "boolean" },
+        "allowMergeCommit": { "type": "boolean" },
+        "allowRebaseMerge": { "type": "boolean" },
+        "deleteBranchOnMerge": { "type": "boolean" },
+        "topics": { "$ref": "#/$defs/stringList" },
+        "branchProtection": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pattern"],
+            "additionalProperties": false,
+            "properties": {
+              "pattern": { "type": "string" },
+              "requirePullRequestReviews": { "type": "boolean" },
+              "requiredApprovingReviewCount": { "type": "number" },
+              "dismissStaleReviews": { "type": "boolean" },
+              "requireCodeOwnerReviews": { "type": "boolean" },
+              "requireStatusChecks": { "type": "boolean" },
+              "requiredStatusCheckContexts": { "$ref": "#/$defs/stringList" },
+              "requireBranchesToBeUpToDate": { "type": "boolean" },
+              "restrictPushes": { "type": "boolean" },
+              "allowForcePushes": { "type": "boolean" },
+              "allowDeletions": { "type": "boolean" },
+              "requireLinearHistory": { "type": "boolean" }
+            }
+          }
+        },
+        "rulesets": { "$ref": "#/$defs/rulesets" },
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "advancedSecurity": { "type": "boolean" },
+            "secretScanning": { "type": "boolean" },
+            "secretScanningPushProtection": { "type": "boolean" },
+            "vulnerabilityAlerts": { "type": "boolean" },
+            "dependabotSecurityUpdates": { "type": "boolean" }
+          }
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "waitTimer": { "type": "number" },
+              "preventSelfReview": { "type": "boolean" },
+              "reviewers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["type", "id"],
+                  "additionalProperties": false,
+                  "properties": { "type": { "enum": ["User", "Team"] }, "id": { "type": "number" } }
+                }
+              },
+              "deploymentBranchPolicy": {
+                "type": ["object", "null"],
+                "additionalProperties": false,
+                "properties": { "protectedBranches": { "type": "boolean" }, "customBranchPolicies": { "type": "boolean" } }
+              }
+            }
+          }
+        },
+        "secrets": { "$ref": "#/$defs/secrets" },
+        "variables": { "$ref": "#/$defs/variables" },
+        "dependabot": {
+          "type": "object",
+          "required": ["content"],
+          "additionalProperties": false,
+          "properties": { "content": { "type": "string" } }
+        }
+      }
+    },
+    "rulesets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "target": { "enum": ["branch", "tag", "push"] },
+          "enforcement": { "enum": ["active", "evaluate", "disabled"] },
+          "bypassActors": { "type": "array", "items": { "type": "object" } },
+          "conditions": { "type": "object" },
+          "rules": { "type": "array", "items": { "type": "object" } }
+        }
+      }
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": { "name": { "type": "string" }, "rotationRef": { "type": "string" } }
+      }
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": { "name": { "type": "string" }, "value": { "type": "string" }, "visibility": { "enum": ["all", "private", "selected"] } }
+      }
+    }
+  }
+}
