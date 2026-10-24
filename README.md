@@ -258,7 +258,7 @@ importing the package.
 | Probe | `governance.yml` directly in the member's directory |
 | Member file | `governance.yml` must pass `schemas/governance.schema.json`. `chant workspace check` reports a missing file, a file that does not parse, or a field the schema does not know as `WSP012` |
 | Outputs | `repos`, the repos in `orgs.<org>.repos`, and `teams`, the teams in `orgs.<org>.teams`, for [member links](https://intentius.io/chant/reference/workspace-declaration/#member-links) |
-| Graph | None yet. The kind has no `graph` block until the warden emits graph IR |
+| Graph | `graph.reader` names `dist/graph-reader.mjs`, which turns `governance.yml` into graph IR with no GitHub call: nodes for the org, repos, teams, rulesets, branch protection rules and the GitHub Apps named as ruleset bypass actors, and edges for a team's access to a repo, a ruleset's reach over a repo, a rule's repo, an app's bypass and a team's parent. It draws the policy as declared; drift colouring needs a live read and is not part of it. Needs a chant that has [chant#4413](https://github.com/INTENTIUS/chant/issues/4413) |
 
 The schema is stricter than the loader: the loader drops a field it does not know, and the schema refuses it, so a
 misspelled field fails `chant workspace check` before a reconcile silently leaves it unmanaged. A member kind with a

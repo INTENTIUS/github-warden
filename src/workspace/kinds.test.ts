@@ -28,7 +28,7 @@ describe("forge-governance kinds file", () => {
     expect(kind.precedence).toBeGreaterThan(0);
     expect(kind.precedence).toBeLessThan(500);
     expect(kind.outputs).toEqual(["repos", "teams"]);
-    expect(kind).not.toHaveProperty("graph");
+    expect(kind.graph.reader).toBe("dist/graph-reader.mjs");
   });
 
   test("probes for the file it checks", () => {
