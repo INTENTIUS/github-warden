@@ -23,8 +23,14 @@
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "schemas",
+    "workspace-kinds.json"
   ],
+  "exports": {
+    "./workspace-kinds": "./workspace-kinds.json",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "tsc": "tsc --noEmit",
     "lint:prose": "bash mkdocs-stage.sh && node scripts/lint-prose.mjs $(find _docs -name '*.md')",
@@ -41,10 +47,12 @@
   "devDependencies": {
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
     "esbuild": "^0.28.0",
     "libsodium-wrappers": "^0.8.4",
     "sentences": "^0.1.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "yaml": "^2.9.1"
   }
 }
