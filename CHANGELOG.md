@@ -3,6 +3,18 @@
 Notable changes to `@intentius/github-warden`. Versions follow semver, and
 releases before `0.4.1` are not recorded here.
 
+## Unreleased
+
+- `reconcile --plan-json` gives each entry its graph node id as its address
+  (INTENTIUS/chant#5089): the bare id for a change of the node itself
+  (`repo/acme/api`), and `<node id>#<resourceType>[<key>]` for a change under
+  it (`repo/acme/api#repo-secret[api/TOKEN]`). chant places the entries on the
+  same nodes as the drift reader's records, and two orgs with a same-named
+  repo no longer share an address. Before, the address was
+  `<resourceType>.<key>` (`member.bob`), which sat on no graph node. This
+  needs `@intentius/chant` at `^0.124.97`; see
+  [CLI.md](CLI.md#the-plan-json-part).
+
 ## 0.7.1 (2026-11-14)
 
 - `emit` pins the generated workflow's action at `v0.7.0` (#79). The 0.7.0
