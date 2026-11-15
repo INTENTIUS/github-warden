@@ -20,26 +20,36 @@ package.json at build time).
 
 ## Config file parsing
 
-`--config` accepts YAML or JSON, decided by extension: `.json` is parsed as
-JSON, anything else goes through the built-in YAML reader (block-style
+`--config` accepts YAML, JSON or TypeScript, decided by extension: `.json` is
+parsed as JSON, `.ts` is a TypeScript policy whose default export is the
+policy (see `--config-mode` below and [POLICY.md](POLICY.md#a-policy-in-typescript)),
+and anything else goes through the built-in YAML reader (block-style
 mappings/sequences, string/bool/number scalars, comments; no flow style, no
 multi-line scalars, no anchors). For complex YAML, use JSON. Invalid config
-shape exits 2 with the offending field path.
+shape exits 2 with the offending field path, whatever the form.
 
-Without `--config`, the policy is `governance.yml` in the working directory. A
-run with no `--config` and no `governance.yml` there exits 2.
+Without `--config`, the policy is `governance.yml` in the working directory,
+or `governance.ts` when there is no `governance.yml`. A run with neither exits 2.
+
+`--config-mode fold|run|check` (default `fold`) sets how a `.ts` policy is
+evaluated, on every subcommand that reads the policy. `fold` reduces the file
+to its value with the typescript-as-data reference evaluator without running
+it, and a file that is not data (it reads the environment, say) exits 2 with
+the line and column. `run` imports the file and takes its export. `check` does
+both and exits 2 when they differ. The flag does nothing for YAML or JSON.
 
 ## `reconcile`
 
 ```
-github-warden reconcile [--config <path>] [auth flags] [--mode dry-run|apply]
+github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
                         [--removal-cap-fraction <value>] [--plan-json <file>]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | `governance.yml` | Governance config (YAML or JSON). |
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config (YAML, JSON or `.ts`). |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated (see above). |
 | `--mode dry-run\|apply` | `dry-run` | `dry-run` prints the plan and changes nothing; `apply` executes it after guardrails pass. |
 | `--cycles <name[,name...]>` | all | Subset of cycles to run. Unknown names exit 2 and print the known list. |
 | `--token-env <VAR>` | — | Env var holding a pre-minted installation token (auth mode 1). |
@@ -68,15 +78,36 @@ plan; a `GUARDRAIL BLOCK:` line when a guardrail refused an apply;
 line when the API request budget (1000 requests per run) ran out before every
 cycle finished.
 
+When the policy is a `.ts` file loaded in `fold` or `check` mode, each drifted
+field in the plan is followed by a line saying where the policy wrote it:
+
+```
+  [branch-protection] my-repo/main
+    requiredApprovingReviewCount: 2 → 1
+      <- reviewPreset(...) argument approvals at examples/governance.ts:31:40
+```
+
+| Origin line | Meaning |
+|---|---|
+| `direct` | The value is written on the field itself in the policy. |
+| `<fn>(...) argument <param> at <file>:<line>:<col>` | A function in the policy (a preset) set the field from one of its parameters; the location is the argument at the call, so change the argument to change the field. When the parameter's default applied, the line names the call instead. |
+| `<fn>(...) sets it in its body at <file>:<line>:<col>, called at ...` | The function's body fixes the value, so the edit belongs in the function. |
+| `unknown (<reason>)` | The fold could not attribute the value; it is never reported as `direct`. |
+
+A YAML or JSON policy, or a `.ts` policy loaded with `--config-mode run`,
+prints the plan without these lines. The same origins are on each cycle
+result's `origins` field when warden is used as a library.
+
 ## `audit`
 
 ```
-github-warden audit [--config <path>] [auth flags] [--fail-on none|merge-worthy|any]
+github-warden audit [--config <path>] [--config-mode fold|run|check] [auth flags] [--fail-on none|merge-worthy|any]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | `governance.yml` | Governance config. The audit targets every repo declared under `repos`. |
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config. The audit targets every repo declared under `repos`. |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated. |
 | `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
 | `--fail-on none\|merge-worthy\|any` | `none` | Exit 4 when findings exceed this threshold. |
 | `--help`, `-h` | — | Print audit usage and exit 0. |
@@ -88,13 +119,14 @@ declared it prints "nothing to audit" and exits 0.
 ## `report`
 
 ```
-github-warden report [--config <path>] [auth flags] [--cycles a,b] [--audit]
+github-warden report [--config <path>] [--config-mode fold|run|check] [auth flags] [--cycles a,b] [--audit]
                      [--identity] [--out compliance.json] [--fail-on none|attention]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | `governance.yml` | Governance config. |
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config. |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated. |
 | `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
 | `--cycles <name[,name...]>` | all | Cycles to include (always run in dry-run). |
 | `--out <path>` | — | Write the committable JSON compliance artifact here. |

@@ -78,12 +78,13 @@ npx @intentius/github-warden reconcile --config .github/governance.yml --token-e
 ### `reconcile`
 
 ```
-github-warden reconcile --config <path> [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override] [--removal-cap-fraction <value>] [--plan-json <file>]
+github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override] [--removal-cap-fraction <value>] [--plan-json <file>]
 ```
 
 | Flag | Meaning |
 |---|---|
-| `--config <path>` | Governance config (YAML or JSON). Required. |
+| `--config <path>` | Governance config (YAML, JSON or `.ts`). Default `governance.yml`, else `governance.ts`. |
+| `--config-mode fold\|run\|check` | How a `.ts` policy is evaluated (default `fold`, which never runs it). |
 | `--mode dry-run\|apply` | Default `dry-run`. |
 | `--cycles <name[,name...]>` | Subset of cycles to run (default: all). |
 | `--allow-guardrail-override` | Apply even when guardrails trip. |
@@ -93,7 +94,7 @@ github-warden reconcile --config <path> [auth] [--mode dry-run|apply] [--cycles 
 ### `audit`
 
 ```
-github-warden audit --config <path> [auth] [--fail-on none|merge-worthy|any]
+github-warden audit [--config <path>] [auth] [--fail-on none|merge-worthy|any]
 ```
 
 Audits every repo declared in the config. Exits `4` when findings exceed `--fail-on`.
@@ -337,7 +338,8 @@ The action accepts these inputs.
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `command` | no | `reconcile` | `reconcile` or `audit` |
-| `config` | yes | — | Path to governance config (YAML/JSON) |
+| `config` | yes | — | Path to governance config (YAML, JSON or `.ts`) |
+| `config-mode` | no | `fold` | How a `.ts` policy is evaluated: `fold`, `run` or `check` |
 | `mode` | no | `dry-run` | `dry-run` or `apply` (reconcile only) |
 | `cycles` | no | all | Comma-separated cycle names (reconcile only) |
 | `app-id` | yes | — | GitHub App ID |

@@ -13,7 +13,9 @@
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
- *                                 Default: governance.yml in the working directory.
+ *                                 Default: governance.yml, else governance.ts, in
+ *                                 the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
  *   --mode dry-run|apply          Reconcile mode. Default: dry-run.
  *   --cycles <name[,name...]>     Comma-separated cycle names. Default: all.
  *   --app-id-env <VAR>            Env var holding the GitHub App ID.
@@ -48,7 +50,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import pkg from "../package.json" with { type: "json" };
-import { loadGovernanceConfig } from "./config/load.js";
+import { GovernanceConfigError } from "./config/load.js";
+import { parseConfigFile } from "./config/parse.js";
+import { CONFIG_MODES, loadGovernancePolicy, type ConfigMode } from "./config/policy.js";
+import type { PolicyProvenance } from "./reconcile/origin.js";
 import { NO_POLICY_MESSAGE, resolvePolicyPath } from "./config/policy-path.js";
 import type { GovernanceConfig } from "./config/types.js";
 import { createAppClient } from "./auth/app-client.js";
@@ -74,8 +79,10 @@ import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./workspa
 // ---------------------------------------------------------------------------
 
 export interface ReconcileArgs {
-  /** `--config`; undefined reads governance.yml in the working directory. */
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
   config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
   mode: "dry-run" | "apply";
   cycles: string[];
   appIdEnv: string | undefined;
@@ -115,6 +122,7 @@ export class CliError extends Error {
 export function parseReconcileArgs(argv: string[]): ReconcileArgs {
   const args: ReconcileArgs = {
     config: undefined,
+    configMode: "fold",
     mode: "dry-run",
     cycles: [],
     appIdEnv: undefined,
@@ -127,6 +135,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
 
   const knownFlags = new Set([
     "--config",
+    "--config-mode",
     "--mode",
     "--cycles",
     "--app-id-env",
@@ -150,6 +159,14 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     }
 
     switch (flag) {
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
       case "--config": {
         const val = argv[++i];
         if (val === undefined || val.startsWith("--"))
@@ -250,8 +267,10 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
 // ---------------------------------------------------------------------------
 
 export interface AuditArgs {
-  /** `--config`; undefined reads governance.yml in the working directory. */
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
   config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
   appIdEnv: string | undefined;
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
@@ -263,7 +282,9 @@ export interface AuditArgs {
  *
  * Accepted flags:
  *   --config <path>               Path to governance config file (YAML/JSON).
- *                                 Default: governance.yml in the working directory.
+ *                                 Default: governance.yml, else governance.ts, in
+ *                                 the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
  *   --token-env <VAR>             Env var holding a pre-minted installation token.
  *   --app-id-env <VAR>            Env var holding the GitHub App ID.
  *   --installation-id-env <VAR>   Env var holding the installation ID.
@@ -274,6 +295,7 @@ export interface AuditArgs {
 export function parseAuditArgs(argv: string[]): AuditArgs {
   const args: AuditArgs = {
     config: undefined,
+    configMode: "fold",
     appIdEnv: undefined,
     installationIdEnv: undefined,
     tokenEnv: undefined,
@@ -282,6 +304,7 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
 
   const knownFlags = new Set([
     "--config",
+    "--config-mode",
     "--token-env",
     "--app-id-env",
     "--installation-id-env",
@@ -308,6 +331,14 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
     }
 
     switch (flag) {
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
       case "--config": {
         const val = argv[++i];
         if (val === undefined || val.startsWith("--"))
@@ -369,8 +400,10 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
 // ---------------------------------------------------------------------------
 
 export interface ReportArgs {
-  /** `--config`; undefined reads governance.yml in the working directory. */
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
   config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
   appIdEnv: string | undefined;
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
@@ -391,7 +424,9 @@ export interface ReportArgs {
  *
  * Accepted flags:
  *   --config <path>               Governance config file (YAML/JSON).
- *                                 Default: governance.yml in the working directory.
+ *                                 Default: governance.yml, else governance.ts, in
+ *                                 the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
  *   --token-env / --app-id-env / --installation-id-env   Auth (same as reconcile).
  *   --cycles <name[,name...]>     Cycles to include (default: all).
  *   --out <path>                  Write the JSON compliance artifact to this path.
@@ -401,6 +436,7 @@ export interface ReportArgs {
 export function parseReportArgs(argv: string[]): ReportArgs {
   const args: ReportArgs = {
     config: undefined,
+    configMode: "fold",
     appIdEnv: undefined,
     installationIdEnv: undefined,
     tokenEnv: undefined,
@@ -413,6 +449,7 @@ export function parseReportArgs(argv: string[]): ReportArgs {
 
   const knownFlags = new Set([
     "--config",
+    "--config-mode",
     "--token-env",
     "--app-id-env",
     "--installation-id-env",
@@ -430,6 +467,14 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     if (!knownFlags.has(flag)) throw new CliError(2, `unknown flag: ${flag}`);
 
     switch (flag) {
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
       case "--config": {
         const val = argv[++i];
         if (val === undefined || val.startsWith("--")) throw new CliError(2, "--config requires a value");
@@ -624,7 +669,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // ── Load config ───────────────────────────────────────────────────────────
 
-  const config = readPolicy(args.config);
+  const { config, provenance } = await readPolicy(args.config, args.configMode);
 
   // ── Build client ──────────────────────────────────────────────────────────
 
@@ -666,6 +711,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
         args.removalCapFraction !== undefined
           ? { removalDeltaCap: { maxFraction: args.removalCapFraction } }
           : undefined,
+      provenance,
     });
   } catch (err) {
     die(3, `reconcile failed: ${errMsg(err)}`);
@@ -758,239 +804,23 @@ function errMsg(err: unknown): string {
 }
 
 /**
- * Read and validate the governance policy named by `--config`, or
- * governance.yml in the working directory when `--config` is absent. Exits 2
- * when there is no policy to read or it is invalid, 3 when the file cannot be
- * read.
+ * Load and validate the governance policy named by `--config`, or the default
+ * policy file in the working directory when `--config` is absent. Exits 2 when
+ * there is no policy to read, it is invalid, a `.ts` policy is not data, or
+ * folding and running it disagree; 3 when the file cannot be read or parsed.
  */
-function readPolicy(given: string | undefined): GovernanceConfig {
+async function readPolicy(
+  given: string | undefined,
+  mode: ConfigMode,
+): Promise<{ config: GovernanceConfig; provenance?: PolicyProvenance }> {
   const path = resolvePolicyPath(given);
   if (path === undefined) die(2, NO_POLICY_MESSAGE);
-  let rawConfig: unknown;
   try {
-    rawConfig = parseConfigFile(path, readFileSync(path, "utf-8"));
+    return await loadGovernancePolicy(path, mode);
   } catch (err) {
+    if (err instanceof GovernanceConfigError) die(2, `invalid governance config: ${errMsg(err)}`);
     die(3, `failed to read config file "${path}": ${errMsg(err)}`);
   }
-  try {
-    return loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
-  }
-}
-
-/**
- * Parse the config file text. Supports YAML (via a hand-rolled subset adequate
- * for governance configs — flat string/bool/number scalars, nested objects, and
- * string arrays) and JSON.
- *
- * The package has no YAML library dependency. Governance configs are structured
- * YAML with a predictable schema: the hand-rolled parser handles the real cases.
- * For truly complex YAML, operators can supply JSON instead.
- */
-function parseConfigFile(filePath: string, text: string): unknown {
-  const lower = filePath.toLowerCase();
-  if (lower.endsWith(".json")) {
-    return JSON.parse(text);
-  }
-  // YAML or ambiguous extension: delegate to the hand-rolled YAML parser.
-  return parseSimpleYaml(text);
-}
-
-/**
- * Minimal YAML parser for governance config files.
- *
- * Handles:
- *   - Nested mappings (indented with 2 spaces).
- *   - String, boolean, and integer scalars.
- *   - Sequences of scalars (- item) and mappings (- key: val).
- *   - Comments (#) and blank lines.
- *
- * Does NOT handle:
- *   - Flow style ({ } / [ ]).
- *   - Multi-line scalars (| / >).
- *   - Anchors / aliases (* / &).
- *   - Quoted keys.
- *
- * Governance configs are authored with this tool and are unlikely to use those
- * features. If they do, operators should use JSON.
- */
-function parseSimpleYaml(text: string): unknown {
-  const lines = text.split("\n");
-  const root = parseYamlBlock(lines, 0, 0);
-  return root.value;
-}
-
-interface ParseResult {
-  value: unknown;
-  nextLine: number;
-}
-
-function parseYamlBlock(lines: string[], startLine: number, indent: number): ParseResult {
-  // Collect lines at this indent level, building a mapping or sequence.
-  let i = startLine;
-  const result: Record<string, unknown> = {};
-  const seq: unknown[] = [];
-  let isSequence = false;
-  let isMapping = false;
-
-  while (i < lines.length) {
-    const raw = lines[i];
-    const stripped = raw.replace(/#.*$/, "").trimEnd();
-
-    if (stripped.trim() === "") {
-      i++;
-      continue;
-    }
-
-    const lineIndent = stripped.length - stripped.trimStart().length;
-
-    // Dedent: this line belongs to a parent block.
-    if (lineIndent < indent) break;
-
-    // Deeper indent: should have been consumed by a recursive call.
-    if (lineIndent > indent) {
-      i++;
-      continue;
-    }
-
-    const content = stripped.trimStart();
-
-    // Sequence item.
-    if (content.startsWith("- ")) {
-      isSequence = true;
-      const rest = content.slice(2).trim();
-      // Inline mapping: "- key: value"
-      if (/^[^:]+:\s/.test(rest) || /^[^:]+:$/.test(rest)) {
-        // Parse as a mini-mapping starting from the same line.
-        const itemMap = parseInlineSequenceMappingItem(lines, i, lineIndent + 2);
-        seq.push(itemMap.value);
-        i = itemMap.nextLine;
-      } else {
-        seq.push(parseScalar(rest));
-        i++;
-      }
-      continue;
-    }
-
-    // Mapping entry: "key: value" or "key:".
-    const colonIdx = content.indexOf(": ");
-    const bareColon = content.endsWith(":") && !content.includes(": ");
-    if (colonIdx !== -1 || bareColon) {
-      isMapping = true;
-      const key = colonIdx !== -1 ? content.slice(0, colonIdx).trim() : content.slice(0, -1).trim();
-      const valueStr = colonIdx !== -1 ? content.slice(colonIdx + 2).trim() : "";
-
-      i++;
-
-      if (valueStr !== "" && valueStr !== "|" && valueStr !== ">") {
-        // Inline scalar value.
-        result[key] = parseScalar(valueStr);
-      } else {
-        // Value is on subsequent lines — recurse.
-        // Find the indent of the next non-blank, non-comment line.
-        let nextNonBlank = i;
-        while (nextNonBlank < lines.length) {
-          const candidate = lines[nextNonBlank].replace(/#.*$/, "").trimEnd();
-          if (candidate.trim() !== "") break;
-          nextNonBlank++;
-        }
-        if (nextNonBlank >= lines.length) {
-          result[key] = null;
-        } else {
-          const childIndent =
-            lines[nextNonBlank].length - lines[nextNonBlank].trimStart().length;
-          if (childIndent <= indent) {
-            result[key] = null;
-          } else {
-            const child = parseYamlBlock(lines, nextNonBlank, childIndent);
-            result[key] = child.value;
-            i = child.nextLine;
-          }
-        }
-      }
-      continue;
-    }
-
-    // Unrecognized line at this indent — skip.
-    i++;
-  }
-
-  if (isSequence) return { value: seq, nextLine: i };
-  if (isMapping) return { value: result, nextLine: i };
-  return { value: null, nextLine: i };
-}
-
-/**
- * Parse a sequence item that starts a mapping at `startLine`.
- * E.g.:
- *   - pattern: main
- *     requirePullRequestReviews: true
- */
-function parseInlineSequenceMappingItem(
-  lines: string[],
-  startLine: number,
-  childIndent: number,
-): ParseResult {
-  const raw = lines[startLine];
-  const stripped = raw.replace(/#.*$/, "").trimEnd();
-  const lineIndent = stripped.length - stripped.trimStart().length;
-  const content = stripped.trimStart().slice(2).trim(); // strip "- "
-
-  const colonIdx = content.indexOf(": ");
-  const bareColon = content.endsWith(":") && !content.includes(": ");
-  const result: Record<string, unknown> = {};
-
-  if (colonIdx !== -1 || bareColon) {
-    const key = colonIdx !== -1 ? content.slice(0, colonIdx).trim() : content.slice(0, -1).trim();
-    const valueStr = colonIdx !== -1 ? content.slice(colonIdx + 2).trim() : "";
-    if (valueStr !== "") {
-      result[key] = parseScalar(valueStr);
-    } else {
-      // value is on child lines
-      let nextNonBlank = startLine + 1;
-      while (nextNonBlank < lines.length) {
-        const candidate = lines[nextNonBlank].replace(/#.*$/, "").trimEnd();
-        if (candidate.trim() !== "") break;
-        nextNonBlank++;
-      }
-      if (nextNonBlank < lines.length) {
-        const ci = lines[nextNonBlank].length - lines[nextNonBlank].trimStart().length;
-        if (ci > lineIndent) {
-          const child = parseYamlBlock(lines, nextNonBlank, ci);
-          result[key] = child.value;
-          // Continue collecting sibling keys at childIndent.
-          const rest = parseYamlBlock(lines, child.nextLine, childIndent);
-          if (rest.value && typeof rest.value === "object" && !Array.isArray(rest.value)) {
-            Object.assign(result, rest.value as object);
-            return { value: result, nextLine: rest.nextLine };
-          }
-          return { value: result, nextLine: child.nextLine };
-        }
-      }
-    }
-  }
-
-  // Collect sibling keys at `childIndent`.
-  const rest = parseYamlBlock(lines, startLine + 1, childIndent);
-  if (rest.value && typeof rest.value === "object" && !Array.isArray(rest.value)) {
-    Object.assign(result, rest.value as object);
-    return { value: result, nextLine: rest.nextLine };
-  }
-  return { value: result, nextLine: startLine + 1 };
-}
-
-function parseScalar(s: string): unknown {
-  if (s === "true") return true;
-  if (s === "false") return false;
-  if (s === "null" || s === "~") return null;
-  // Strip optional quotes.
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1);
-  }
-  const n = Number(s);
-  if (!isNaN(n) && s.trim() !== "") return n;
-  return s;
 }
 
 /**
@@ -1009,7 +839,7 @@ async function runAudit(argv: string[]): Promise<void> {
   }
 
   // ── Load config ────────────────────────────────────────────────────────────
-  const config = readPolicy(auditArgs.config);
+  const { config } = await readPolicy(auditArgs.config, auditArgs.configMode);
 
   // ── Resolve managed repos from config ──────────────────────────────────────
   const repoUrls: string[] = [];
@@ -1100,7 +930,7 @@ async function runReport(argv: string[]): Promise<void> {
   }
 
   // ── Load config ────────────────────────────────────────────────────────────
-  const config = readPolicy(reportArgs.config);
+  const { config } = await readPolicy(reportArgs.config, reportArgs.configMode);
 
   // ── Build client ───────────────────────────────────────────────────────────
   let client;
@@ -1444,7 +1274,9 @@ function printUsage() {
       "  checks      Print the ruleset requiring each member pipeline's job names.",
       "",
       "Flags (reconcile):",
-      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --mode dry-run|apply          Reconcile mode (default: dry-run).",
       "  --cycles <name[,name...]>     Cycle names to run (default: all).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
@@ -1455,7 +1287,9 @@ function printUsage() {
       "                                delete per resource type, in (0,1]. Default: 0.25.",
       "",
       "Flags (audit):",
-      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
@@ -1463,7 +1297,9 @@ function printUsage() {
       "                                Exit 4 when findings exceed threshold (default: none).",
       "",
       "Flags (report):",
-      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "  --cycles <name[,name...]>     Cycles to include (default: all).",
       "  --out <path>                  Write the JSON compliance artifact to this path.",
@@ -1511,7 +1347,9 @@ function printAuditUsage() {
       "using the warden App installation token.",
       "",
       "Flags:",
-      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",

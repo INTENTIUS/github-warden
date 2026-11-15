@@ -27,6 +27,7 @@ function readOptionalInput(env: Record<string, string>, name: string): string | 
 function buildArgv(env: Record<string, string>): string[] {
   const command = readOptionalInput(env, "command") ?? "reconcile";
   const config = env["INPUT_CONFIG"]?.trim() ?? "";
+  const configMode = readOptionalInput(env, "config-mode");
   const mode = readOptionalInput(env, "mode") ?? "dry-run";
   const cycles = readOptionalInput(env, "cycles");
   const failOn = readOptionalInput(env, "fail-on");
@@ -34,6 +35,7 @@ function buildArgv(env: Record<string, string>): string[] {
 
   const argv: string[] = [command];
   argv.push("--config", config);
+  if (configMode) argv.push("--config-mode", configMode);
   argv.push("--app-id-env", "WARDEN_ACTION_APP_ID");
   argv.push("--installation-id-env", "WARDEN_ACTION_INSTALLATION_ID");
 
@@ -124,6 +126,19 @@ describe("action input → argv mapping", () => {
       "--installation-id-env", "WARDEN_ACTION_INSTALLATION_ID",
       "--fail-on", "merge-worthy",
     ]);
+  });
+
+  it("config-mode is passed through when set and omitted otherwise", () => {
+    const env: Record<string, string> = {
+      INPUT_CONFIG: "governance.ts",
+      INPUT_CONFIG_MODE: "check",
+      INPUT_APP_ID: "123",
+      INPUT_INSTALLATION_ID: "456",
+      INPUT_PRIVATE_KEY: "pem",
+    };
+    expect(buildArgv(env).slice(0, 5)).toEqual(["reconcile", "--config", "governance.ts", "--config-mode", "check"]);
+    delete env.INPUT_CONFIG_MODE;
+    expect(buildArgv(env)).not.toContain("--config-mode");
   });
 
   it("audit without fail-on omits the flag", () => {

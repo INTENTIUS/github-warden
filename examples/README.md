@@ -26,6 +26,15 @@ the blocks you don't want managed and add fields as you grow. The
 cycles (teams, members, rulesets, environments, secrets/variables, dependency
 hygiene, repo provisioning, token governance, ...).
 
+## `governance.ts` and `not-data.ts`
+
+`governance.ts` is the same policy as `governance.yml`, written in TypeScript
+with a review preset that sets the branch protection and branch auto-delete
+from one call. Warden folds it to its value without running it, and a drifted
+field the preset set is traced back to the preset's argument in the plan.
+`not-data.ts` reads the environment, so folding refuses it; it is there to
+show the refusal. See [the policy reference](../POLICY.md#a-policy-in-typescript).
+
 ## Auth
 
 The example uses `--token-env GH_TOKEN` (a pre-minted installation token), which

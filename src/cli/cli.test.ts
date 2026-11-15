@@ -89,6 +89,19 @@ describe("parseReconcileArgs", () => {
     expect(args.tokenEnv).toBeUndefined();
   });
 
+  it("parses --config-mode, defaulting to fold", () => {
+    const base = ["--config", "governance.ts", "--token-env", "GH_TOKEN"];
+    expect(parseReconcileArgs(base).configMode).toBe("fold");
+    for (const mode of ["fold", "run", "check"] as const) {
+      expect(parseReconcileArgs([...base, "--config-mode", mode]).configMode).toBe(mode);
+      expect(parseReportArgs([...base, "--config-mode", mode]).configMode).toBe(mode);
+    }
+    expect(() => parseReconcileArgs([...base, "--config-mode", "eval"])).toThrow(
+      '--config-mode must be "fold", "run" or "check", got: eval',
+    );
+    expect(() => parseReconcileArgs([...base, "--config-mode"])).toThrow(expect.objectContaining({ code: 2 }));
+  });
+
   it("leaves --config unset when it is omitted, so the default policy file is read", () => {
     expect(parseReconcileArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });

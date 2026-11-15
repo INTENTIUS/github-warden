@@ -55,6 +55,7 @@ async function main(): Promise<void> {
   // Collect inputs.
   const command = optionalInput("command") ?? "reconcile";
   const config = requiredInput("config");
+  const configMode = optionalInput("config-mode");
   const appId = requiredInput("app-id");
   const installationId = requiredInput("installation-id");
   const privateKey = requiredInput("private-key");
@@ -86,6 +87,7 @@ async function main(): Promise<void> {
   const argv: string[] = [command];
 
   argv.push("--config", config);
+  if (configMode) argv.push("--config-mode", configMode);
   argv.push("--app-id-env", "WARDEN_ACTION_APP_ID");
   argv.push("--installation-id-env", "WARDEN_ACTION_INSTALLATION_ID");
 

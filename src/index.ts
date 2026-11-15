@@ -1,34 +1,16 @@
-// Config types
-export type {
-  GovernanceConfig,
-  OrgConfig,
-  OrgSettings,
-  TeamConfig,
-  TeamMember,
-  TeamRepo,
-  TeamRole,
-  TeamRepoPermission,
-  MemberConfig,
-  OrgMemberRole,
-  RepoConfig,
-  BranchProtectionConfig,
-  RulesetConfig,
-  RulesetTarget,
-  RulesetEnforcement,
-  RepoSecurityConfig,
-  EnvironmentConfig,
-  EnvironmentReviewer,
-  DeploymentBranchPolicy,
-  SecretConfig,
-  VariableConfig,
-  DependabotConfig,
-  RepoBaselineConfig,
-  TokenPolicyConfig,
-  TokenApprovalPolicy,
-} from "./config/types.js";
+// The policy's types, for `satisfies GovernanceConfig` in a `.ts` policy.
+export type * from "./config/types.js";
 
-// Config loader
+// Config loader. `loadGovernanceConfig` validates a parsed policy value;
+// `loadGovernancePolicy` reads a YAML, JSON or `.ts` policy file and folds,
+// runs or checks a `.ts` one (`satisfies GovernanceConfig` types it).
 export { loadGovernanceConfig, GovernanceConfigError } from "./config/load.js";
+export { loadGovernancePolicy } from "./config/policy.js";
+export type { ConfigMode, LoadedPolicy } from "./config/policy.js";
+
+// Where a drifted field was written, when the policy was folded.
+export { originAt, formatOrigin, driftOrigins, annotatePlan } from "./reconcile/origin.js";
+export type { FieldOrigin, SourceLocation, PolicyProvenance, DriftOrigin } from "./reconcile/origin.js";
 
 // GitHub App auth client
 export type { MintOptions, InstallationToken, AppClientOptions, AppClient } from "./auth/app-client.js";
@@ -101,6 +83,8 @@ export type {
   DeferredWork,
   ReconcileResult,
   RunReconcileOptions,
+  WardenCycleResult,
+  WardenReconcileResult,
 } from "./reconcile/runner.js";
 export { runReconcile, BudgetExhaustedError } from "./reconcile/runner.js";
 
