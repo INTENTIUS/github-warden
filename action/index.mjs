@@ -241198,6 +241198,9 @@ var init_workspace_kinds_schema = __esm({
             graph: {
               $ref: "#/$defs/graph"
             },
+            drift: {
+              $ref: "#/$defs/drift"
+            },
             fields: {
               $ref: "#/$defs/fields"
             },
@@ -241382,6 +241385,26 @@ var init_workspace_kinds_schema = __esm({
           if: { properties: { reader: true }, required: ["reader"] },
           then: { not: { properties: { lexicon: true }, required: ["lexicon"] } },
           else: { properties: { lexicon: true, config: true }, required: ["lexicon", "config"] },
+          patternProperties: {
+            "^x-": true
+          },
+          additionalProperties: false
+        },
+        drift: {
+          type: "object",
+          description: "How chant workspace drift --member reads a member of this kind (#5068): a drift reader module the supplying package ships, called with the member's directory and config. In every string key and value of config, {member} becomes the member's name, {dir} its absolute directory and {workspace} the absolute workspace root, as in graph. Without this field a member of the kind answers no-drift-read. A chant older than this field can't read a kinds file that uses it.",
+          required: ["reader"],
+          properties: {
+            reader: {
+              type: "string",
+              pattern: "^(?!/)(?!.*\\.\\.)(?!.*\\\\)[^\\u0000-\\u001f]+$",
+              description: "A drift reader module, as a path inside the supplying package: an ES module whose default export is (input: { dir, config, member, observedAt, read?, resource?, stack? }) => DriftReaderOutput, sync or async, the lines of each read it ran or a refusal (drift-reader.schema.json). chant workspace drift imports it in its own process, with the process's environment, so the reader brings its own credentials; chant makes no call of its own for it."
+            },
+            config: {
+              type: "object",
+              description: "The config object the module is called with (optional). Placeholders are substituted; nothing else is interpreted."
+            }
+          },
           patternProperties: {
             "^x-": true
           },
@@ -259264,8 +259287,8 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.124.95",
-    "@intentius/chant-lexicon-github": "^0.124.95",
+    "@intentius/chant": "^0.124.96",
+    "@intentius/chant-lexicon-github": "^0.124.96",
     "@intentius/tsad-reference": "^2.3.0"
   },
   devDependencies: {

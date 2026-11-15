@@ -79,7 +79,7 @@ releases before `0.4.1` are not recorded here.
   (`chant workspace ls --json`), and owners are declared by member name in an
   owners file. See [CLI.md](CLI.md#codeowners).
 - The `@intentius/chant` and `@intentius/chant-lexicon-github` range moves from
-  `^0.72.1` to `^0.124.95` (#70). On 0.x a caret admits one minor, so each
+  `^0.72.1` to `^0.124.96` (#70). On 0.x a caret admits one minor, so each
   bump is explicit. The workspace read contract starts at chant 0.81.
 - The governance pipeline the emitter writes pins `actions/checkout` from
   chant's action pin table (`@intentius/chant/action-pins`) instead of its own
