@@ -112,6 +112,16 @@ snapshot. Optional passes add an `--audit` sweep and an `--identity`
 artifact. With `--fail-on attention` the command exits `4` when anything needs
 attention; nothing is ever mutated.
 
+### `repos`
+
+```
+github-warden repos [--config <path>] [auth] [--org <name>] [--out <file>]
+```
+
+Writes the policy's org's repository list, archived repos included, as the
+JSON `chant workspace check --forge-repos <file>` reads. See
+[CLI.md](CLI.md#repos).
+
 ### Exit codes
 
 `0` success · `1` guardrail block (apply) · `2` arg/config error · `3` runtime error · `4` audit/report threshold exceeded.
