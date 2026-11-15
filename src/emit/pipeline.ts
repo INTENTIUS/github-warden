@@ -39,15 +39,15 @@ function pinnedUses(pin: ActionPin): string {
 }
 
 /**
- * intentius/github-warden at the v0.6.1 tag.
- * https://github.com/intentius/github-warden/releases/tag/v0.6.1
+ * intentius/github-warden at the v0.7.0 tag.
+ * https://github.com/intentius/github-warden/releases/tag/v0.7.0
  *
  * The emitted pipeline runs this action, so its pin is kept here rather than
  * in chant's table. Keep the SHA and the tag in agreement when bumping.
  */
 const GITHUB_WARDEN_PIN = {
-  sha: "b25424ab2930551d0be5bac99cff577e2ba5edd6",
-  tag: "v0.6.1",
+  sha: "b094e91b9313b2a44b6fa14781a4917d670f62ed",
+  tag: "v0.7.0",
 } as const;
 
 const GITHUB_WARDEN_USES = `intentius/github-warden@${GITHUB_WARDEN_PIN.sha} # ${GITHUB_WARDEN_PIN.tag}`;
