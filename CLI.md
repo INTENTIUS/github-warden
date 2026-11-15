@@ -305,8 +305,9 @@ several org administration endpoints are callable only by a GitHub App. See
 `governance.ts`) and runs the same plan `reconcile --mode dry-run` prints,
 with every cycle. It never applies. Its credentials come from the
 environment: the token from `GH_TOKEN` and the API base from
-`GITHUB_API_URL` (default `https://api.github.com`), or App auth when the
-kind's `drift.config` names `appIdEnv` and `installationIdEnv`. Each record is
+`GITHUB_API_URL` (default `https://api.github.com`), or, with no token, App
+auth from `GOVERNANCE_APP_ID`, `GOVERNANCE_INSTALLATION_ID` and
+`GOVERNANCE_APP_PRIVATE_KEY`. Each record is
 one graph node; [README.md](README.md#drift-in-a-chant-workspace) lists the
 addresses and statuses.
 

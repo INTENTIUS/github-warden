@@ -294,9 +294,12 @@ the environment:
 
 | Variable | Use |
 |---|---|
-| `GH_TOKEN` | The token, as `--token-env GH_TOKEN` reads it. The kind's `drift.config.tokenEnv` can name another variable |
-| `GITHUB_API_URL` | The API base, default `https://api.github.com`. GitHub Actions sets it, to the GHES API on GHES. `drift.config.baseUrlEnv` can name another variable |
-| App auth | With no token set, and `drift.config.appIdEnv` and `drift.config.installationIdEnv` naming the App ID and installation ID variables, the reader mints an installation token with the private key in `GOVERNANCE_APP_PRIVATE_KEY` (or `GITHUB_APP_PRIVATE_KEY`), as the CLI's App auth does |
+| `GH_TOKEN` | The token, as `--token-env GH_TOKEN` reads it |
+| `GITHUB_API_URL` | The API base, default `https://api.github.com`. GitHub Actions sets it, to the GHES API on GHES |
+| `GOVERNANCE_APP_ID`, `GOVERNANCE_INSTALLATION_ID`, `GOVERNANCE_APP_PRIVATE_KEY` | App auth, used when `GH_TOKEN` is not set: the reader mints an installation token from the App ID, the installation ID and the private key (or `GITHUB_APP_PRIVATE_KEY`), as the CLI's App auth does |
+
+chant reads a kind's `drift.config` only from this package's `workspace-kinds.json`, so a workspace cannot rename these
+variables; set them in the environment `chant workspace drift` runs in.
 
 Without credentials, or without a policy in the member's directory, the read is refused with `no-drift-read`. The
 policy is the member's `governance.yml`, or `governance.ts` when there is no `governance.yml`, folded as `reconcile`

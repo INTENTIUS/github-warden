@@ -8,10 +8,13 @@
  *
  * Credentials come from the environment. The token is read from `GH_TOKEN`
  * (the variable the docs pass to `--token-env`), or from the variable
- * `drift.config.tokenEnv` names. When no token is set and the config names
- * `appIdEnv` and `installationIdEnv`, the reader mints an installation token
- * from those and the private key in `GOVERNANCE_APP_PRIVATE_KEY` (or
- * `GITHUB_APP_PRIVATE_KEY`), as the CLI's App auth does. The API base is
+ * `drift.config.tokenEnv` names. When no token is set, the reader mints an
+ * installation token from the App ID in `GOVERNANCE_APP_ID`, the installation
+ * ID in `GOVERNANCE_INSTALLATION_ID` and the private key in
+ * `GOVERNANCE_APP_PRIVATE_KEY` (or `GITHUB_APP_PRIVATE_KEY`), as the CLI's App
+ * auth does; `drift.config.appIdEnv` and `installationIdEnv` name other
+ * variables. chant reads `drift.config` only from this package's
+ * workspace-kinds.json, so the defaults are what a workspace gets. The API base is
  * `GITHUB_API_URL` when set (GitHub Actions sets it, and it points at a GHES
  * instance there), else https://api.github.com; `drift.config.baseUrlEnv`
  * names another variable. Missing credentials or a missing policy are a
@@ -31,6 +34,8 @@ import { declaredNodes, DRIFT_READ, driftLines, governanceDrift } from "./reader
 
 export const DEFAULT_TOKEN_ENV = "GH_TOKEN";
 export const DEFAULT_BASE_URL_ENV = "GITHUB_API_URL";
+export const DEFAULT_APP_ID_ENV = "GOVERNANCE_APP_ID";
+export const DEFAULT_INSTALLATION_ID_ENV = "GOVERNANCE_INSTALLATION_ID";
 const PRIVATE_KEY_ENVS = ["GOVERNANCE_APP_PRIVATE_KEY", "GITHUB_APP_PRIVATE_KEY"];
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
@@ -68,11 +73,8 @@ export function driftAuth(config: Record<string, unknown>, env: NodeJS.ProcessEn
   const token = env[tokenEnv]?.trim();
   if (token) return { token, baseUrl };
 
-  const appIdEnv = str(config.appIdEnv);
-  const installationIdEnv = str(config.installationIdEnv);
-  if (!appIdEnv || !installationIdEnv) {
-    return { missing: `${tokenEnv} is not set (and the kind's drift config names no appIdEnv and installationIdEnv)` };
-  }
+  const appIdEnv = str(config.appIdEnv) ?? DEFAULT_APP_ID_ENV;
+  const installationIdEnv = str(config.installationIdEnv) ?? DEFAULT_INSTALLATION_ID_ENV;
   const unset = [appIdEnv, installationIdEnv].filter((v) => !env[v]);
   const keyEnv = PRIVATE_KEY_ENVS.find((v) => env[v]);
   if (!keyEnv) unset.push(PRIVATE_KEY_ENVS.join(" or "));
