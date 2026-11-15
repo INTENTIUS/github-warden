@@ -64,6 +64,8 @@ async function main(): Promise<void> {
   const cycles = optionalInput("cycles");
   const failOn = optionalInput("fail-on");
   const allowGuardrailOverride = optionalInput("allow-guardrail-override");
+  const driftIssue = optionalInput("drift-issue");
+  const driftIssueRepo = optionalInput("drift-issue-repo");
 
   // Validate command early for a clear error message.
   if (command !== "reconcile" && command !== "audit") {
@@ -95,6 +97,8 @@ async function main(): Promise<void> {
     argv.push("--mode", mode);
     if (cycles) argv.push("--cycles", cycles);
     if (allowGuardrailOverride === "true") argv.push("--allow-guardrail-override");
+    if (driftIssue === "true") argv.push("--drift-issue");
+    if (driftIssueRepo) argv.push("--drift-issue-repo", driftIssueRepo);
   }
 
   if (command === "audit") {

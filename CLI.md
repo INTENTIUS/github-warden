@@ -44,7 +44,8 @@ both and exits 2 when they differ. The flag does nothing for YAML or JSON.
 ```
 github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
-                        [--removal-cap-fraction <value>] [--plan-json <file> [--member <name>]]
+                        [--removal-cap-fraction <value>] [--plan-json <file>] [--member <name>]
+                        [--drift-issue [--drift-issue-repo <owner/name>]]
 ```
 
 | Flag | Default | Meaning |
@@ -59,7 +60,9 @@ github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth f
 | `--allow-guardrail-override` | off | Apply even when guardrails trip. |
 | `--removal-cap-fraction <value>` | `0.25` | `removalDeltaCap` threshold: the max fraction of any one resource type's live managed entries the plan may delete. Must be in (0,1]; anything else exits 2. See [the canonical cap description in POLICY.md](POLICY.md#what-the-policy-does-not-declare). |
 | `--plan-json <file>` | — | Write the plan as a part of a chant change-set document (see below). Nothing is applied: combining it with `--mode apply` exits 2. |
-| `--member <name>` | the policy file's directory name | The workspace member the `--plan-json` part names. Given without `--plan-json`, or empty, it exits 2. |
+| `--member <name>` | the policy file's directory name | The workspace member the `--plan-json` part and the `--drift-issue` records name. Given without either flag, or empty, it exits 2. |
+| `--drift-issue` | off | Keep one GitHub issue tracking the drift this dry run finds (see [Drift issue](#drift-issue)). Combining it with `--mode apply` or `--cycles` exits 2. |
+| `--drift-issue-repo <owner/name>` | `GITHUB_REPOSITORY` | The repository that holds the drift issue. Given without `--drift-issue`, or a value that is not `owner/name`, it exits 2. |
 
 Deletes come from the policy, not from a flag: a live resource missing from
 the policy is planned for deletion only in an org whose policy declares
@@ -127,6 +130,52 @@ field in the plan is followed by a line saying where the policy wrote it:
 A YAML or JSON policy, or a `.ts` policy loaded with `--config-mode run`,
 prints the plan without these lines. The same origins are on each cycle
 result's `origins` field when warden is used as a library.
+
+### Drift issue
+
+`--drift-issue` turns a scheduled dry run into one issue that tracks the
+governance drift. It passes the run's drift to `keepDriftIssue` from
+`@intentius/chant/drift-issue`. A run that finds drift opens the issue, or
+updates the open one when the drift changed; a run that finds the same drift
+leaves it as it is, so a nightly schedule does not open a second issue or
+edit the first. A run that finds no drift closes the open issue with a
+comment. A run where a cycle failed and found no drift leaves the open issue
+alone, since it cannot say GitHub matches.
+
+```bash
+github-warden reconcile \
+  --config governance.yml \
+  --token-env GH_TOKEN \
+  --drift-issue \
+  --drift-issue-repo acme/governance
+```
+
+The drift is the same list `chant workspace drift` reports for the member
+([README.md](README.md#drift-in-a-chant-workspace)): each org, repo, team,
+ruleset or branch protection rule with planned changes under it, the changes
+as attributes. The issue lists each such node with every attribute's
+declared and live values (secrets without values), and the nodes that could
+not be read. The run must cover every cycle, so `--drift-issue` with
+`--cycles` exits 2: a subset would report the other cycles' nodes as matching
+and close the issue.
+
+The issue is kept with the run's own credential: the `--token-env` token, or
+under App auth an installation token minted for the call. That credential
+needs Issues read and write on the issue repository. The repository is
+`--drift-issue-repo`, or the workflow's own repository from
+`GITHUB_REPOSITORY`; with neither the run exits 2 before reading GitHub.
+
+One issue is kept per policy: the hidden marker on its first line names
+`github.com` and the policy's orgs (`<!-- github-warden:drift github.com/acme -->`),
+and its title is `Governance drift on github.com/acme`. An issue closed by
+hand stays closed, and the next drift opens a new one. On a GitHub Actions
+runner the issue links the run.
+
+The run prints `Drift issue: <action>` with the issue's number and URL
+(`opened`, `updated`, `unchanged`, `closed`, `left` or `none`) after the
+plans. A dry run with drift still exits 0. When GitHub refuses the issue call
+the run prints `github-warden: error: keeping the drift issue failed: <message>`
+and exits 3.
 
 ## `audit`
 

@@ -32,6 +32,8 @@ function buildArgv(env: Record<string, string>): string[] {
   const cycles = readOptionalInput(env, "cycles");
   const failOn = readOptionalInput(env, "fail-on");
   const allowOverride = readOptionalInput(env, "allow-guardrail-override");
+  const driftIssue = readOptionalInput(env, "drift-issue");
+  const driftIssueRepo = readOptionalInput(env, "drift-issue-repo");
 
   const argv: string[] = [command];
   argv.push("--config", config);
@@ -43,6 +45,8 @@ function buildArgv(env: Record<string, string>): string[] {
     argv.push("--mode", mode);
     if (cycles) argv.push("--cycles", cycles);
     if (allowOverride === "true") argv.push("--allow-guardrail-override");
+    if (driftIssue === "true") argv.push("--drift-issue");
+    if (driftIssueRepo) argv.push("--drift-issue-repo", driftIssueRepo);
   }
 
   if (command === "audit") {
@@ -107,6 +111,27 @@ describe("action input → argv mapping", () => {
     };
     const argv = buildArgv(env);
     expect(argv).toContain("--allow-guardrail-override");
+  });
+
+  it("reconcile with drift-issue=true and a drift-issue-repo", () => {
+    const env: Record<string, string> = {
+      INPUT_CONFIG: "governance.yml",
+      INPUT_DRIFT_ISSUE: "true",
+      INPUT_DRIFT_ISSUE_REPO: "acme/governance",
+      INPUT_APP_ID: "123",
+      INPUT_INSTALLATION_ID: "456",
+      INPUT_PRIVATE_KEY: "pem",
+    };
+    expect(buildArgv(env)).toEqual([
+      "reconcile",
+      "--config", "governance.yml",
+      "--app-id-env", "WARDEN_ACTION_APP_ID",
+      "--installation-id-env", "WARDEN_ACTION_INSTALLATION_ID",
+      "--mode", "dry-run",
+      "--drift-issue",
+      "--drift-issue-repo", "acme/governance",
+    ]);
+    expect(buildArgv({ ...env, INPUT_DRIFT_ISSUE: "false", INPUT_DRIFT_ISSUE_REPO: "" })).not.toContain("--drift-issue");
   });
 
   it("audit with fail-on merge-worthy", () => {

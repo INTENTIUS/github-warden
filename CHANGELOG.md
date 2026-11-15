@@ -5,6 +5,17 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- `reconcile --drift-issue` keeps one issue tracking the drift a dry run
+  finds, through `keepDriftIssue` from `@intentius/chant/drift-issue` (#77):
+  drift opens or updates it, the same drift leaves it alone, and a clean run
+  closes it. The records are the drift reader's. The issue lives in
+  `--drift-issue-repo <owner/name>`, or the workflow's repository
+  (`GITHUB_REPOSITORY`), and is kept with the run's own token or App
+  installation. `--drift-issue` cannot be combined with `--mode apply` or
+  `--cycles`, and `--member` now also names the drift records. The Action
+  gains `drift-issue` and `drift-issue-repo` inputs. See
+  [CLI.md](CLI.md#drift-issue) and the scheduled job in
+  [CI.md](CI.md#a-scheduled-drift-issue).
 - The `forge-governance` kind names a drift reader, `dist/drift-reader.mjs`
   (#76), so `chant workspace drift --member` reads a governance member: a
   dry-run reconcile of every cycle against GitHub, one record per graph node
