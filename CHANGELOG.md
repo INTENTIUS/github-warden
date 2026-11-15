@@ -3,7 +3,7 @@
 Notable changes to `@intentius/github-warden`. Versions follow semver, and
 releases before `0.4.1` are not recorded here.
 
-## Unreleased
+## 0.7.1 (2026-11-14)
 
 - `emit` pins the generated workflow's action at `v0.7.0` (#79). The 0.7.0
   package still pinned `v0.6.1`, whose action runs on Node 20.
