@@ -25,28 +25,32 @@
  */
 
 import { Step, Job, Workflow } from "@intentius/chant-lexicon-github";
+import { ACTION_PINS, usesRef, type ActionPin } from "@intentius/chant/action-pins";
 
-// ── Pinned action SHAs ─────────────────────────────────────────────
+// ── Pinned actions ─────────────────────────────────────────────────
 //
 // Pin to commit SHA so a tag repoint cannot introduce malicious code.
-// See GHA021 (checkout) and GHA029 (all other external actions).
+// See GHA021 (checkout) and GHA029 (all other external actions). Third-party
+// actions come from chant's pin table, so a pin refresh is a chant bump.
+
+/** `uses:` for a pinned action, with its release as a trailing YAML comment. */
+function pinnedUses(pin: ActionPin): string {
+  return `${usesRef(pin)} # ${pin.tag}`;
+}
 
 /**
- * actions/checkout v4.2.2
- * https://github.com/actions/checkout/releases/tag/v4.2.2
- */
-const CHECKOUT_SHA = "11bd71901bbe5b1630ceea73d27597364c9af683";
-
-/**
- * intentius/github-warden v0.3.1
- * https://github.com/intentius/github-warden/releases/tag/v0.3.1
+ * intentius/github-warden at the v0.6.1 tag.
+ * https://github.com/intentius/github-warden/releases/tag/v0.6.1
  *
- * SHA-pinned to satisfy GHA029. The `# v0.3.1` comment preserves human readability
- * while preventing silent tag-repoint attacks. Warden's own audit (GHA021/029)
- * enforces this pattern — the emitted pipeline dogfoods it. Keep the SHA, this
- * comment, and the `# vX.Y.Z` step comments in agreement when bumping.
+ * The emitted pipeline runs this action, so its pin is kept here rather than
+ * in chant's table. Keep the SHA and the tag in agreement when bumping.
  */
-const GITHUB_WARDEN_SHA = "7e74b49eb59c59068c6b71dd6c6ee1ab66aeaa31"; // v0.3.1
+const GITHUB_WARDEN_PIN = {
+  sha: "b25424ab2930551d0be5bac99cff577e2ba5edd6",
+  tag: "v0.6.1",
+} as const;
+
+const GITHUB_WARDEN_USES = `intentius/github-warden@${GITHUB_WARDEN_PIN.sha} # ${GITHUB_WARDEN_PIN.tag}`;
 
 // ── Public types ───────────────────────────────────────────────────
 
@@ -122,7 +126,7 @@ function buildCycleArgs(cycles?: CycleFilter): string {
  *
  * Example:
  * ```ts
- * import { governancePipeline } from "@intentius/chant-lexicon-github-org/emit/pipeline";
+ * import { governancePipeline } from "./emit/pipeline.js";
  * import { githubSerializer } from "@intentius/chant-lexicon-github";
  *
  * const { workflow } = governancePipeline({ cron: "0 6 * * 1" });
@@ -148,7 +152,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
   const checkoutStep = new Step({
     name: "Checkout",
     // SHA-pinned to satisfy GHA021.
-    uses: `actions/checkout@${CHECKOUT_SHA}`,
+    uses: pinnedUses(ACTION_PINS.checkout4),
     with: {
       // Sparse checkout: only the config file is needed.
       "sparse-checkout": configPath,
@@ -167,7 +171,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
 
   const dryRunWardenStep = new Step({
     name: "Dry-run reconcile",
-    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.3.1`,
+    uses: GITHUB_WARDEN_USES,
     with: {
       command: "reconcile",
       config: configPath,
@@ -214,7 +218,7 @@ export function governancePipeline(opts: GovernancePipelineOptions = {}) {
 
   const applyWardenStep = new Step({
     name: "Apply reconcile",
-    uses: `intentius/github-warden@${GITHUB_WARDEN_SHA} # v0.3.1`,
+    uses: GITHUB_WARDEN_USES,
     with: {
       command: "reconcile",
       config: configPath,

@@ -1,6 +1,8 @@
 import { describe, test, expect } from "vitest";
 import { governancePipeline } from "./pipeline.js";
 import { githubSerializer } from "@intentius/chant-lexicon-github";
+import { ACTION_PINS } from "@intentius/chant/action-pins";
+import { parse as parseYaml } from "yaml";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -93,25 +95,32 @@ describe("governancePipeline", () => {
     expect(yaml).not.toMatch(/private-key:.*\$\{\{\s*vars\./);
   });
 
-  test("all external actions are SHA-pinned", () => {
+  test("all external actions are SHA-pinned with the release as a YAML comment", () => {
     const yaml = buildYaml();
-    // Every `uses:` line must pin to a 40-char commit SHA.
-    // The serializer wraps values with special chars in single quotes, and
-    // SHA-pinned warden steps include a `# v0.3.1` inline comment, so we strip
-    // trailing quote, whitespace, and any `# …` comment before matching.
-    const SHA_RE = /^[a-f0-9]{40}$/;
+    // Every `uses:` line is `<action>@<40-char sha> # v<release>`, unquoted, so
+    // the release is a YAML comment and not part of the ref GitHub resolves.
+    const PINNED_RE = /^uses: [\w.-]+\/[\w./-]+@[a-f0-9]{40} # v\d+\.\d+\.\d+$/;
     const usesLines = yaml
       .split("\n")
-      .map((l) => l.trim())
+      .map((l) => l.trim().replace(/^- /, ""))
       .filter((l) => l.startsWith("uses:"));
 
     expect(usesLines.length).toBeGreaterThan(0);
     for (const line of usesLines) {
-      // Extract the ref after "@", then strip trailing quote + inline comment.
-      const raw = line.split("@")[1] ?? "";
-      const ref = raw.replace(/#.*$/, "").replace(/['"\s]/g, "");
-      expect(ref, `Action "${line}" must be pinned to a SHA`).toMatch(SHA_RE);
+      expect(line, `Action "${line}" must be pinned to a SHA with a version comment`).toMatch(PINNED_RE);
     }
+    const parsed = parseYaml(yaml) as { jobs: Record<string, { steps: { uses?: string }[] }> };
+    for (const job of Object.values(parsed.jobs)) {
+      for (const step of job.steps) {
+        if (step.uses) expect(step.uses).toMatch(/^[\w./-]+@[a-f0-9]{40}$/);
+      }
+    }
+  });
+
+  test("checkout comes from chant's pin table", () => {
+    const yaml = buildYaml();
+    const pin = ACTION_PINS.checkout4;
+    expect(yaml).toContain(`uses: actions/checkout@${pin.sha} # ${pin.tag}`);
   });
 
   test("every job has timeout-minutes set", () => {
@@ -164,18 +173,11 @@ describe("governancePipeline", () => {
 
   // ── Dogfood: github-warden Action reference ────────────────────
 
-  test("warden steps use intentius/github-warden SHA-pinned with # v0.3.1 comment", () => {
+  test("warden steps use intentius/github-warden pinned at the v0.6.1 tag", () => {
     const yaml = buildYaml();
-    // Both jobs should use the warden action pinned to the v0.3.1 tag commit.
-    // The serializer quotes the value (special chars), so look for the SHA
-    // followed by the inline comment inside single quotes.
-    expect(yaml).toContain(
-      "7e74b49eb59c59068c6b71dd6c6ee1ab66aeaa31 # v0.3.1"
-    );
-    // Two warden steps (dry-run + apply), each appear once.
-    const count = (
-      yaml.match(/intentius\/github-warden@7e74b49eb59c59068c6b71dd6c6ee1ab66aeaa31/g) ?? []
-    ).length;
+    const line = "uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1";
+    // Two warden steps (dry-run + apply).
+    const count = yaml.split("\n").filter((l) => l.trim() === line).length;
     expect(count).toBe(2);
   });
 
