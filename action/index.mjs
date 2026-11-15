@@ -1224,11 +1224,24 @@ var init_notes = __esm({
 var runner_exports = {};
 __export(runner_exports, {
   BudgetExhaustedError: () => BudgetExhaustedError,
+  orgScope: () => orgScope,
   runReconcile: () => runReconcile2
 });
 function ownedPredicate(owned) {
   if (owned === void 0 || owned === false) return void 0;
   return (type2, _key) => owned === true || Array.isArray(owned) && owned.includes(type2);
+}
+function orgScope(orgConfig) {
+  return { repos: orgConfig?.repos, teams: orgConfig?.teams };
+}
+function withOrgScope(cycle, config2) {
+  const scopeOf = (org) => orgScope(config2.orgs[org]);
+  return {
+    ...cycle,
+    fetchLive: (client, org, _scope, budget) => cycle.fetchLive(client, org, scopeOf(org), budget),
+    buildDesired: (orgConfig, org, _scope) => cycle.buildDesired(orgConfig, org, scopeOf(org)),
+    apply: (client, entry, org, _scope, budget) => cycle.apply(client, entry, org, scopeOf(org), budget)
+  };
 }
 async function runReconcile2(opts) {
   drainNotes();
@@ -1236,7 +1249,7 @@ async function runReconcile2(opts) {
   const result = await runReconcile({
     client: opts.client,
     scopes: opts.config.orgs,
-    cycles: opts.cycles,
+    cycles: opts.scope === void 0 ? opts.cycles.map((c) => withOrgScope(c, opts.config)) : opts.cycles,
     scope: opts.scope,
     mode: opts.mode,
     // The diff stamps `managedCounts` (per-type live denominators for
@@ -256536,6 +256549,19 @@ function buildRulesetBody(desired) {
   if (desired.rules !== void 0) body.rules = desired.rules;
   return body;
 }
+function confirmWritten(res, method, path, name) {
+  const r = res;
+  if (!r || typeof r.id !== "number") {
+    throw new Error(
+      `rulesets: ${method} ${path} returned no ruleset for "${name}"; the write is not confirmed`
+    );
+  }
+  if (r.name !== void 0 && r.name !== name) {
+    throw new Error(
+      `rulesets: ${method} ${path} returned ruleset "${r.name}", not "${name}"; the write is not confirmed`
+    );
+  }
+}
 async function applyRuleset(client, entry, basePath, budget) {
   if (entry.kind === "delete") {
     const id2 = entry.before?.id;
@@ -256550,7 +256576,8 @@ async function applyRuleset(client, entry, basePath, budget) {
   const body = buildRulesetBody(desired);
   if (entry.kind === "create") {
     budget.use(1);
-    await client.request("POST", basePath, body);
+    const res2 = await client.request("POST", basePath, body);
+    confirmWritten(res2, "POST", basePath, desired.name);
     return;
   }
   const id = entry.before?.id;
@@ -256558,7 +256585,8 @@ async function applyRuleset(client, entry, basePath, budget) {
     throw new Error(`rulesets: update entry "${entry.key}" is missing the live ruleset id`);
   }
   budget.use(1);
-  await client.request("PUT", `${basePath}/${id}`, body);
+  const res = await client.request("PUT", `${basePath}/${id}`, body);
+  confirmWritten(res, "PUT", `${basePath}/${id}`, desired.name);
 }
 var rulesetsCycle = {
   name: "rulesets",

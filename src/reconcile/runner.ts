@@ -49,7 +49,11 @@ export interface RunReconcileOptions<TScope = unknown> {
   client: AppClient;
   /** Cycles to run; each runs against every org in `config.orgs`. */
   cycles: Cycle<TScope>[];
-  /** Scope forwarded to each cycle (filter/cursor); does not vary by org. */
+  /**
+   * Scope forwarded to each cycle (filter/cursor); does not vary by org.
+   * When absent, each org's cycles get that org's own `repos` and `teams`
+   * from the config (see `orgScope`).
+   */
   scope?: TScope;
   /** "dry-run" (default) or "apply". */
   mode?: "dry-run" | "apply";
@@ -78,6 +82,30 @@ function ownedPredicate(
 }
 
 /**
+ * The scope a cycle gets for one org when the caller passes none: the org's
+ * declared `repos` and `teams`. The repo- and team-level cycles read live state
+ * only for what their scope names, so without it a declared repo is never read
+ * and its slice diffs as a create the cycle cannot apply.
+ */
+export function orgScope(orgConfig: OrgConfig | undefined): {
+  repos?: OrgConfig["repos"];
+  teams?: OrgConfig["teams"];
+} {
+  return { repos: orgConfig?.repos, teams: orgConfig?.teams };
+}
+
+/** A cycle that sees `orgScope` of the org it runs against in place of the shared scope. */
+function withOrgScope<TScope>(cycle: Cycle<TScope>, config: GovernanceConfig): Cycle<TScope> {
+  const scopeOf = (org: string) => orgScope(config.orgs[org]) as TScope;
+  return {
+    ...cycle,
+    fetchLive: (client, org, _scope, budget) => cycle.fetchLive(client, org, scopeOf(org), budget),
+    buildDesired: (orgConfig, org, _scope) => cycle.buildDesired(orgConfig, org, scopeOf(org)),
+    apply: (client, entry, org, _scope, budget) => cycle.apply(client, entry, org, scopeOf(org), budget),
+  };
+}
+
+/**
  * Run the GitHub governance reconcile loop by delegating to the shared runner
  * with warden's diff (org login as scope id; `nowMs` defaulted for time-based
  * diffs) and member-aware guardrails wired in.
@@ -101,7 +129,10 @@ export async function runReconcile<TScope = unknown>(
   const result = await coreRunReconcile<AppClient, OrgConfig, LiveOrgState, TScope>({
     client: opts.client,
     scopes: opts.config.orgs,
-    cycles: opts.cycles,
+    cycles:
+      opts.scope === undefined
+        ? opts.cycles.map((c) => withOrgScope(c, opts.config))
+        : opts.cycles,
     scope: opts.scope,
     mode: opts.mode,
     // The diff stamps `managedCounts` (per-type live denominators for

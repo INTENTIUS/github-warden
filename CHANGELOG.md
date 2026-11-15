@@ -5,6 +5,14 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- `reconcile` with no programmatic scope (the CLI and the Action) gives each org's
+  cycles that org's declared `repos` and `teams`. Before, the repo-level cycles
+  read nothing: the branch-protection and repo-settings cycles threw
+  `Cannot read properties of undefined (reading 'repos')`, and the rulesets
+  cycle planned a repo create it skipped on apply and still counted as
+  `Applied` (#61). A ruleset create or update now counts as applied only when
+  GitHub answers with the ruleset. POLICY.md covers repos owned by a personal
+  account.
 - New `reconcile --plan-json <file>` writes the change sets a run planned, one per
   cycle and org, as a JSON array of chant's reconcile `ChangeSet`. chant's
   change-set document reads it (`readChangeSetPart` with `planner: "warden"`).
