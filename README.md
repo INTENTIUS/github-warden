@@ -89,7 +89,7 @@ github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth] 
 | `--cycles <name[,name...]>` | Subset of cycles to run (default: all). |
 | `--allow-guardrail-override` | Apply even when guardrails trip. |
 | `--removal-cap-fraction <value>` | `removalDeltaCap` threshold in (0,1] (default 0.25). |
-| `--plan-json <file>` | Write the plan as a chant change-set part (lexicon `github`) for chant's change-set document. Dry-run only. |
+| `--plan-json <file>` | Write the plan as a chant change-set part (lexicon `github`) for chant's change-set document. Each entry's address is its graph node id (`repo/acme/api`), or `<node id>#<resourceType>[<key>]` for a change under the node, so entries sit on the same nodes as the drift records. Dry-run only. |
 | `--member <name>` | The member the `--plan-json` part names (default: the policy file's directory name). |
 
 ### `audit`

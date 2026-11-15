@@ -92,6 +92,28 @@ export function driftAddress(org: string, entry: Pick<ChangeSetEntry, "resourceT
 }
 
 /**
+ * The resource types that are a graph node's own: a change of one of these
+ * changes the node itself, so its plan address is the bare node id. One per
+ * node kind (two for rulesets, which an org or a repo can own).
+ */
+const NODE_OWN_TYPES = new Set(["org-settings", "team", "repo", "org-ruleset", "repo-ruleset", "branch-protection"]);
+
+/**
+ * A planned change's address in a `--plan-json` part (INTENTIUS/chant#5089):
+ * the node id {@link driftAddress} gives when the change is of the node's own
+ * type (`repo/acme/api` for a `repo` entry), and
+ * `<node id>#<resourceType>[<key>]` for a change under the node
+ * (`repo/acme/api#repo-secret[api/TOKEN]`). chant places a `warden` entry on
+ * the address, then on the part before the first `#`, so plan entries land on
+ * the same nodes as the drift records. The node id carries the org, so two
+ * orgs with a same-named repo give distinct addresses.
+ */
+export function planEntryAddress(org: string, entry: Pick<ChangeSetEntry, "resourceType" | "key">): string {
+  const node = driftAddress(org, entry);
+  return NODE_OWN_TYPES.has(entry.resourceType) ? node : `${node}#${entry.resourceType}[${entry.key}]`;
+}
+
+/**
  * Resource types whose values could hold a secret: their attributes carry
  * none. github-warden diffs secrets by name only; Actions variables are not
  * secret by GitHub's own definition and keep their values.

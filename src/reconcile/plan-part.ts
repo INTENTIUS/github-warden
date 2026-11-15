@@ -3,6 +3,8 @@
  * document (`@intentius/chant/change-set`, chant#3181).
  *
  * chant's `reconcilePlanPart` turns the reconcile change sets into the part;
+ * each entry carries the address {@link planEntryAddress} gives it, so it sits
+ * on the same graph node as the drift reader's record (chant#5089);
  * chant reads the file back with `readChangeSetPartFile(part, "warden",
  * member, lexicon)` and composes it with the other members' parts.
  *
@@ -12,7 +14,8 @@
 
 import { basename, dirname, resolve } from "node:path";
 import { reconcilePlanPart, type ChangeSetPart } from "@intentius/chant/change-set";
-import type { ChangeSet } from "./diff.js";
+import { planEntryAddress } from "../drift/reader.js";
+import type { ChangeSet, ChangeSetEntry } from "./diff.js";
 import type { CycleError, DeferredWork } from "./runner.js";
 
 /** The lexicon label a github-warden part carries on its member and entries. */
@@ -38,6 +41,14 @@ export interface PlanPartInput {
   deferred?: DeferredWork;
 }
 
+/** The change sets with every entry's graph address set ({@link planEntryAddress}). */
+export function addressed(changeSets: readonly ChangeSet[]): ChangeSet[] {
+  return changeSets.map((cs) => ({
+    ...cs,
+    entries: cs.entries.map((e): ChangeSetEntry => ({ ...e, address: planEntryAddress(cs.org, e) })),
+  }));
+}
+
 /**
  * The part for one reconcile run. A run where every cycle planned gives a
  * `planned` member whose digest covers the change sets. When a cycle errored
@@ -46,7 +57,7 @@ export interface PlanPartInput {
  * what is missing; the entries the other cycles planned stay in the part.
  */
 export function planPart(input: PlanPartInput): ChangeSetPart {
-  const part = reconcilePlanPart({ member: input.member, plan: input.changeSets, lexicon: PLAN_PART_LEXICON });
+  const part = reconcilePlanPart({ member: input.member, plan: addressed(input.changeSets), lexicon: PLAN_PART_LEXICON });
   const missing = [
     ...(input.errored ?? []).map((e) => `${e.name} @ ${e.org} errored in ${e.stage}: ${e.error}`),
     ...(input.deferred?.skippedCycles ?? []).map((c) => `${c} was deferred by the request budget`),

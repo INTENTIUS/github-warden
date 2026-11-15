@@ -90,10 +90,22 @@ document: the object chant's `reconcilePlanPart` returns (from
 `@intentius/chant/change-set`), with planner `warden` and lexicon `github`.
 chant reads the file with `readChangeSetPartFile(part, "warden", member,
 "github")`. It then composes the result with the other members' parts. Each planned change
-is an entry with its action (`create`, `update`, `delete`), its address (the
-change set's resource type and key, as in `member.bob`) and its scope (the
-org or account login). The file holds only the part, written as indented JSON
-with a trailing newline.
+is an entry with its action (`create`, `update`, `delete`), its address and
+its scope (the org or account login). The file holds only the part, written
+as indented JSON with a trailing newline.
+
+An entry's address is the id of the graph node it changes, the same id the
+graph reader gives that node and the drift reader gives its record
+(`repo/<org>/<name>`, `team/<org>/<slug>`, `ruleset/<org>/...`,
+`protection/<org>/<repo>/<pattern>`, `org/<org>`). A change of the node itself
+(a `repo`, `team`, `org-ruleset`, `repo-ruleset`, `branch-protection` or
+`org-settings` entry) has the bare node id, as in `repo/acme/api`. Any other
+change sits under its node as `<node id>#<resourceType>[<key>]`, as in
+`repo/acme/api#repo-secret[api/TOKEN]` or `org/acme#member[bob]`. chant tries
+the whole address as a node id and then the part before the `#`. A member's
+plan entries therefore land on the same nodes as its drift records. The org is part of
+every address, so a policy that governs two orgs with a repo of the same name
+gives two addresses.
 
 The member is `--member`, or else the name of the directory that holds the
 policy file, which is the member's directory in a chant workspace. Without

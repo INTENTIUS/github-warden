@@ -215978,7 +215978,7 @@ function reconcilePlanPart(input) {
         member: input.member,
         lexicon,
         planner: "warden",
-        address: `${e.resourceType}.${e.key}`,
+        address: e.address ?? `${e.resourceType}.${e.key}`,
         type: e.resourceType,
         name: e.key,
         action: e.kind,
@@ -255835,7 +255835,7 @@ function buildQuickWins(findings, contents, proveOpts, catalog = RULE_CATALOG) {
   for (const [file2, group] of byFile(findings)) {
     const ids = [...new Set(group.map((f) => f.checkId))].sort();
     const original = contents.get(file2);
-    const addressed = [];
+    const addressed2 = [];
     const needsInput = [];
     let patched = original;
     if (original !== void 0) {
@@ -255843,7 +255843,7 @@ function buildQuickWins(findings, contents, proveOpts, catalog = RULE_CATALOG) {
         const res = proveFix(id, patched ?? original, { ...proveOpts, catalog });
         if (res.applied && res.patched !== void 0) {
           patched = res.patched;
-          addressed.push(metaFor(id, catalog));
+          addressed2.push(metaFor(id, catalog));
         } else if (res.reason === "needs-input") {
           needsInput.push(...group.filter((f) => f.checkId === id));
         }
@@ -255861,7 +255861,7 @@ function buildQuickWins(findings, contents, proveOpts, catalog = RULE_CATALOG) {
       seen.add(k);
       return true;
     });
-    out.push({ file: file2, diff: diff2, addressed, needsInput: deduped });
+    out.push({ file: file2, diff: diff2, addressed: addressed2, needsInput: deduped });
   }
   return out;
 }
@@ -259287,8 +259287,8 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.124.96",
-    "@intentius/chant-lexicon-github": "^0.124.96",
+    "@intentius/chant": "^0.124.97",
+    "@intentius/chant-lexicon-github": "^0.124.97",
     "@intentius/tsad-reference": "^2.3.0"
   },
   devDependencies: {
@@ -260170,6 +260170,11 @@ function driftAddress(org, entry) {
       return `${entry.resourceType}/${org}/${entry.key}`;
   }
 }
+var NODE_OWN_TYPES = /* @__PURE__ */ new Set(["org-settings", "team", "repo", "org-ruleset", "repo-ruleset", "branch-protection"]);
+function planEntryAddress(org, entry) {
+  const node = driftAddress(org, entry);
+  return NODE_OWN_TYPES.has(entry.resourceType) ? node : `${node}#${entry.resourceType}[${entry.key}]`;
+}
 var SENSITIVE_TYPES = /* @__PURE__ */ new Set(["org-secret", "repo-secret"]);
 var SINGLE_TYPES = /* @__PURE__ */ new Set(["org-settings"]);
 function driftAttributes(entry) {
@@ -260335,8 +260340,14 @@ function defaultMemberName(configPath2) {
   const name = basename(dirname2(resolve3(configPath2)));
   return name === "" ? void 0 : name;
 }
+function addressed(changeSets) {
+  return changeSets.map((cs) => ({
+    ...cs,
+    entries: cs.entries.map((e) => ({ ...e, address: planEntryAddress(cs.org, e) }))
+  }));
+}
 function planPart(input) {
-  const part = reconcilePlanPart({ member: input.member, plan: input.changeSets, lexicon: PLAN_PART_LEXICON });
+  const part = reconcilePlanPart({ member: input.member, plan: addressed(input.changeSets), lexicon: PLAN_PART_LEXICON });
   const missing = [
     ...(input.errored ?? []).map((e) => `${e.name} @ ${e.org} errored in ${e.stage}: ${e.error}`),
     ...(input.deferred?.skippedCycles ?? []).map((c) => `${c} was deferred by the request budget`)

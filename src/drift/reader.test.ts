@@ -21,7 +21,7 @@ import type { GovernanceConfig } from "../config/types.js";
 import { readGovernance } from "../graph/reader.js";
 import type { Cycle } from "../reconcile/runner.js";
 import { driftAuth, readMemberDrift } from "./entry.js";
-import { declaredNodes, driftAddress, driftAttributes, governanceDrift } from "./reader.js";
+import { declaredNodes, driftAddress, driftAttributes, governanceDrift, planEntryAddress } from "./reader.js";
 
 const require = createRequire(import.meta.url);
 const schemaDir = dirname(require.resolve("@intentius/chant/workspace/drift-reader.schema.json"));
@@ -287,6 +287,35 @@ describe("addresses and attributes", () => {
     expect(at("org-ruleset", "base")).toBe("ruleset/acme/base");
     expect(at("repo-ruleset", "api/r1")).toBe("ruleset/acme/api/r1");
     expect(at("branch-protection", "api/release/*")).toBe("protection/acme/api/release/*");
+  });
+
+  it("gives a plan entry its node id for the node's own type, and <node id>#<type>[<key>] for a change under the node", () => {
+    const at = (resourceType: string, key: string, org = "acme") => planEntryAddress(org, { resourceType, key });
+    // One type per node kind is the node's own.
+    expect(at("org-settings", "org-settings")).toBe("org/acme");
+    expect(at("repo", "api")).toBe("repo/acme/api");
+    expect(at("team", "core")).toBe("team/acme/core");
+    expect(at("org-ruleset", "base")).toBe("ruleset/acme/base");
+    expect(at("repo-ruleset", "api/r1")).toBe("ruleset/acme/api/r1");
+    expect(at("branch-protection", "api/release/*")).toBe("protection/acme/api/release/*");
+    // Everything else sits under the node it falls on.
+    expect(at("member", "ada")).toBe("org/acme#member[ada]");
+    expect(at("org-secret", "NPM")).toBe("org/acme#org-secret[NPM]");
+    expect(at("token-grant", "17")).toBe("org/acme#token-grant[17]");
+    expect(at("repo-baseline", "api")).toBe("repo/acme/api#repo-baseline[api]");
+    expect(at("repo-security", "api")).toBe("repo/acme/api#repo-security[api]");
+    expect(at("dependabot", "api")).toBe("repo/acme/api#dependabot[api]");
+    expect(at("environment", "api/prod")).toBe("repo/acme/api#environment[api/prod]");
+    expect(at("repo-secret", "api/TOKEN")).toBe("repo/acme/api#repo-secret[api/TOKEN]");
+    expect(at("team-member", "core/ada")).toBe("team/acme/core#team-member[core/ada]");
+    expect(at("team-repo", "core/api")).toBe("team/acme/core#team-repo[core/api]");
+    // The part before the first `#` is always the drift reader's node.
+    for (const [t, k] of [["member", "ada"], ["repo-secret", "api/TOKEN"], ["team-repo", "core/api"], ["repo", "api"]] as const) {
+      expect(at(t, k).split("#")[0]).toBe(driftAddress("acme", { resourceType: t, key: k }));
+    }
+    // The org is in the address, so two orgs' same-named repos differ.
+    expect(at("repo", "api", "acme")).not.toBe(at("repo", "api", "globex"));
+    expect(at("repo-secret", "api/TOKEN", "acme")).not.toBe(at("repo-secret", "api/TOKEN", "globex"));
   });
 
   it("an update gives one attribute per field, declared before and live after; a create the declared value, a delete the live one", () => {
