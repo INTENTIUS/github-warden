@@ -10,9 +10,14 @@
  *   codeowners  Generate CODEOWNERS from a chant workspace's members.
  *   lifecycle   Show the chant/lifecycle ledger paths and its ruleset.
  *   checks      Required status checks from the members' pipeline job names.
+ *   repos       Write the policy's org's repository list in the format
+ *               `chant workspace check --forge-repos` reads.
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
+ *                                 Default: governance.yml, else governance.ts, in
+ *                                 the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
  *   --mode dry-run|apply          Reconcile mode. Default: dry-run.
  *   --cycles <name[,name...]>     Comma-separated cycle names. Default: all.
  *   --app-id-env <VAR>            Env var holding the GitHub App ID.
@@ -23,9 +28,15 @@
  *   --removal-cap-fraction <v>    Max fraction of live managed entries the plan
  *                                 may delete per resource type, in (0,1].
  *                                 Default: 0.25.
- *   --plan-json <file>            Write the reconcile ChangeSets this run planned
- *                                 (one per cycle and org) as a JSON array, for
- *                                 chant's change-set document. Dry-run only.
+ *   --plan-json <file>            Write the plan as a chant change-set part
+ *                                 (lexicon "github"). Dry-run only.
+ *   --member <name>               Member the part and the drift records name.
+ *                                 Default: the policy file's directory name.
+ *                                 Needs --plan-json or --drift-issue.
+ *   --drift-issue                 Keep one GitHub issue tracking the drift this
+ *                                 dry run finds. Dry-run only, all cycles.
+ *   --drift-issue-repo <o/n>      Repository of the drift issue. Default:
+ *                                 GITHUB_REPOSITORY. Needs --drift-issue.
  *
  * Auth modes (mutually exclusive, precedence: token-env > app-id-env):
  *   1. --token-env GH_TOKEN
@@ -47,9 +58,27 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import pkg from "../package.json" with { type: "json" };
-import { loadGovernanceConfig } from "./config/load.js";
-import { createAppClient } from "./auth/app-client.js";
+import { GovernanceConfigError } from "./config/load.js";
+import { parseConfigFile } from "./config/parse.js";
+import { CONFIG_MODES, loadGovernancePolicy, type ConfigMode } from "./config/policy.js";
+import type { PolicyProvenance } from "./reconcile/origin.js";
+import { NO_POLICY_MESSAGE, resolvePolicyPath } from "./config/policy-path.js";
+import type { GovernanceConfig } from "./config/types.js";
+import { createAppClient, mintInstallationToken } from "./auth/app-client.js";
+import { governanceDrift } from "./drift/reader.js";
+import {
+  describeDriftIssue,
+  driftIssueEnvironment,
+  driftIssueForge,
+  driftIssueRepo,
+  driftIssueRunUrl,
+  isRepoName,
+  keepGovernanceDriftIssue,
+} from "./drift/issue.js";
+import { createTokenClient } from "./auth/token-client.js";
 import { runReconcile } from "./reconcile/runner.js";
+import { defaultMemberName, planPart } from "./reconcile/plan-part.js";
+import { forgeRepoList, pickOrg } from "./repos.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
 // NOTE: ./audit/engine.js is deliberately NOT imported statically. Its import
 // graph reaches chant's audit pipeline and the lexicon's lint rules, which pull
@@ -71,7 +100,10 @@ import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./workspa
 // ---------------------------------------------------------------------------
 
 export interface ReconcileArgs {
-  config: string;
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
+  config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
   mode: "dry-run" | "apply";
   cycles: string[];
   appIdEnv: string | undefined;
@@ -80,8 +112,14 @@ export interface ReconcileArgs {
   allowGuardrailOverride: boolean;
   /** removalDeltaCap threshold in (0,1]; undefined keeps chant's default. */
   removalCapFraction: number | undefined;
-  /** File to write the planned reconcile ChangeSets to, as JSON. */
+  /** File to write the plan to, as a chant change-set part. */
   planJson: string | undefined;
+  /** The workspace member the part and the drift records name; undefined defaults to the policy directory's name. */
+  member: string | undefined;
+  /** Keep one GitHub issue tracking the drift this dry run finds. */
+  driftIssue: boolean;
+  /** `owner/name` of the repository the drift issue lives in; undefined reads GITHUB_REPOSITORY. */
+  driftIssueRepo: string | undefined;
 }
 
 /**
@@ -110,7 +148,8 @@ export class CliError extends Error {
  */
 export function parseReconcileArgs(argv: string[]): ReconcileArgs {
   const args: ReconcileArgs = {
-    config: "",
+    config: undefined,
+    configMode: "fold",
     mode: "dry-run",
     cycles: [],
     appIdEnv: undefined,
@@ -119,10 +158,14 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     allowGuardrailOverride: false,
     removalCapFraction: undefined,
     planJson: undefined,
+    member: undefined,
+    driftIssue: false,
+    driftIssueRepo: undefined,
   };
 
   const knownFlags = new Set([
     "--config",
+    "--config-mode",
     "--mode",
     "--cycles",
     "--app-id-env",
@@ -131,6 +174,9 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     "--allow-guardrail-override",
     "--removal-cap-fraction",
     "--plan-json",
+    "--member",
+    "--drift-issue",
+    "--drift-issue-repo",
   ]);
 
   let i = 0;
@@ -146,6 +192,14 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     }
 
     switch (flag) {
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
       case "--config": {
         const val = argv[++i];
         if (val === undefined || val.startsWith("--"))
@@ -220,14 +274,45 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
         args.planJson = val;
         break;
       }
+      case "--member": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--member requires a value");
+        if (val.trim() === "") throw new CliError(2, "--member requires a non-empty name");
+        args.member = val;
+        break;
+      }
+      case "--drift-issue": {
+        args.driftIssue = true;
+        break;
+      }
+      case "--drift-issue-repo": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--drift-issue-repo requires a value");
+        if (!isRepoName(val)) throw new CliError(2, `--drift-issue-repo must be owner/name, got: ${val}`);
+        args.driftIssueRepo = val;
+        break;
+      }
     }
     i++;
   }
 
-  // Validate required flags.
-  if (!args.config) throw new CliError(2, "--config is required");
+  // Validate flag combinations.
   if (args.planJson !== undefined && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
+  }
+  if (args.member !== undefined && args.planJson === undefined && !args.driftIssue) {
+    throw new CliError(2, "--member names the member of the --plan-json part or the drift records; give it with --plan-json or --drift-issue");
+  }
+  if (args.driftIssue && args.mode === "apply") {
+    throw new CliError(2, "--drift-issue tracks the drift a dry run finds; it cannot be combined with --mode apply");
+  }
+  if (args.driftIssue && args.cycles.length > 0) {
+    throw new CliError(2, "--drift-issue tracks the whole policy's drift; it cannot be combined with --cycles, whose run would read the other cycles' nodes as matching");
+  }
+  if (args.driftIssueRepo !== undefined && !args.driftIssue) {
+    throw new CliError(2, "--drift-issue-repo names the repository of the drift issue; give it with --drift-issue");
   }
 
   const hasTokenAuth = !!args.tokenEnv;
@@ -247,7 +332,10 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
 // ---------------------------------------------------------------------------
 
 export interface AuditArgs {
-  config: string;
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
+  config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
   appIdEnv: string | undefined;
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
@@ -258,7 +346,10 @@ export interface AuditArgs {
  * Parse audit argv (everything after the `audit` subcommand) into `AuditArgs`.
  *
  * Accepted flags:
- *   --config <path>               Path to governance config file (YAML/JSON). Required.
+ *   --config <path>               Path to governance config file (YAML/JSON).
+ *                                 Default: governance.yml, else governance.ts, in
+ *                                 the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
  *   --token-env <VAR>             Env var holding a pre-minted installation token.
  *   --app-id-env <VAR>            Env var holding the GitHub App ID.
  *   --installation-id-env <VAR>   Env var holding the installation ID.
@@ -268,7 +359,8 @@ export interface AuditArgs {
  */
 export function parseAuditArgs(argv: string[]): AuditArgs {
   const args: AuditArgs = {
-    config: "",
+    config: undefined,
+    configMode: "fold",
     appIdEnv: undefined,
     installationIdEnv: undefined,
     tokenEnv: undefined,
@@ -277,6 +369,7 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
 
   const knownFlags = new Set([
     "--config",
+    "--config-mode",
     "--token-env",
     "--app-id-env",
     "--installation-id-env",
@@ -303,6 +396,14 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
     }
 
     switch (flag) {
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
       case "--config": {
         const val = argv[++i];
         if (val === undefined || val.startsWith("--"))
@@ -347,8 +448,6 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
     i++;
   }
 
-  if (!args.config) throw new CliError(2, "--config is required");
-
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
   if (!hasTokenAuth && !hasAppAuth) {
@@ -366,7 +465,10 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
 // ---------------------------------------------------------------------------
 
 export interface ReportArgs {
-  config: string;
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
+  config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
   appIdEnv: string | undefined;
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
@@ -386,7 +488,10 @@ export interface ReportArgs {
  * parse error instead of touching `process`.
  *
  * Accepted flags:
- *   --config <path>               Governance config file (YAML/JSON). Required.
+ *   --config <path>               Governance config file (YAML/JSON).
+ *                                 Default: governance.yml, else governance.ts, in
+ *                                 the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
  *   --token-env / --app-id-env / --installation-id-env   Auth (same as reconcile).
  *   --cycles <name[,name...]>     Cycles to include (default: all).
  *   --out <path>                  Write the JSON compliance artifact to this path.
@@ -395,7 +500,8 @@ export interface ReportArgs {
  */
 export function parseReportArgs(argv: string[]): ReportArgs {
   const args: ReportArgs = {
-    config: "",
+    config: undefined,
+    configMode: "fold",
     appIdEnv: undefined,
     installationIdEnv: undefined,
     tokenEnv: undefined,
@@ -408,6 +514,7 @@ export function parseReportArgs(argv: string[]): ReportArgs {
 
   const knownFlags = new Set([
     "--config",
+    "--config-mode",
     "--token-env",
     "--app-id-env",
     "--installation-id-env",
@@ -425,6 +532,14 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     if (!knownFlags.has(flag)) throw new CliError(2, `unknown flag: ${flag}`);
 
     switch (flag) {
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
       case "--config": {
         const val = argv[++i];
         if (val === undefined || val.startsWith("--")) throw new CliError(2, "--config requires a value");
@@ -482,8 +597,6 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     i++;
   }
 
-  if (!args.config) throw new CliError(2, "--config is required");
-
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
   if (!hasTokenAuth && !hasAppAuth) {
@@ -493,6 +606,105 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     );
   }
 
+  return args;
+}
+
+// ---------------------------------------------------------------------------
+// Repos subcommand
+// ---------------------------------------------------------------------------
+
+export interface ReposArgs {
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
+  config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
+  /** The org (or account) to list; undefined means the policy's only org. */
+  org: string | undefined;
+  /** File to write; undefined writes to stdout. */
+  out: string | undefined;
+  appIdEnv: string | undefined;
+  installationIdEnv: string | undefined;
+  tokenEnv: string | undefined;
+}
+
+const REPOS_FLAGS = new Set([
+  "--config",
+  "--config-mode",
+  "--org",
+  "--out",
+  "--token-env",
+  "--app-id-env",
+  "--installation-id-env",
+]);
+
+/**
+ * Parse repos argv (everything after the `repos` subcommand). Pure: throws
+ * `CliError` (carrying an exit code) on any parse error.
+ *
+ * Accepted flags:
+ *   --config <path>               Governance policy. Default: governance.yml,
+ *                                 else governance.ts, in the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
+ *   --org <name>                  Org to list. Default: the policy's only org.
+ *   --out <file>                  File to write. Default: stdout.
+ *   --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).
+ */
+export function parseReposArgs(argv: string[]): ReposArgs {
+  const args: ReposArgs = {
+    config: undefined,
+    configMode: "fold",
+    org: undefined,
+    out: undefined,
+    appIdEnv: undefined,
+    installationIdEnv: undefined,
+    tokenEnv: undefined,
+  };
+  const need = (i: number, flag: string): string => {
+    const v = argv[i];
+    if (v === undefined || v.startsWith("--") || v === "") throw new CliError(2, `${flag} requires a value`);
+    return v;
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i]!;
+    if (!flag.startsWith("--")) throw new CliError(2, `unexpected positional argument: ${flag}`);
+    if (!REPOS_FLAGS.has(flag)) throw new CliError(2, `unknown flag for repos: ${flag}`);
+    switch (flag) {
+      case "--config":
+        args.config = need(++i, flag);
+        break;
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
+      case "--org":
+        args.org = need(++i, flag);
+        break;
+      case "--out":
+        args.out = need(++i, flag);
+        break;
+      case "--token-env":
+        args.tokenEnv = need(++i, flag);
+        break;
+      case "--app-id-env":
+        args.appIdEnv = need(++i, flag);
+        break;
+      case "--installation-id-env":
+        args.installationIdEnv = need(++i, flag);
+        break;
+    }
+  }
+  const hasTokenAuth = !!args.tokenEnv;
+  const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
+  if (!hasTokenAuth && !hasAppAuth) {
+    throw new CliError(
+      2,
+      "auth is required: supply --token-env <VAR>, or both --app-id-env <VAR> and --installation-id-env <VAR>",
+    );
+  }
   return args;
 }
 
@@ -511,41 +723,8 @@ export function parseReportArgs(argv: string[]): ReportArgs {
  *
  * Accepts both ReconcileArgs and AuditArgs (both carry the same auth fields).
  */
-function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs) {
-  if (args.tokenEnv) {
-    const token = env(args.tokenEnv);
-    // Wrap the pre-minted token in a minimal AppClient.
-    return {
-      async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-        const API_BASE = "https://api.github.com";
-        const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-        const res = await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "User-Agent": "github-warden (+https://github.com/INTENTIUS/github-warden)",
-            "X-GitHub-Api-Version": "2022-11-28",
-            ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-          },
-          redirect: "manual",
-          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        });
-        if (res.status === 204) return {} as T;
-        if (!res.ok) {
-          let detail = "";
-          try {
-            const text = await res.text();
-            if (text) detail = `: ${text.slice(0, 500)}`;
-          } catch {
-            // best-effort
-          }
-          throw new Error(`${method} ${path} returned ${res.status}${detail}`);
-        }
-        return (await res.json()) as T;
-      },
-    };
-  }
+function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs | ReposArgs) {
+  if (args.tokenEnv) return createTokenClient({ token: env(args.tokenEnv) });
 
   // App-client path: read app-id, installation-id, private key from env.
   const appId = env(args.appIdEnv!);
@@ -561,6 +740,18 @@ function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs) {
     );
 
   return createAppClient({ appId, privateKeyPem, installationId });
+}
+
+/**
+ * The token the drift issue is kept with: the `--token-env` token, or, under
+ * App auth, an installation token minted for it. Either way the warden's own
+ * credential, which therefore needs issue access to the issue repository.
+ */
+async function issueCredential(args: ReconcileArgs): Promise<{ token: string; tokenSource: string }> {
+  if (args.tokenEnv) return { token: env(args.tokenEnv), tokenSource: args.tokenEnv };
+  const privateKeyPem = process.env["GOVERNANCE_APP_PRIVATE_KEY"] ?? process.env["GITHUB_APP_PRIVATE_KEY"] ?? "";
+  const { token } = await mintInstallationToken({ appId: env(args.appIdEnv!), installationId: env(args.installationIdEnv!), privateKeyPem });
+  return { token, tokenSource: `the GitHub App installation in ${args.installationIdEnv}` };
 }
 
 // ---------------------------------------------------------------------------
@@ -607,8 +798,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
 
+  if (subcommand === "repos") {
+    await runRepos(argv.slice(1));
+    return;
+  }
+
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", "lifecycle", or "checks"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "repos", "codeowners", "lifecycle", or "checks"?`);
   }
 
   let args: ReconcileArgs;
@@ -621,19 +817,21 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // ── Load config ───────────────────────────────────────────────────────────
 
-  let rawConfig: unknown;
-  try {
-    const text = readFileSync(args.config, "utf-8");
-    rawConfig = parseConfigFile(args.config, text);
-  } catch (err) {
-    die(3, `failed to read config file "${args.config}": ${errMsg(err)}`);
+  const { config, provenance, path: configPath } = await readPolicy(args.config, args.configMode);
+
+  let member: string | undefined;
+  if (args.planJson !== undefined || args.driftIssue) {
+    member = args.member ?? defaultMemberName(configPath);
+    if (!member) die(2, `cannot name the member from "${configPath}"'s directory; give --member <name>`);
   }
 
-  let config;
-  try {
-    config = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
+  let issueRepo: string | undefined;
+  if (args.driftIssue) {
+    issueRepo = driftIssueRepo(args.driftIssueRepo);
+    if (!issueRepo) {
+      die(2, "--drift-issue needs the repository to keep the issue in: give --drift-issue-repo <owner/name>, or run where GITHUB_REPOSITORY is set");
+    }
+    if (!isRepoName(issueRepo)) die(2, `the drift issue repository must be owner/name, got: ${issueRepo}`);
   }
 
   // ── Build client ──────────────────────────────────────────────────────────
@@ -676,6 +874,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
         args.removalCapFraction !== undefined
           ? { removalDeltaCap: { maxFraction: args.removalCapFraction } }
           : undefined,
+      provenance,
     });
   } catch (err) {
     die(3, `reconcile failed: ${errMsg(err)}`);
@@ -683,9 +882,12 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // ── Output ────────────────────────────────────────────────────────────────
 
+  // Written before the exit code is decided, so a run that exits 3 still
+  // leaves its (failed) part.
   if (args.planJson !== undefined) {
+    const part = planPart({ member: member!, changeSets: result.changeSets, errored: result.errored, deferred: result.deferred });
     try {
-      writeFileSync(args.planJson, `${JSON.stringify(result.changeSets, null, 2)}\n`, "utf-8");
+      writeFileSync(args.planJson, `${JSON.stringify(part, null, 2)}\n`, "utf-8");
     } catch (err) {
       die(3, `failed to write plan to "${args.planJson}": ${errMsg(err)}`);
     }
@@ -723,6 +925,26 @@ async function main(argv: string[] = process.argv.slice(2)) {
     process.stderr.write(
       `DEFERRED cycles (budget exhausted): ${result.deferred.skippedCycles.join(", ")}\n`,
     );
+  }
+
+  // The drift issue: kept after the plans print and before the exit code is
+  // decided, also on a run whose cycles errored (their nodes read as
+  // not-observed, which leaves an open issue alone).
+  if (args.driftIssue) {
+    const observedAt = new Date().toISOString();
+    const runUrl = driftIssueRunUrl();
+    try {
+      const { token, tokenSource } = await issueCredential(args);
+      const kept = await keepGovernanceDriftIssue(driftIssueForge({ repo: issueRepo!, token, tokenSource, runUrl }), {
+        environment: driftIssueEnvironment(Object.keys(config.orgs)),
+        records: governanceDrift({ member: member!, observedAt, policy: config, changeSets: result.changeSets, errored: result.errored, deferred: result.deferred }).records,
+        observedAt,
+        runUrl,
+      });
+      process.stdout.write(`\n${describeDriftIssue(kept)}\n`);
+    } catch (err) {
+      die(3, `keeping the drift issue failed: ${errMsg(err)}`);
+    }
   }
 
   // Determine exit code.
@@ -768,217 +990,23 @@ function errMsg(err: unknown): string {
 }
 
 /**
- * Parse the config file text. Supports YAML (via a hand-rolled subset adequate
- * for governance configs — flat string/bool/number scalars, nested objects, and
- * string arrays) and JSON.
- *
- * The package has no YAML library dependency. Governance configs are structured
- * YAML with a predictable schema: the hand-rolled parser handles the real cases.
- * For truly complex YAML, operators can supply JSON instead.
+ * Load and validate the governance policy named by `--config`, or the default
+ * policy file in the working directory when `--config` is absent. Exits 2 when
+ * there is no policy to read, it is invalid, a `.ts` policy is not data, or
+ * folding and running it disagree; 3 when the file cannot be read or parsed.
  */
-function parseConfigFile(filePath: string, text: string): unknown {
-  const lower = filePath.toLowerCase();
-  if (lower.endsWith(".json")) {
-    return JSON.parse(text);
+async function readPolicy(
+  given: string | undefined,
+  mode: ConfigMode,
+): Promise<{ config: GovernanceConfig; provenance?: PolicyProvenance; path: string }> {
+  const path = resolvePolicyPath(given);
+  if (path === undefined) die(2, NO_POLICY_MESSAGE);
+  try {
+    return { ...(await loadGovernancePolicy(path, mode)), path };
+  } catch (err) {
+    if (err instanceof GovernanceConfigError) die(2, `invalid governance config: ${errMsg(err)}`);
+    die(3, `failed to read config file "${path}": ${errMsg(err)}`);
   }
-  // YAML or ambiguous extension: delegate to the hand-rolled YAML parser.
-  return parseSimpleYaml(text);
-}
-
-/**
- * Minimal YAML parser for governance config files.
- *
- * Handles:
- *   - Nested mappings (indented with 2 spaces).
- *   - String, boolean, and integer scalars.
- *   - Sequences of scalars (- item) and mappings (- key: val).
- *   - Comments (#) and blank lines.
- *
- * Does NOT handle:
- *   - Flow style ({ } / [ ]).
- *   - Multi-line scalars (| / >).
- *   - Anchors / aliases (* / &).
- *   - Quoted keys.
- *
- * Governance configs are authored with this tool and are unlikely to use those
- * features. If they do, operators should use JSON.
- */
-function parseSimpleYaml(text: string): unknown {
-  const lines = text.split("\n");
-  const root = parseYamlBlock(lines, 0, 0);
-  return root.value;
-}
-
-interface ParseResult {
-  value: unknown;
-  nextLine: number;
-}
-
-function parseYamlBlock(lines: string[], startLine: number, indent: number): ParseResult {
-  // Collect lines at this indent level, building a mapping or sequence.
-  let i = startLine;
-  const result: Record<string, unknown> = {};
-  const seq: unknown[] = [];
-  let isSequence = false;
-  let isMapping = false;
-
-  while (i < lines.length) {
-    const raw = lines[i];
-    const stripped = raw.replace(/#.*$/, "").trimEnd();
-
-    if (stripped.trim() === "") {
-      i++;
-      continue;
-    }
-
-    const lineIndent = stripped.length - stripped.trimStart().length;
-
-    // Dedent: this line belongs to a parent block.
-    if (lineIndent < indent) break;
-
-    // Deeper indent: should have been consumed by a recursive call.
-    if (lineIndent > indent) {
-      i++;
-      continue;
-    }
-
-    const content = stripped.trimStart();
-
-    // Sequence item.
-    if (content.startsWith("- ")) {
-      isSequence = true;
-      const rest = content.slice(2).trim();
-      // Inline mapping: "- key: value"
-      if (/^[^:]+:\s/.test(rest) || /^[^:]+:$/.test(rest)) {
-        // Parse as a mini-mapping starting from the same line.
-        const itemMap = parseInlineSequenceMappingItem(lines, i, lineIndent + 2);
-        seq.push(itemMap.value);
-        i = itemMap.nextLine;
-      } else {
-        seq.push(parseScalar(rest));
-        i++;
-      }
-      continue;
-    }
-
-    // Mapping entry: "key: value" or "key:".
-    const colonIdx = content.indexOf(": ");
-    const bareColon = content.endsWith(":") && !content.includes(": ");
-    if (colonIdx !== -1 || bareColon) {
-      isMapping = true;
-      const key = colonIdx !== -1 ? content.slice(0, colonIdx).trim() : content.slice(0, -1).trim();
-      const valueStr = colonIdx !== -1 ? content.slice(colonIdx + 2).trim() : "";
-
-      i++;
-
-      if (valueStr !== "" && valueStr !== "|" && valueStr !== ">") {
-        // Inline scalar value.
-        result[key] = parseScalar(valueStr);
-      } else {
-        // Value is on subsequent lines — recurse.
-        // Find the indent of the next non-blank, non-comment line.
-        let nextNonBlank = i;
-        while (nextNonBlank < lines.length) {
-          const candidate = lines[nextNonBlank].replace(/#.*$/, "").trimEnd();
-          if (candidate.trim() !== "") break;
-          nextNonBlank++;
-        }
-        if (nextNonBlank >= lines.length) {
-          result[key] = null;
-        } else {
-          const childIndent =
-            lines[nextNonBlank].length - lines[nextNonBlank].trimStart().length;
-          if (childIndent <= indent) {
-            result[key] = null;
-          } else {
-            const child = parseYamlBlock(lines, nextNonBlank, childIndent);
-            result[key] = child.value;
-            i = child.nextLine;
-          }
-        }
-      }
-      continue;
-    }
-
-    // Unrecognized line at this indent — skip.
-    i++;
-  }
-
-  if (isSequence) return { value: seq, nextLine: i };
-  if (isMapping) return { value: result, nextLine: i };
-  return { value: null, nextLine: i };
-}
-
-/**
- * Parse a sequence item that starts a mapping at `startLine`.
- * E.g.:
- *   - pattern: main
- *     requirePullRequestReviews: true
- */
-function parseInlineSequenceMappingItem(
-  lines: string[],
-  startLine: number,
-  childIndent: number,
-): ParseResult {
-  const raw = lines[startLine];
-  const stripped = raw.replace(/#.*$/, "").trimEnd();
-  const lineIndent = stripped.length - stripped.trimStart().length;
-  const content = stripped.trimStart().slice(2).trim(); // strip "- "
-
-  const colonIdx = content.indexOf(": ");
-  const bareColon = content.endsWith(":") && !content.includes(": ");
-  const result: Record<string, unknown> = {};
-
-  if (colonIdx !== -1 || bareColon) {
-    const key = colonIdx !== -1 ? content.slice(0, colonIdx).trim() : content.slice(0, -1).trim();
-    const valueStr = colonIdx !== -1 ? content.slice(colonIdx + 2).trim() : "";
-    if (valueStr !== "") {
-      result[key] = parseScalar(valueStr);
-    } else {
-      // value is on child lines
-      let nextNonBlank = startLine + 1;
-      while (nextNonBlank < lines.length) {
-        const candidate = lines[nextNonBlank].replace(/#.*$/, "").trimEnd();
-        if (candidate.trim() !== "") break;
-        nextNonBlank++;
-      }
-      if (nextNonBlank < lines.length) {
-        const ci = lines[nextNonBlank].length - lines[nextNonBlank].trimStart().length;
-        if (ci > lineIndent) {
-          const child = parseYamlBlock(lines, nextNonBlank, ci);
-          result[key] = child.value;
-          // Continue collecting sibling keys at childIndent.
-          const rest = parseYamlBlock(lines, child.nextLine, childIndent);
-          if (rest.value && typeof rest.value === "object" && !Array.isArray(rest.value)) {
-            Object.assign(result, rest.value as object);
-            return { value: result, nextLine: rest.nextLine };
-          }
-          return { value: result, nextLine: child.nextLine };
-        }
-      }
-    }
-  }
-
-  // Collect sibling keys at `childIndent`.
-  const rest = parseYamlBlock(lines, startLine + 1, childIndent);
-  if (rest.value && typeof rest.value === "object" && !Array.isArray(rest.value)) {
-    Object.assign(result, rest.value as object);
-    return { value: result, nextLine: rest.nextLine };
-  }
-  return { value: result, nextLine: startLine + 1 };
-}
-
-function parseScalar(s: string): unknown {
-  if (s === "true") return true;
-  if (s === "false") return false;
-  if (s === "null" || s === "~") return null;
-  // Strip optional quotes.
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1);
-  }
-  const n = Number(s);
-  if (!isNaN(n) && s.trim() !== "") return n;
-  return s;
 }
 
 /**
@@ -997,20 +1025,7 @@ async function runAudit(argv: string[]): Promise<void> {
   }
 
   // ── Load config ────────────────────────────────────────────────────────────
-  let rawConfig: unknown;
-  try {
-    const text = readFileSync(auditArgs.config, "utf-8");
-    rawConfig = parseConfigFile(auditArgs.config, text);
-  } catch (err) {
-    die(3, `failed to read config file "${auditArgs.config}": ${errMsg(err)}`);
-  }
-
-  let config;
-  try {
-    config = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
-  }
+  const { config } = await readPolicy(auditArgs.config, auditArgs.configMode);
 
   // ── Resolve managed repos from config ──────────────────────────────────────
   const repoUrls: string[] = [];
@@ -1101,20 +1116,7 @@ async function runReport(argv: string[]): Promise<void> {
   }
 
   // ── Load config ────────────────────────────────────────────────────────────
-  let rawConfig: unknown;
-  try {
-    const text = readFileSync(reportArgs.config, "utf-8");
-    rawConfig = parseConfigFile(reportArgs.config, text);
-  } catch (err) {
-    die(3, `failed to read config file "${reportArgs.config}": ${errMsg(err)}`);
-  }
-
-  let config;
-  try {
-    config = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
-  }
+  const { config } = await readPolicy(reportArgs.config, reportArgs.configMode);
 
   // ── Build client ───────────────────────────────────────────────────────────
   let client;
@@ -1233,6 +1235,55 @@ async function runReport(argv: string[]): Promise<void> {
   if (reportArgs.failOn === "attention" && !report.clean) {
     process.stderr.write("github-warden: compliance report needs attention (--fail-on attention)\n");
     process.exit(4);
+  }
+  process.exit(0);
+}
+
+/**
+ * Run `repos`: write the policy's org's repository list, archived repos
+ * included, as the JSON `chant workspace check --forge-repos` reads. Exits 2
+ * when the org cannot be chosen from the policy, 3 when GitHub has no such
+ * account, the listing fails, or the file cannot be written.
+ */
+async function runRepos(argv: string[]): Promise<void> {
+  let args: ReposArgs;
+  try {
+    args = parseReposArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+
+  const { config } = await readPolicy(args.config, args.configMode);
+
+  let org: string;
+  try {
+    org = pickOrg(Object.keys(config.orgs), args.org);
+  } catch (err) {
+    die(2, errMsg(err));
+  }
+
+  let client;
+  try {
+    client = buildClient(args);
+  } catch (err) {
+    die(3, `auth setup failed: ${errMsg(err)}`);
+  }
+
+  let text: string;
+  try {
+    text = `${JSON.stringify(await forgeRepoList(client, org), null, 2)}\n`;
+  } catch (err) {
+    die(3, `listing the repositories of ${org} failed: ${errMsg(err)}`);
+  }
+  if (args.out === undefined) {
+    process.stdout.write(text);
+  } else {
+    try {
+      writeFileSync(args.out, text, "utf-8");
+    } catch (err) {
+      die(3, `failed to write the repository list to "${args.out}": ${errMsg(err)}`);
+    }
   }
   process.exit(0);
 }
@@ -1456,9 +1507,12 @@ function printUsage() {
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
       "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
       "  checks      Print the ruleset requiring each member pipeline's job names.",
+      "  repos       Write the policy's org's repository list for chant workspace check.",
       "",
       "Flags (reconcile):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --mode dry-run|apply          Reconcile mode (default: dry-run).",
       "  --cycles <name[,name...]>     Cycle names to run (default: all).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
@@ -1467,9 +1521,15 @@ function printUsage() {
       "  --allow-guardrail-override    Apply even when guardrails trip.",
       "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
       "                                delete per resource type, in (0,1]. Default: 0.25.",
+      "  --plan-json <file>            Write the plan as a chant change-set part (dry-run only).",
+      "  --member <name>               Member the part and drift records name (default: the policy file's directory name).",
+      "  --drift-issue                 Keep one forge issue tracking the drift this dry run finds (dry-run only).",
+      "  --drift-issue-repo <owner/name>  Repository the issue lives in (default: GITHUB_REPOSITORY).",
       "",
       "Flags (audit):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
@@ -1477,13 +1537,26 @@ function printUsage() {
       "                                Exit 4 when findings exceed threshold (default: none).",
       "",
       "Flags (report):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "  --cycles <name[,name...]>     Cycles to include (default: all).",
       "  --out <path>                  Write the JSON compliance artifact to this path.",
       "  --audit                       Include an audit pass in the report.",
       "  --identity                    Include an identity & service-account hygiene pass.",
       "  --fail-on none|attention      Exit 4 when the report needs attention (default: none).",
+      "",
+      "repos writes the policy's org's repository list, archived repos included, as",
+      "the JSON `chant workspace check --forge-repos <file>` reads.",
+      "",
+      "Flags (repos):",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
+      "  --org <name>                  Org to list (default: the policy's only org).",
+      "  --out <file>                  File to write (default: stdout).",
+      "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "",
       "Flags (codeowners):",
       "  --owners <path>               Owners by workspace member name (YAML or JSON). Required.",
@@ -1525,7 +1598,9 @@ function printAuditUsage() {
       "using the warden App installation token.",
       "",
       "Flags:",
-      "  --config <path>               Path to governance config file (YAML or JSON). Required.",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",

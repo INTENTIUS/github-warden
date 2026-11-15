@@ -51,6 +51,11 @@ function makeMockClient(responses: Record<string, unknown> = {}): MockClient {
       const key = `${method} ${path}`;
       if (responseMap.has(key)) return responseMap.get(key) as T;
       if (method === "GET" && path.includes("/rulesets?")) return [] as T;
+      // GitHub answers a ruleset POST or PUT with the ruleset it wrote.
+      if (method === "POST" && path.endsWith("/rulesets")) return { id: 1, ...(body as object) } as T;
+      if (method === "PUT" && /\/rulesets\/\d+$/.test(path)) {
+        return { id: Number(path.split("/").pop()), ...(body as object) } as T;
+      }
       return {} as T;
     },
   };
@@ -470,5 +475,117 @@ describe("rulesetsCycle via runReconcile", () => {
     expect(result.completed).toBe(true);
     expect(result.cycles[0]!.applied).toHaveLength(1);
     expect(client.calls.find((c) => c.method === "POST")!.path).toBe("/orgs/test-org/rulesets");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. A user-owned repo with no shared scope (github-warden#61)
+// ---------------------------------------------------------------------------
+
+describe("rulesetsCycle on a user-owned repo (github-warden#61)", () => {
+  // The config shape from the issue: a personal account under `orgs:`, one
+  // private repo with one ruleset. The CLI runs the loop without a scope.
+  const config: GovernanceConfig = {
+    orgs: {
+      alice: {
+        repos: {
+          app: {
+            rulesets: [
+              {
+                name: "main-requires-test",
+                target: "branch",
+                enforcement: "active",
+                conditions: { ref_name: { include: ["refs/heads/main"] } },
+                rules: [
+                  {
+                    type: "required_status_checks",
+                    parameters: {
+                      strict_required_status_checks_policy: false,
+                      required_status_checks: [{ context: "test" }],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+
+  const UPGRADE =
+    '{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature.","status":"403"}';
+
+  /** GitHub as the issue's token saw it: no org endpoint, rulesets refused on write. */
+  function userRepoClient(writeError: string): MockClient {
+    const calls: MockCall[] = [];
+    return {
+      calls,
+      responses: new Map(),
+      async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+        calls.push({ method, path, body });
+        if (path.startsWith("/orgs/alice/")) {
+          throw new Error(`${method} ${path} returned 404: {"message":"Not Found"}`);
+        }
+        if (method === "GET" && path === "/repos/alice/app/rulesets?per_page=100&page=1") return [] as T;
+        throw new Error(`${method} ${path} returned ${writeError}`);
+      },
+    };
+  }
+
+  it("reads the declared repo's rulesets without a scope and plans a ruleset create", async () => {
+    const client = userRepoClient(`403: ${UPGRADE}`);
+    const result = await runReconcile({ config, client, cycles: [rulesetsCycle], mode: "dry-run" });
+    expect(result.errored).toEqual([]);
+    expect(client.calls.map((c) => `${c.method} ${c.path}`)).toContain(
+      "GET /repos/alice/app/rulesets?per_page=100&page=1",
+    );
+    const entries = result.changeSets[0]!.entries;
+    expect(entries.map((e) => `${e.kind} ${e.resourceType} ${e.key}`)).toEqual([
+      "create repo-ruleset app/main-requires-test",
+    ]);
+  });
+
+  it("reports a refused write as failed with the API's message, never as applied", async () => {
+    const client = userRepoClient(`403: ${UPGRADE}`);
+    const result = await runReconcile({
+      config,
+      client,
+      cycles: [rulesetsCycle],
+      mode: "apply",
+      allowGuardrailOverride: true,
+    });
+    const cr = result.cycles[0]!;
+    expect(cr.applied).toHaveLength(0);
+    expect(cr.failed).toHaveLength(1);
+    expect(cr.failed[0]!.error).toContain("Upgrade to GitHub Pro");
+    expect(client.calls.some((c) => c.method === "POST" && c.path === "/repos/alice/app/rulesets")).toBe(true);
+  });
+
+  it("reports a 404 on the write (no admin rights) as failed", async () => {
+    const client = userRepoClient('404: {"message":"Not Found"}');
+    const result = await runReconcile({
+      config,
+      client,
+      cycles: [rulesetsCycle],
+      mode: "apply",
+      allowGuardrailOverride: true,
+    });
+    expect(result.cycles[0]!.applied).toHaveLength(0);
+    expect(result.cycles[0]!.failed[0]!.error).toContain("404");
+  });
+
+  it("does not count a 2xx that returns no ruleset as applied", async () => {
+    const client = makeMockClient({ "POST /repos/alice/app/rulesets": {} });
+    const result = await runReconcile({
+      config,
+      client,
+      cycles: [rulesetsCycle],
+      mode: "apply",
+      allowGuardrailOverride: true,
+    });
+    const cr = result.cycles[0]!;
+    expect(cr.applied).toHaveLength(0);
+    expect(cr.failed[0]!.error).toContain("the write is not confirmed");
   });
 });

@@ -78,7 +78,7 @@ export { branchProtectionCycle } from "./cycles/branch-protection.js";
 Pass it to `runReconcile`:
 
 ```ts
-import { branchProtectionCycle } from "@intentius/chant-lexicon-github-org";
+import { branchProtectionCycle } from "./cycles/branch-protection.js";
 
 await runReconcile({
   config,

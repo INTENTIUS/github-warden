@@ -89,11 +89,21 @@ describe("parseReconcileArgs", () => {
     expect(args.tokenEnv).toBeUndefined();
   });
 
-  it("throws a CliError with code 2 when --config is missing", () => {
-    expect(() => parseReconcileArgs(["--token-env", "GH_TOKEN"])).toThrow(CliError);
-    expect(() =>
-      parseReconcileArgs(["--token-env", "GH_TOKEN"]),
-    ).toThrow(expect.objectContaining({ code: 2 }));
+  it("parses --config-mode, defaulting to fold", () => {
+    const base = ["--config", "governance.ts", "--token-env", "GH_TOKEN"];
+    expect(parseReconcileArgs(base).configMode).toBe("fold");
+    for (const mode of ["fold", "run", "check"] as const) {
+      expect(parseReconcileArgs([...base, "--config-mode", mode]).configMode).toBe(mode);
+      expect(parseReportArgs([...base, "--config-mode", mode]).configMode).toBe(mode);
+    }
+    expect(() => parseReconcileArgs([...base, "--config-mode", "eval"])).toThrow(
+      '--config-mode must be "fold", "run" or "check", got: eval',
+    );
+    expect(() => parseReconcileArgs([...base, "--config-mode"])).toThrow(expect.objectContaining({ code: 2 }));
+  });
+
+  it("leaves --config unset when it is omitted, so the default policy file is read", () => {
+    expect(parseReconcileArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });
 
   it("throws code 2 when no auth flag is supplied", () => {
@@ -144,6 +154,39 @@ describe("parseReconcileArgs", () => {
     );
   });
 
+  it("parses --member with --plan-json, and refuses it alone or empty", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    expect(parseReconcileArgs([...base, "--plan-json", "p.json"]).member).toBeUndefined();
+    expect(parseReconcileArgs([...base, "--plan-json", "p.json", "--member", "gov"]).member).toBe("gov");
+    for (const bad of [
+      [...base, "--member", "gov"],
+      [...base, "--plan-json", "p.json", "--member"],
+      [...base, "--plan-json", "p.json", "--member", ""],
+      [...base, "--plan-json", "p.json", "--member", "  "],
+    ]) {
+      expect(() => parseReconcileArgs(bad)).toThrow(expect.objectContaining({ code: 2 }));
+    }
+  });
+
+  it("parses --drift-issue and --drift-issue-repo, refusing them with --mode apply, --cycles or alone", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    const a = parseReconcileArgs(base);
+    expect(a.driftIssue).toBe(false);
+    expect(a.driftIssueRepo).toBeUndefined();
+    const b = parseReconcileArgs([...base, "--drift-issue", "--drift-issue-repo", "acme/governance", "--member", "gov"]);
+    expect(b.driftIssue).toBe(true);
+    expect(b.driftIssueRepo).toBe("acme/governance");
+    expect(b.member).toBe("gov");
+    expect(b.planJson).toBeUndefined();
+    const bad = (argv: string[]) => expect(() => parseReconcileArgs(argv)).toThrow(expect.objectContaining({ code: 2 }));
+    bad([...base, "--mode", "apply", "--drift-issue"]);
+    bad([...base, "--drift-issue-repo", "acme/governance"]);
+    bad([...base, "--drift-issue", "--drift-issue-repo"]);
+    bad([...base, "--drift-issue", "--drift-issue-repo", "governance"]);
+    bad([...base, "--drift-issue", "--drift-issue-repo", "acme/gov/extra"]);
+    bad([...base, "--drift-issue", "--cycles", "teams"]);
+  });
+
   it("throws code 2 for a --removal-cap-fraction outside (0, 1]", () => {
     const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
     for (const bad of ["0", "-0.5", "1.5", "abc"]) {
@@ -192,6 +235,10 @@ describe("parseReportArgs", () => {
   it("parses --identity", () => {
     const args = parseReportArgs(["--config", "g.yml", "--token-env", "GH_TOKEN", "--identity"]);
     expect(args.identity).toBe(true);
+  });
+
+  it("leaves --config unset when it is omitted", () => {
+    expect(parseReportArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });
 
   it("throws code 2 when auth is missing", () => {

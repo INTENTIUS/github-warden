@@ -5,23 +5,97 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
-- New `reconcile --plan-json <file>` writes the change sets a run planned, one per
-  cycle and org, as a JSON array of chant's reconcile `ChangeSet`. chant's
-  change-set document reads it (`readChangeSetPart` with `planner: "warden"`).
-  It cannot be combined with `--mode apply`. `runReconcile` also returns them
-  as `changeSets`.
+- `reconcile --drift-issue` keeps one issue tracking the drift a dry run
+  finds, through `keepDriftIssue` from `@intentius/chant/drift-issue` (#77):
+  drift opens or updates it, the same drift leaves it alone, and a clean run
+  closes it. The records are the drift reader's. The issue lives in
+  `--drift-issue-repo <owner/name>`, or the workflow's repository
+  (`GITHUB_REPOSITORY`), and is kept with the run's own token or App
+  installation. `--drift-issue` cannot be combined with `--mode apply` or
+  `--cycles`, and `--member` now also names the drift records. The Action
+  gains `drift-issue` and `drift-issue-repo` inputs. See
+  [CLI.md](CLI.md#drift-issue) and the scheduled job in
+  [CI.md](CI.md#a-scheduled-drift-issue).
+- The `forge-governance` kind names a drift reader, `dist/drift-reader.mjs`
+  (#76), so `chant workspace drift --member` reads a governance member: a
+  dry-run reconcile of every cycle against GitHub, one record per graph node
+  (`in-sync`, or `drifted` with each planned change an attribute), and
+  `not-observed` nodes when a cycle errors or the request budget defers one.
+  It takes the token from `GH_TOKEN` and the API base from `GITHUB_API_URL`,
+  and refuses with `no-drift-read` without them. The kind now needs chant
+  `0.124.96` or newer, the first chant that reads a kinds file's `drift` block.
+- New `repos` subcommand writes the policy's org's repository list, archived
+  repos included, as the `{ forge, org, repos: [{ url, archived? }] }` JSON
+  `chant workspace check --forge-repos <file>` reads (#75). `--org` picks the
+  org when the policy has several and `--out` names the file (default
+  stdout). An org key that is a personal account is listed from the App
+  installation's repositories, or from the account's own token. A login
+  GitHub does not have exits 3 rather than writing an empty list.
+- The policy can be a `.ts` file whose default export is the policy, typed with
+  `satisfies GovernanceConfig` (#69). Warden folds it to its value with
+  `@intentius/tsad-reference` without running it, so a file that reads the
+  environment or otherwise is not data exits 2 with its line and column. The
+  new `--config-mode fold|run|check` on `reconcile`, `audit` and `report`, and
+  the Action's `config-mode` input, choose folding (the default), importing
+  the file, or both with a refusal when they differ. A folded policy's plan
+  prints, under each drifted field, where the policy wrote it: `direct`, or the
+  preset argument or body line that set it. Without `--config`, warden reads
+  `governance.ts` when there is no `governance.yml`. `examples/governance.ts`
+  is the example policy in TypeScript.
+- The package has a root export, `dist/index.js` with its type declarations,
+  so a `.ts` policy can import `GovernanceConfig` from
+  `@intentius/github-warden`. It also exports `loadGovernancePolicy`, which
+  reads a policy file of any of the three forms. `runReconcile` takes the
+  folded policy's `provenance` and returns each cycle's drift `origins`.
+  `@intentius/tsad-reference` `^2.3.0` is a runtime dependency; the CLI loads
+  it from node_modules and the Action bundles it.
+- `reconcile` with no programmatic scope (the CLI and the Action) gives each org's
+  cycles that org's declared `repos` and `teams`. Before, the repo-level cycles
+  read nothing: the branch-protection and repo-settings cycles threw
+  `Cannot read properties of undefined (reading 'repos')`, and the rulesets
+  cycle planned a repo create it skipped on apply and still counted as
+  `Applied` (#61). A ruleset create or update now counts as applied only when
+  GitHub answers with the ruleset. POLICY.md covers repos owned by a personal
+  account.
+- `reconcile --plan-json <file>` writes the plan as a chant change-set part:
+  the object `reconcilePlanPart` from `@intentius/chant/change-set` returns,
+  with planner `warden` and lexicon `github`, which chant's
+  `readChangeSetPartFile` reads (#74). This changes the file's shape: through
+  `0.6.x` it was a bare JSON array of chant's reconcile `ChangeSet`, and a
+  reader of that array now reads the part (or takes `runReconcile`'s
+  `changeSets` as a library). The new `--member <name>` names the member,
+  defaulting to the policy file's directory name. A run where a cycle errored
+  or was deferred writes the part with `status: "failed"`, no plan digest and
+  an `error` naming the missing cycles. `--plan-json` still cannot be combined
+  with `--mode apply`. `runReconcile` returns the change sets as `changeSets`.
 - New `checks` subcommand reads each member's generated pipeline job names from
   `chant workspace ls --json` and prints the ruleset that requires them as
-  status checks. The chant range moves to `^0.101.0`, which publishes the names.
-- New `lifecycle` subcommand reads the `chant/lifecycle` branch name and each member's
-  ledger paths from `chant workspace status --json`, and prints the ruleset that
+  status checks. It needs chant 0.101 or newer, which publishes the names.
+- Another new subcommand, `lifecycle`, reads the `chant/lifecycle` branch name and each member's
+  ledger paths from `chant workspace status --json`. It prints the ruleset that
   protects the branch (no deletion, no force push) for the `rulesets` cycle.
-- New `codeowners` subcommand generates CODEOWNERS with one rule per member of a
+- The third, `codeowners`, generates CODEOWNERS with one rule per member of a
   chant workspace. Members are read through chant's read contract
   (`chant workspace ls --json`), and owners are declared by member name in an
   owners file. See [CLI.md](CLI.md#codeowners).
 - The `@intentius/chant` and `@intentius/chant-lexicon-github` range moves from
-  `^0.72.1` to `^0.100.0`, since the read contract starts at chant 0.81.
+  `^0.72.1` to `^0.124.96` (#70). On 0.x a caret admits one minor, so each
+  bump is explicit. The workspace read contract starts at chant 0.81.
+- The governance pipeline the emitter writes pins `actions/checkout` from
+  chant's action pin table (`@intentius/chant/action-pins`) instead of its own
+  SHA, and every `uses:` line carries its release as a YAML comment. The
+  emitted pipeline's own pin moves from `v0.3.1` to the `v0.6.1` commit (#71).
+- Node 24 is the supported runtime: `engines.node` is `>=24`, the Action runs
+  on `node24`, and every workflow runs Node 24 with one `actions/checkout` pin.
+  CI's check job also runs `npm run build` (#72). CI.md's and the README's
+  workflow examples pin `actions/checkout` and the Action to commit SHAs.
+- The `forge-governance` kind needs chant `0.124.49` or newer (`memberFile` from
+  `0.124.48`, `graph.reader` from `0.124.49`). The test suite validates
+  `workspace-kinds.json` against chant's kinds schema and the graph reader's
+  output against chant's workspace graph schema (#73).
+- `--config` is optional for `reconcile`, `audit` and `report`. Without it the
+  policy is `governance.yml` in the working directory, and a run with neither
+  exits 2.
 
 ## 0.5.0 (2026-09-02)
 

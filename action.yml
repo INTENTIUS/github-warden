@@ -15,8 +15,15 @@ inputs:
     default: reconcile
 
   config:
-    description: "Path to the governance config file (YAML or JSON)."
+    description: "Path to the governance config file (YAML, JSON, or a .ts policy)."
     required: true
+
+  config-mode:
+    description: >
+      How a .ts policy is evaluated: fold (reduce it to its value without
+      running it), run (import it), or check (both, failing when they differ).
+      Default: fold.
+    required: false
 
   mode:
     description: "Reconcile mode: dry-run or apply. Only used when command is reconcile."
@@ -56,6 +63,21 @@ inputs:
     required: false
     default: "false"
 
+  drift-issue:
+    description: >
+      Set to 'true' on a dry-run reconcile to keep one issue tracking the drift
+      it finds: opened or updated while GitHub differs from the policy, closed
+      on the first run that matches. The App needs Issues read and write on the
+      issue repository. Cannot be combined with mode apply or cycles.
+    required: false
+    default: "false"
+
+  drift-issue-repo:
+    description: >
+      owner/name of the repository the drift issue lives in. Default: the
+      workflow's repository. Only used with drift-issue.
+    required: false
+
 runs:
-  using: node20
+  using: node24
   main: action/index.mjs

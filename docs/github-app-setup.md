@@ -41,6 +41,12 @@ level is enough; **apply** needs *write*.
 
 The Repository **Metadata (read)** permission is mandatory and auto-selected.
 
+For repos owned by a personal account, install the App on that account. Only
+the Repository permissions apply there; see
+[Repos owned by a personal account](../POLICY.md#repos-owned-by-a-personal-account)
+for the cycles that work on an account and the plan rulesets need on a private
+repo.
+
 > A read that 403s (a permission you didn't grant, or a feature not on your
 > plan) never aborts the run: every cycle treats it as "nothing live", skips
 > the gated slice, and appends a `NOTE: <slice>: read was permission-gated

@@ -1,10 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadGovernanceConfig } from "../config/load.js";
 import { lifecycleRuleset, parseStatusDocument, readLifecycle } from "./lifecycle.js";
+
+/** Temp dirs made by this file's tests, removed after each test. */
+const tempDirs: string[] = [];
+afterEach(() => {
+  for (const d of tempDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+function tempDir(prefix: string): string {
+  const d = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(d);
+  return d;
+}
 
 const status = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
@@ -81,7 +92,7 @@ describe("the ruleset in a governance config", () => {
 
 describe("against a real chant workspace", () => {
   it("reads the lifecycle from `chant workspace status --json`", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "warden-lc-"));
+    const dir = tempDir("warden-lc-");
     execFileSync("git", ["init", "-q"], { cwd: dir });
     mkdirSync(join(dir, "docs"));
     writeFileSync(

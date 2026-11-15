@@ -1,8 +1,8 @@
 # CLI reference
 
-The `github-warden` binary has six subcommands. `reconcile`, `audit` and
-`report` load the policy file (`--config`) and authenticate the same way; they
-differ in what they do with live GitHub state. `codeowners`, `lifecycle` and `checks` read
+The `github-warden` binary has seven subcommands. `reconcile`, `audit`,
+`report` and `repos` load the policy file (`--config`) and authenticate the
+same way; they differ in what they do with live GitHub state. `codeowners`, `lifecycle` and `checks` read
 a chant workspace from disk and touch neither GitHub nor the policy file.
 
 | Subcommand | What it does | Mutates? |
@@ -10,6 +10,7 @@ a chant workspace from disk and touch neither GitHub nor the policy file.
 | `reconcile` | Diff desired vs live per cycle, guardrail-check, print the plan (`dry-run`) or apply it. | Only with `--mode apply`. |
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
+| `repos` | Write the policy's org's repository list for `chant workspace check --forge-repos`. | Only the `--out` file. |
 | `codeowners` | Generate CODEOWNERS from the members of a chant workspace. | Only the `--out` file, and not with `--check`. |
 | `checks` | Print the ruleset that requires each member pipeline's job names as status checks. | Never. |
 | `lifecycle` | Show the `chant/lifecycle` ledger paths, or print the ruleset that protects the branch. | Never. |
@@ -20,23 +21,37 @@ package.json at build time).
 
 ## Config file parsing
 
-`--config` accepts YAML or JSON, decided by extension: `.json` is parsed as
-JSON, anything else goes through the built-in YAML reader (block-style
+`--config` accepts YAML, JSON or TypeScript, decided by extension: `.json` is
+parsed as JSON, `.ts` is a TypeScript policy whose default export is the
+policy (see `--config-mode` below and [POLICY.md](POLICY.md#a-policy-in-typescript)),
+and anything else goes through the built-in YAML reader (block-style
 mappings/sequences, string/bool/number scalars, comments; no flow style, no
 multi-line scalars, no anchors). For complex YAML, use JSON. Invalid config
-shape exits 2 with the offending field path.
+shape exits 2 with the offending field path, whatever the form.
+
+Without `--config`, the policy is `governance.yml` in the working directory,
+or `governance.ts` when there is no `governance.yml`. A run with neither exits 2.
+
+`--config-mode fold|run|check` (default `fold`) sets how a `.ts` policy is
+evaluated, on every subcommand that reads the policy. `fold` reduces the file
+to its value with the typescript-as-data reference evaluator without running
+it, and a file that is not data (it reads the environment, say) exits 2 with
+the line and column. `run` imports the file and takes its export. `check` does
+both and exits 2 when they differ. The flag does nothing for YAML or JSON.
 
 ## `reconcile`
 
 ```
-github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
+github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
-                        [--removal-cap-fraction <value>] [--plan-json <file>]
+                        [--removal-cap-fraction <value>] [--plan-json <file>] [--member <name>]
+                        [--drift-issue [--drift-issue-repo <owner/name>]]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | **required** | Governance config (YAML or JSON). |
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config (YAML, JSON or `.ts`). |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated (see above). |
 | `--mode dry-run\|apply` | `dry-run` | `dry-run` prints the plan and changes nothing; `apply` executes it after guardrails pass. |
 | `--cycles <name[,name...]>` | all | Subset of cycles to run. Unknown names exit 2 and print the known list. |
 | `--token-env <VAR>` | — | Env var holding a pre-minted installation token (auth mode 1). |
@@ -44,7 +59,10 @@ github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
 | `--installation-id-env <VAR>` | — | Env var holding the installation ID. |
 | `--allow-guardrail-override` | off | Apply even when guardrails trip. |
 | `--removal-cap-fraction <value>` | `0.25` | `removalDeltaCap` threshold: the max fraction of any one resource type's live managed entries the plan may delete. Must be in (0,1]; anything else exits 2. See [the canonical cap description in POLICY.md](POLICY.md#what-the-policy-does-not-declare). |
-| `--plan-json <file>` | — | Write the change sets the run planned (one per cycle and org, a JSON array of chant's reconcile `ChangeSet`) to the file, for chant's change-set document (`readChangeSetPart` with `planner: "warden"`). Nothing is applied: combining it with `--mode apply` exits 2. |
+| `--plan-json <file>` | — | Write the plan as a part of a chant change-set document (see below). Nothing is applied: combining it with `--mode apply` exits 2. |
+| `--member <name>` | the policy file's directory name | The workspace member the `--plan-json` part and the `--drift-issue` records name. Given without either flag, or empty, it exits 2. |
+| `--drift-issue` | off | Keep one GitHub issue tracking the drift this dry run finds (see [Drift issue](#drift-issue)). Combining it with `--mode apply` or `--cycles` exits 2. |
+| `--drift-issue-repo <owner/name>` | `GITHUB_REPOSITORY` | The repository that holds the drift issue. Given without `--drift-issue`, or a value that is not `owner/name`, it exits 2. |
 
 Deletes come from the policy, not from a flag: a live resource missing from
 the policy is planned for deletion only in an org whose policy declares
@@ -65,15 +83,110 @@ plan; a `GUARDRAIL BLOCK:` line when a guardrail refused an apply;
 line when the API request budget (1000 requests per run) ran out before every
 cycle finished.
 
+### The `--plan-json` part
+
+`--plan-json <file>` writes the run's plan as one part of a chant change-set
+document: the object chant's `reconcilePlanPart` returns (from
+`@intentius/chant/change-set`), with planner `warden` and lexicon `github`.
+chant reads the file with `readChangeSetPartFile(part, "warden", member,
+"github")`. It then composes the result with the other members' parts. Each planned change
+is an entry with its action (`create`, `update`, `delete`), its address (the
+change set's resource type and key, as in `member.bob`) and its scope (the
+org or account login). The file holds only the part, written as indented JSON
+with a trailing newline.
+
+The member is `--member`, or else the name of the directory that holds the
+policy file, which is the member's directory in a chant workspace. Without
+`--config` that is the working directory's name. A policy at the filesystem
+root has no such name, and the run exits 2 asking for `--member`.
+
+When every cycle planned, the part's member has `status: "planned"` and a
+`planDigest` over the change sets. When a cycle errored or the request budget
+deferred it, the plan is incomplete: the member has `status: "failed"`,
+`planDigest: null`, and an `error` naming each missing cycle
+(`<cycle> @ <org> errored in <stage>: <message>`, or
+`<cycle> was deferred by the request budget`, joined by `; `). The entries the
+other cycles planned stay in the part. The file is written once the cycles
+have run and before the exit code is decided, so a run that exits 3 still
+leaves its failed part; a failure before the cycles run (bad policy, auth
+setup) writes nothing. A write that fails exits 3.
+
+When the policy is a `.ts` file loaded in `fold` or `check` mode, each drifted
+field in the plan is followed by a line saying where the policy wrote it:
+
+```
+  [branch-protection] my-repo/main
+    requiredApprovingReviewCount: 2 → 1
+      <- reviewPreset(...) argument approvals at examples/governance.ts:31:40
+```
+
+| Origin line | Meaning |
+|---|---|
+| `direct` | The value is written on the field itself in the policy. |
+| `<fn>(...) argument <param> at <file>:<line>:<col>` | A function in the policy (a preset) set the field from one of its parameters; the location is the argument at the call, so change the argument to change the field. When the parameter's default applied, the line names the call instead. |
+| `<fn>(...) sets it in its body at <file>:<line>:<col>, called at ...` | The function's body fixes the value, so the edit belongs in the function. |
+| `unknown (<reason>)` | The fold could not attribute the value; it is never reported as `direct`. |
+
+A YAML or JSON policy, or a `.ts` policy loaded with `--config-mode run`,
+prints the plan without these lines. The same origins are on each cycle
+result's `origins` field when warden is used as a library.
+
+### Drift issue
+
+`--drift-issue` turns a scheduled dry run into one issue that tracks the
+governance drift. It passes the run's drift to `keepDriftIssue` from
+`@intentius/chant/drift-issue`. A run that finds drift opens the issue, or
+updates the open one when the drift changed; a run that finds the same drift
+leaves it as it is, so a nightly schedule does not open a second issue or
+edit the first. When no drift is found, the run closes the open issue with a
+comment. If a cycle failed and found no drift, the run leaves the open issue
+alone, since it cannot say GitHub matches.
+
+```bash
+github-warden reconcile \
+  --config governance.yml \
+  --token-env GH_TOKEN \
+  --drift-issue \
+  --drift-issue-repo acme/governance
+```
+
+The drift is the same list `chant workspace drift` reports for the member
+([README.md](README.md#drift-in-a-chant-workspace)): each org, repo, team,
+ruleset or branch protection rule with planned changes under it, the changes
+as attributes. The issue lists each such node with every attribute's
+declared and live values (secrets without values), and the nodes that could
+not be read. The run must cover every cycle, so `--drift-issue` with
+`--cycles` exits 2: a subset would report the other cycles' nodes as matching
+and close the issue.
+
+The issue is kept with the run's own credential: the `--token-env` token, or
+under App auth an installation token minted for the call. That credential
+needs Issues read and write on the issue repository. The repository is
+`--drift-issue-repo`, or the workflow's own repository from
+`GITHUB_REPOSITORY`; with neither the run exits 2 before reading GitHub.
+
+One issue is kept per policy: the hidden marker on its first line names
+`github.com` and the policy's orgs (`<!-- github-warden:drift github.com/acme -->`),
+and its title is `Governance drift on github.com/acme`. An issue closed by
+hand stays closed, and the next drift opens a new one. On a GitHub Actions
+runner the issue links the run.
+
+The run prints `Drift issue: <action>` with the issue's number and URL
+(`opened`, `updated`, `unchanged`, `closed`, `left` or `none`) after the
+plans. A dry run with drift still exits 0. When GitHub refuses the issue call
+the run prints `github-warden: error: keeping the drift issue failed: <message>`
+and exits 3.
+
 ## `audit`
 
 ```
-github-warden audit --config <path> [auth flags] [--fail-on none|merge-worthy|any]
+github-warden audit [--config <path>] [--config-mode fold|run|check] [auth flags] [--fail-on none|merge-worthy|any]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | **required** | Governance config. The audit targets every repo declared under `repos`. |
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config. The audit targets every repo declared under `repos`. |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated. |
 | `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
 | `--fail-on none\|merge-worthy\|any` | `none` | Exit 4 when findings exceed this threshold. |
 | `--help`, `-h` | — | Print audit usage and exit 0. |
@@ -85,13 +198,14 @@ declared it prints "nothing to audit" and exits 0.
 ## `report`
 
 ```
-github-warden report --config <path> [auth flags] [--cycles a,b] [--audit]
+github-warden report [--config <path>] [--config-mode fold|run|check] [auth flags] [--cycles a,b] [--audit]
                      [--identity] [--out compliance.json] [--fail-on none|attention]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | **required** | Governance config. |
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config. |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated. |
 | `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
 | `--cycles <name[,name...]>` | all | Cycles to include (always run in dry-run). |
 | `--out <path>` | — | Write the committable JSON compliance artifact here. |
@@ -100,6 +214,65 @@ github-warden report --config <path> [auth flags] [--cycles a,b] [--audit]
 | `--fail-on none\|attention` | `none` | Exit 4 when the report needs attention. |
 
 Report is detect-only; cycles run in dry-run and nothing is mutated.
+
+## `repos`
+
+```
+github-warden repos [--config <path>] [--config-mode fold|run|check] [auth flags] [--org <name>] [--out <file>]
+```
+
+`repos` writes the policy's org's repository list, archived repos included,
+as the JSON `chant workspace check --forge-repos <file>` reads. chant
+compares it with an org workspace (`scope: "org"`, one `repo` member per
+repository) and reports a repository GitHub has that no member names
+(WSP014) and a member naming one GitHub no longer has (WSP015).
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config. |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated. |
+| `--org <name>` | the policy's only org | Org to list. It must be a key of the policy's `orgs`; one the policy does not govern exits 2, and so does a policy with several orgs (or none) and no `--org`. |
+| `--out <file>` | stdout | File to write. |
+| `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
+
+Reconcile's other flags (`--mode`, `--cycles`, and so on) exit 2 here.
+
+The output is indented JSON with a trailing newline:
+
+```json
+{
+  "forge": "github",
+  "org": "acme",
+  "repos": [
+    { "url": "https://github.com/acme/api" },
+    { "url": "https://github.com/acme/legacy", "archived": true }
+  ]
+}
+```
+
+`url` is the repository's `html_url` (or `https://github.com/<full_name>`
+when the API leaves it out). chant matches URLs by host, owner and name. Members declared with
+clone URLs therefore match, whether the URL uses `https`, `ssh` or `git@github.com:`
+and whether or not it ends in `.git`. `archived: true` marks an archived repository and is
+left out for a live one. The list is sorted by `url`, so a run with nothing
+changed writes the same bytes.
+
+The org key can be an organization or a personal account (see
+[POLICY.md](POLICY.md#repos-owned-by-a-personal-account)); `GET /users/<login>`
+tells them apart. An organization is listed with
+`GET /orgs/<org>/repos?type=all`. A personal account is listed from the
+repositories the App installation reaches (`GET /installation/repositories`,
+keeping those the account owns), so install the App on the account with
+access to all its repositories. A `--token-env` token that is not an
+installation token works only when it belongs to the account itself, and
+then lists `GET /user/repos?affiliation=owner`. Either way the list holds the
+repositories the credential can see, so a token or installation limited to
+selected repositories gives a partial list.
+
+A login GitHub does not have (404) exits 3 and writes nothing; it is never
+written as an empty list, which chant would read as every member dropped. A
+personal account the credential cannot list, other API errors and a failed
+write also exit 3.
 
 ## Auth
 
@@ -124,6 +297,19 @@ token APIs: the token cycles (`token-governance`, `token-approval`) and
 several org administration endpoints are callable only by a GitHub App. See
 [SETUP.md](SETUP.md) and the [App setup checklist](docs/github-app-setup.md).
 
+## The drift reader
+
+`chant workspace drift --member <name>` runs no CLI subcommand. It imports
+`dist/drift-reader.mjs`, the drift reader the `forge-governance` kind names
+(chant 0.124.96 or later), which reads the member's `governance.yml` (or
+`governance.ts`) and runs the same plan `reconcile --mode dry-run` prints,
+with every cycle. It never applies. Its credentials come from the
+environment: the token from `GH_TOKEN` and the API base from
+`GITHUB_API_URL` (default `https://api.github.com`), or App auth when the
+kind's `drift.config` names `appIdEnv` and `installationIdEnv`. Each record is
+one graph node; [README.md](README.md#drift-in-a-chant-workspace) lists the
+addresses and statuses.
+
 ## Exit codes
 
 | Code | Meaning |
@@ -131,7 +317,7 @@ several org administration endpoints are callable only by a GitHub App. See
 | 0 | Success: the plan printed (dry-run), or apply completed with no failures. |
 | 1 | Guardrail block: apply mode, at least one guardrail tripped, and `--allow-guardrail-override` was not set. |
 | 2 | Argument or config error (unknown flag, unknown cycle, invalid config shape, missing auth). |
-| 3 | Runtime error (unreadable config file, API failure, an errored cycle, or failed apply entries). |
+| 3 | Runtime error (unreadable config file, API failure, an errored cycle, failed apply entries, or `repos` on an account GitHub does not have). |
 | 4 | `audit`: findings exceed `--fail-on`; `report`: needs attention with `--fail-on attention`. |
 
 ## `codeowners`

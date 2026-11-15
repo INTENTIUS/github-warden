@@ -55,6 +55,7 @@ async function main(): Promise<void> {
   // Collect inputs.
   const command = optionalInput("command") ?? "reconcile";
   const config = requiredInput("config");
+  const configMode = optionalInput("config-mode");
   const appId = requiredInput("app-id");
   const installationId = requiredInput("installation-id");
   const privateKey = requiredInput("private-key");
@@ -63,6 +64,8 @@ async function main(): Promise<void> {
   const cycles = optionalInput("cycles");
   const failOn = optionalInput("fail-on");
   const allowGuardrailOverride = optionalInput("allow-guardrail-override");
+  const driftIssue = optionalInput("drift-issue");
+  const driftIssueRepo = optionalInput("drift-issue-repo");
 
   // Validate command early for a clear error message.
   if (command !== "reconcile" && command !== "audit") {
@@ -86,6 +89,7 @@ async function main(): Promise<void> {
   const argv: string[] = [command];
 
   argv.push("--config", config);
+  if (configMode) argv.push("--config-mode", configMode);
   argv.push("--app-id-env", "WARDEN_ACTION_APP_ID");
   argv.push("--installation-id-env", "WARDEN_ACTION_INSTALLATION_ID");
 
@@ -93,6 +97,8 @@ async function main(): Promise<void> {
     argv.push("--mode", mode);
     if (cycles) argv.push("--cycles", cycles);
     if (allowGuardrailOverride === "true") argv.push("--allow-guardrail-override");
+    if (driftIssue === "true") argv.push("--drift-issue");
+    if (driftIssueRepo) argv.push("--drift-issue-repo", driftIssueRepo);
   }
 
   if (command === "audit") {
