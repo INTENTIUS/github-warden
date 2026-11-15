@@ -259234,7 +259234,7 @@ import { pathToFileURL as pathToFileURL4 } from "node:url";
 // package.json
 var package_default = {
   name: "@intentius/github-warden",
-  version: "0.7.1",
+  version: "0.8.0",
   type: "module",
   description: "Keep your GitHub org and repos in declared state \u2014 reconcile, guardrails, drift correction",
   license: "Apache-2.0",
