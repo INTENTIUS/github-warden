@@ -355,7 +355,7 @@ onto a CLI flag.
 
 ```yaml
 # Dry-run reconcile on every PR.
-- uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1
+- uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0
   with:
     command: reconcile
     config: .github/governance.yml
@@ -365,7 +365,7 @@ onto a CLI flag.
     private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 
 # Apply on push to main.
-- uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1
+- uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0
   with:
     command: reconcile
     config: .github/governance.yml
@@ -375,7 +375,7 @@ onto a CLI flag.
     private-key: ${{ secrets.WARDEN_PRIVATE_KEY }}
 
 # Audit all managed repos — fail if merge-worthy findings exist.
-- uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1
+- uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0
   with:
     command: audit
     config: .github/governance.yml

@@ -173,9 +173,9 @@ describe("governancePipeline", () => {
 
   // ── Dogfood: github-warden Action reference ────────────────────
 
-  test("warden steps use intentius/github-warden pinned at the v0.6.1 tag", () => {
+  test("warden steps use intentius/github-warden pinned at the v0.7.0 tag", () => {
     const yaml = buildYaml();
-    const line = "uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1";
+    const line = "uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0";
     // Two warden steps (dry-run + apply).
     const count = yaml.split("\n").filter((l) => l.trim() === line).length;
     expect(count).toBe(2);

@@ -55,7 +55,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1
+      - uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0
         with:
           command: reconcile
           config: .github/governance.yml
@@ -70,7 +70,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1
+      - uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0
         with:
           command: reconcile
           config: .github/governance.yml
@@ -88,7 +88,7 @@ and a failed apply entry surfaces as exit 3.
 An audit gate is one more step:
 
 ```yaml
-      - uses: intentius/github-warden@b25424ab2930551d0be5bac99cff577e2ba5edd6 # v0.6.1
+      - uses: intentius/github-warden@b094e91b9313b2a44b6fa14781a4917d670f62ed # v0.7.0
         with:
           command: audit
           config: .github/governance.yml
