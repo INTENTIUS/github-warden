@@ -1,16 +1,27 @@
-import { describe, it, expect } from "vitest";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { afterEach, describe, it, expect } from "vitest";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadGovernancePolicy } from "./policy.js";
 import { GovernanceConfigError } from "./load.js";
 
+/** Temp dirs made by this file's tests, removed after each test. */
+const tempDirs: string[] = [];
+afterEach(() => {
+  for (const d of tempDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+function tempDir(prefix: string): string {
+  const d = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(d);
+  return d;
+}
+
 const ex = (name: string) => resolve(import.meta.dirname, "..", "..", "examples", name);
 const load = async (path: string, mode?: "fold" | "run" | "check") => (await loadGovernancePolicy(path, mode)).config;
 
-/** A fresh directory holding one policy file. Left in the OS temp dir. */
+/** A fresh directory holding one policy file, removed after the test. */
 function policyFile(name: string, text: string): string {
-  const dir = mkdtempSync(join(tmpdir(), "gw-policy-"));
+  const dir = tempDir("gw-policy-");
   const p = join(dir, name);
   writeFileSync(p, text);
   return p;

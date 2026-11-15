@@ -1,11 +1,22 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadGovernanceConfig } from "../config/load.js";
 import { memberChecks, requiredChecksRuleset } from "./checks.js";
 import { parseLsDocument, readWorkspace, type Workspace } from "./members.js";
+
+/** Temp dirs made by this file's tests, removed after each test. */
+const tempDirs: string[] = [];
+afterEach(() => {
+  for (const d of tempDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+function tempDir(prefix: string): string {
+  const d = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(d);
+  return d;
+}
 
 const ws: Workspace = {
   name: "demo",
@@ -62,7 +73,7 @@ describe("requiredChecksRuleset", () => {
 
 describe("against a real chant workspace", () => {
   it("reads job names from `chant workspace ls --json`", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "warden-ck-"));
+    const dir = tempDir("warden-ck-");
     execFileSync("git", ["init", "-q"], { cwd: dir });
     mkdirSync(join(dir, "api/.chant"), { recursive: true });
     mkdirSync(join(dir, ".github/workflows"), { recursive: true });

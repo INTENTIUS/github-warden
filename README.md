@@ -78,7 +78,7 @@ npx @intentius/github-warden reconcile --config .github/governance.yml --token-e
 ### `reconcile`
 
 ```
-github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override] [--removal-cap-fraction <value>] [--plan-json <file>]
+github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth] [--mode dry-run|apply] [--cycles a,b,c] [--allow-guardrail-override] [--removal-cap-fraction <value>] [--plan-json <file> [--member <name>]]
 ```
 
 | Flag | Meaning |
@@ -89,7 +89,8 @@ github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth] 
 | `--cycles <name[,name...]>` | Subset of cycles to run (default: all). |
 | `--allow-guardrail-override` | Apply even when guardrails trip. |
 | `--removal-cap-fraction <value>` | `removalDeltaCap` threshold in (0,1] (default 0.25). |
-| `--plan-json <file>` | Write the planned reconcile change sets (one per cycle and org) as JSON for chant's change-set document. Dry-run only. |
+| `--plan-json <file>` | Write the plan as a chant change-set part (lexicon `github`) for chant's change-set document. Dry-run only. |
+| `--member <name>` | The member the `--plan-json` part names (default: the policy file's directory name). |
 
 ### `audit`
 

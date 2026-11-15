@@ -123778,7 +123778,7 @@ ${lanes.join("\n")}
           }
         }
         function createImportCallExpressionAMD(arg, containsLexicalThis) {
-          const resolve14 = factory2.createUniqueName("resolve");
+          const resolve15 = factory2.createUniqueName("resolve");
           const reject2 = factory2.createUniqueName("reject");
           const parameters = [
             factory2.createParameterDeclaration(
@@ -123787,7 +123787,7 @@ ${lanes.join("\n")}
               /*dotDotDotToken*/
               void 0,
               /*name*/
-              resolve14
+              resolve15
             ),
             factory2.createParameterDeclaration(
               /*modifiers*/
@@ -123804,7 +123804,7 @@ ${lanes.join("\n")}
                 factory2.createIdentifier("require"),
                 /*typeArguments*/
                 void 0,
-                [factory2.createArrayLiteralExpression([arg || factory2.createOmittedExpression()]), resolve14, reject2]
+                [factory2.createArrayLiteralExpression([arg || factory2.createOmittedExpression()]), resolve15, reject2]
               )
             )
           ]);
@@ -136614,9 +136614,9 @@ ${lanes.join("\n")}
             /*ignoreCase*/
             false
           )) {
-            const basename4 = getBaseFileName(a.fileName);
-            if (basename4 === "lib.d.ts" || basename4 === "lib.es6.d.ts") return 0;
-            const name = removeSuffix(removePrefix(basename4, "lib."), ".d.ts");
+            const basename5 = getBaseFileName(a.fileName);
+            if (basename5 === "lib.d.ts" || basename5 === "lib.es6.d.ts") return 0;
+            const name = removeSuffix(removePrefix(basename5, "lib."), ".d.ts");
             const index = libs.indexOf(name);
             if (index !== -1) return index + 1;
           }
@@ -200362,8 +200362,8 @@ ${options.prefix}` : "\n" : options.prefix
             }
           };
           for (const file2 of files) {
-            const basename4 = getBaseFileName(file2);
-            if (basename4 === "package.json" || basename4 === "bower.json") {
+            const basename5 = getBaseFileName(file2);
+            if (basename5 === "package.json" || basename5 === "bower.json") {
               createProjectWatcher(
                 file2,
                 "FileWatcher"
@@ -204035,8 +204035,8 @@ All files are: ${JSON.stringify(names)}`,
               var _a7;
               const fileOrDirectoryPath = removeIgnoredPath(this.toPath(fileOrDirectory));
               if (!fileOrDirectoryPath) return;
-              const basename4 = getBaseFileName(fileOrDirectoryPath);
-              if (((_a7 = result.affectedModuleSpecifierCacheProjects) == null ? void 0 : _a7.size) && (basename4 === "package.json" || basename4 === "node_modules")) {
+              const basename5 = getBaseFileName(fileOrDirectoryPath);
+              if (((_a7 = result.affectedModuleSpecifierCacheProjects) == null ? void 0 : _a7.size) && (basename5 === "package.json" || basename5 === "node_modules")) {
                 result.affectedModuleSpecifierCacheProjects.forEach((project2) => {
                   var _a22;
                   (_a22 = project2.getModuleSpecifierCache()) == null ? void 0 : _a22.clear();
@@ -210522,8 +210522,8 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         installPackage(options) {
           this.packageInstallId++;
           const request = { kind: "installPackage", ...options, id: this.packageInstallId };
-          const promise2 = new Promise((resolve14, reject2) => {
-            (this.packageInstalledPromise ?? (this.packageInstalledPromise = /* @__PURE__ */ new Map())).set(this.packageInstallId, { resolve: resolve14, reject: reject2 });
+          const promise2 = new Promise((resolve15, reject2) => {
+            (this.packageInstalledPromise ?? (this.packageInstalledPromise = /* @__PURE__ */ new Map())).set(this.packageInstallId, { resolve: resolve15, reject: reject2 });
           });
           this.installer.send(request);
           return promise2;
@@ -214555,6 +214555,159 @@ var init_runner = __esm({
   }
 });
 
+// node_modules/@intentius/chant/dist/content-digest.js
+import { createHash } from "node:crypto";
+function contentDigest(input) {
+  return `sha256:${createHash("sha256").update(input, "utf8").digest("hex")}`;
+}
+var init_content_digest = __esm({
+  "node_modules/@intentius/chant/dist/content-digest.js"() {
+  }
+});
+
+// node_modules/@intentius/chant/dist/declarable.js
+var DECLARABLE_MARKER;
+var init_declarable = __esm({
+  "node_modules/@intentius/chant/dist/declarable.js"() {
+    DECLARABLE_MARKER = /* @__PURE__ */ Symbol.for("chant.declarable");
+  }
+});
+
+// node_modules/@intentius/chant/dist/intrinsic.js
+var INTRINSIC_MARKER;
+var init_intrinsic = __esm({
+  "node_modules/@intentius/chant/dist/intrinsic.js"() {
+    INTRINSIC_MARKER = /* @__PURE__ */ Symbol.for("chant.intrinsic");
+  }
+});
+
+// node_modules/@intentius/chant/dist/effect-receipt.js
+function canonicalJson(value) {
+  const out = encodeCanonical(value, "$", /* @__PURE__ */ new Set());
+  if (out === void 0) {
+    throw new Error(`canonicalJson: value at $ is not representable in JSON`);
+  }
+  return out;
+}
+function encodeCanonical(value, path, seen) {
+  if (value !== null && (typeof value === "object" || typeof value === "function")) {
+    const toJSON = value.toJSON;
+    if (typeof toJSON === "function") {
+      value = toJSON.call(value);
+    }
+  }
+  if (value === void 0)
+    return void 0;
+  if (value === null)
+    return "null";
+  switch (typeof value) {
+    case "boolean":
+      return value ? "true" : "false";
+    case "number":
+      if (!Number.isFinite(value)) {
+        throw new Error(`canonicalJson: non-finite number at ${path}`);
+      }
+      return String(value);
+    // ECMAScript ToString — what JCS specifies.
+    case "string":
+      return JSON.stringify(value);
+    case "bigint":
+      throw new Error(`canonicalJson: bigint at ${path} is not representable in JSON`);
+    case "function":
+    case "symbol":
+      throw new Error(`canonicalJson: ${typeof value} at ${path} is not representable in JSON`);
+  }
+  const obj = value;
+  if (seen.has(obj)) {
+    throw new Error(`canonicalJson: circular structure at ${path}`);
+  }
+  seen.add(obj);
+  try {
+    if (Array.isArray(obj)) {
+      const parts2 = obj.map((el, i) => encodeCanonical(el, `${path}[${i}]`, seen) ?? "null");
+      return `[${parts2.join(",")}]`;
+    }
+    const keys = Object.keys(obj).sort();
+    const parts = [];
+    for (const key of keys) {
+      const encoded = encodeCanonical(obj[key], `${path}.${key}`, seen);
+      if (encoded !== void 0)
+        parts.push(`${JSON.stringify(key)}:${encoded}`);
+    }
+    return `{${parts.join(",")}}`;
+  } finally {
+    seen.delete(obj);
+  }
+}
+var init_effect_receipt = __esm({
+  "node_modules/@intentius/chant/dist/effect-receipt.js"() {
+    init_content_digest();
+    init_declarable();
+    init_intrinsic();
+  }
+});
+
+// node_modules/@intentius/chant/dist/lifecycle/plan-digest.js
+function computePlanDigest(kind, subject) {
+  return PLAN_DIGEST_PREFIX + contentDigest(canonicalJson({ kind, subject })).slice(LEGACY_PLAN_DIGEST_PREFIX.length);
+}
+var PLAN_DIGEST_PREFIX, LEGACY_PLAN_DIGEST_PREFIX;
+var init_plan_digest = __esm({
+  "node_modules/@intentius/chant/dist/lifecycle/plan-digest.js"() {
+    init_effect_receipt();
+    init_content_digest();
+    PLAN_DIGEST_PREFIX = "jcs1-sha256:";
+    LEGACY_PLAN_DIGEST_PREFIX = "sha256:";
+  }
+});
+
+// node_modules/@intentius/chant/dist/change-set.js
+function topLevelKeys(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort() : [];
+}
+function reconcilePlanPart(input) {
+  const sets = (Array.isArray(input.plan) ? input.plan : [input.plan]).map((cs) => ({ org: cs.org, entries: [...cs.entries].sort((a, b) => byString(`${a.resourceType}\0${a.key}`, `${b.resourceType}\0${b.key}`)) })).sort((a, b) => byString(a.org, b.org));
+  const lexicon = input.lexicon ?? "github";
+  const entries = [];
+  for (const cs of sets) {
+    for (const e of cs.entries) {
+      const attributes = e.kind === "update" ? (e.fields ?? []).map((f) => ({ path: f.field, ...f.before !== void 0 ? { before: f.before } : {}, ...f.after !== void 0 ? { after: f.after } : {} })) : e.kind === "create" ? topLevelKeys(e.after).map((k) => ({ path: k, after: e.after[k] })) : [];
+      entries.push({
+        member: input.member,
+        lexicon,
+        planner: "warden",
+        address: `${e.resourceType}.${e.key}`,
+        type: e.resourceType,
+        name: e.key,
+        action: e.kind,
+        ...e.kind === "delete" ? { disruption: "destroy" } : e.kind === "update" ? { disruption: "unknown" } : {},
+        scope: cs.org,
+        attributes
+      });
+    }
+  }
+  const orgs = [...new Set(sets.map((s) => s.org))];
+  return {
+    member: {
+      member: input.member,
+      lexicon,
+      planner: "warden",
+      ...orgs.length === 1 ? { scope: orgs[0] } : {},
+      status: "planned",
+      planDigest: computePlanDigest("reconcile-plan", sets),
+      holes: []
+    },
+    entries
+  };
+}
+var byString;
+var init_change_set = __esm({
+  "node_modules/@intentius/chant/dist/change-set.js"() {
+    init_plan_digest();
+    byString = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+  }
+});
+
 // node_modules/@intentius/chant/dist/vendor/js-yaml-load.js
 function resolveYamlInteger(data) {
   if (data === null)
@@ -217861,9 +218014,9 @@ var require_picomatch2 = __commonJS({
 
 // node_modules/@intentius/chant/dist/project-root.js
 import { existsSync as existsSync3 } from "fs";
-import { dirname as dirname3, join as join4, resolve as resolve3 } from "path";
+import { dirname as dirname4, join as join4, resolve as resolve4 } from "path";
 function findProjectConfig(startDir) {
-  const resolvedStart = resolve3(startDir);
+  const resolvedStart = resolve4(startDir);
   let dir = resolvedStart;
   for (; ; ) {
     const tsPath = join4(dir, "chant.config.ts");
@@ -217875,7 +218028,7 @@ function findProjectConfig(startDir) {
     if (existsSync3(join4(dir, ".git")) || existsSync3(join4(dir, "package.json"))) {
       return { dir };
     }
-    const parent = dirname3(dir);
+    const parent = dirname4(dir);
     if (parent === dir) {
       return { dir: resolvedStart };
     }
@@ -217883,17 +218036,17 @@ function findProjectConfig(startDir) {
   }
 }
 function findWorkspaceRoot(startDir) {
-  const start = resolve3(startDir);
+  const start = resolve4(startDir);
   let top;
-  for (let dir = start; ; dir = dirname3(dir)) {
+  for (let dir = start; ; dir = dirname4(dir)) {
     if (existsSync3(join4(dir, ".git"))) {
       top = dir;
       break;
     }
-    if (dirname3(dir) === dir)
+    if (dirname4(dir) === dir)
       break;
   }
-  for (let dir = start; ; dir = dirname3(dir)) {
+  for (let dir = start; ; dir = dirname4(dir)) {
     const [json3, jsonc] = WORKSPACE_DECLARATION_FILES.map((name) => join4(dir, name));
     const hasJson = existsSync3(json3);
     const hasJsonc = existsSync3(jsonc);
@@ -217903,7 +218056,7 @@ function findWorkspaceRoot(startDir) {
       return { dir, file: json3 };
     if (hasJsonc)
       return { dir, file: jsonc };
-    if (top === void 0 || dir === top || dirname3(dir) === dir)
+    if (top === void 0 || dir === top || dirname4(dir) === dir)
       return void 0;
   }
 }
@@ -233177,7 +233330,7 @@ var init_bom_writer = __esm({
 
 // node_modules/@intentius/chant/dist/components/verbs/lockfile-sbom-generator.js
 import { readFileSync as readFileSync2, writeFileSync, mkdirSync } from "node:fs";
-import { dirname as dirname4, join as join5 } from "node:path";
+import { dirname as dirname5, join as join5 } from "node:path";
 function parseNpmPackageLock(content) {
   const lock = JSON.parse(content);
   const seen = /* @__PURE__ */ new Map();
@@ -233300,10 +233453,10 @@ function createLockfileSbomGenerator(options = {}) {
       throw new SbomGeneratorNotImplementedError("forImage");
     },
     async forJar(input) {
-      return generateFromDir(dirname4(input.jarPath), input.jarPath, input.digest, input.format);
+      return generateFromDir(dirname5(input.jarPath), input.jarPath, input.digest, input.format);
     },
     async forZip(input) {
-      return generateFromDir(dirname4(input.zipPath), input.zipPath, input.digest, input.format);
+      return generateFromDir(dirname5(input.zipPath), input.zipPath, input.digest, input.format);
     },
     async forDir(input) {
       return generateFromDir(input.path, input.path, void 0, input.format);
@@ -233348,7 +233501,7 @@ var init_sbom_generator = __esm({
 });
 
 // node_modules/@intentius/chant/dist/module-source.js
-import { dirname as dirname5, sep } from "node:path";
+import { dirname as dirname6, sep } from "node:path";
 import { fileURLToPath, pathToFileURL as pathToFileURL2 } from "node:url";
 function sourcePathOf(path) {
   if (!/\.[cm]?js$/.test(path))
@@ -233359,7 +233512,7 @@ function sourcePathOf(path) {
   return path.slice(0, at) + `${sep}src${sep}` + path.slice(at + DIST.length);
 }
 function moduleSourceDir(moduleUrl) {
-  return dirname5(sourcePathOf(fileURLToPath(moduleUrl)));
+  return dirname6(sourcePathOf(fileURLToPath(moduleUrl)));
 }
 function isTypeScriptModule(pathOrUrl) {
   const path = pathOrUrl.replace(/[?#].*$/, "");
@@ -233387,7 +233540,7 @@ var init_module_source = __esm({
 // node_modules/@intentius/chant/dist/ts-loader.js
 import { existsSync as existsSync4, readFileSync as readFileSync3, realpathSync } from "node:fs";
 import * as nodeModule from "node:module";
-import { dirname as dirname6, join as join6, sep as sep2 } from "node:path";
+import { dirname as dirname7, join as join6, sep as sep2 } from "node:path";
 function compiledState() {
   return globalThis[STATE];
 }
@@ -233396,7 +233549,7 @@ function chantPackageSourceTarget(specifier, parentPath) {
   if (!match)
     return void 0;
   const subpath = match[2] ? `.${match[2]}` : ".";
-  let dir = dirname6(parentPath);
+  let dir = dirname7(parentPath);
   for (; ; ) {
     const pkgDir = join6(dir, "node_modules", match[1]);
     const manifest = join6(pkgDir, "package.json");
@@ -233433,7 +233586,7 @@ function chantPackageSourceTarget(specifier, parentPath) {
       const target = join6(pkgDir, star === void 0 ? development : development.split("*").join(star));
       return existsSync4(target) ? realpathSync(target) : void 0;
     }
-    const parent = dirname6(dir);
+    const parent = dirname7(dir);
     if (parent === dir)
       return void 0;
     dir = parent;
@@ -234705,7 +234858,7 @@ is not a problem with esbuild. You need to fix your environment instead.
         let latestResultPromise;
         let provideLatestResult;
         if (isContext)
-          requestCallbacks["on-end"] = (id, request2) => new Promise((resolve14) => {
+          requestCallbacks["on-end"] = (id, request2) => new Promise((resolve15) => {
             buildResponseToResult(request2, (err, result, onEndErrors, onEndWarnings) => {
               const response = {
                 errors: onEndErrors,
@@ -234715,7 +234868,7 @@ is not a problem with esbuild. You need to fix your environment instead.
               latestResultPromise = void 0;
               provideLatestResult = void 0;
               sendResponse(id, response);
-              resolve14();
+              resolve15();
             });
           });
         sendRequest(refs, request, (error51, response) => {
@@ -234732,10 +234885,10 @@ is not a problem with esbuild. You need to fix your environment instead.
           let didDispose = false;
           const result = {
             rebuild: () => {
-              if (!latestResultPromise) latestResultPromise = new Promise((resolve14, reject2) => {
+              if (!latestResultPromise) latestResultPromise = new Promise((resolve15, reject2) => {
                 let settlePromise;
                 provideLatestResult = (err, result2) => {
-                  if (!settlePromise) settlePromise = () => err ? reject2(err) : resolve14(result2);
+                  if (!settlePromise) settlePromise = () => err ? reject2(err) : resolve15(result2);
                 };
                 const triggerAnotherBuild = () => {
                   const request2 = {
@@ -234756,7 +234909,7 @@ is not a problem with esbuild. You need to fix your environment instead.
               });
               return latestResultPromise;
             },
-            watch: (options2 = {}) => new Promise((resolve14, reject2) => {
+            watch: (options2 = {}) => new Promise((resolve15, reject2) => {
               if (!streamIn.hasFS) throw new Error(`Cannot use the "watch" API in this environment`);
               const keys = {};
               const delay = getFlag(options2, keys, "delay", mustBeInteger);
@@ -234768,10 +234921,10 @@ is not a problem with esbuild. You need to fix your environment instead.
               if (delay) request2.delay = delay;
               sendRequest(refs, request2, (error210) => {
                 if (error210) reject2(new Error(error210));
-                else resolve14(void 0);
+                else resolve15(void 0);
               });
             }),
-            serve: (options2 = {}) => new Promise((resolve14, reject2) => {
+            serve: (options2 = {}) => new Promise((resolve15, reject2) => {
               if (!streamIn.hasFS) throw new Error(`Cannot use the "serve" API in this environment`);
               const keys = {};
               const port = getFlag(options2, keys, "port", mustBeValidPortNumber);
@@ -234809,28 +234962,28 @@ is not a problem with esbuild. You need to fix your environment instead.
                     sendResponse(id, {});
                   };
                 }
-                resolve14(response2);
+                resolve15(response2);
               });
             }),
-            cancel: () => new Promise((resolve14) => {
-              if (didDispose) return resolve14();
+            cancel: () => new Promise((resolve15) => {
+              if (didDispose) return resolve15();
               const request2 = {
                 command: "cancel",
                 key: buildKey
               };
               sendRequest(refs, request2, () => {
-                resolve14();
+                resolve15();
               });
             }),
-            dispose: () => new Promise((resolve14) => {
-              if (didDispose) return resolve14();
+            dispose: () => new Promise((resolve15) => {
+              if (didDispose) return resolve15();
               didDispose = true;
               const request2 = {
                 command: "dispose",
                 key: buildKey
               };
               sendRequest(refs, request2, () => {
-                resolve14();
+                resolve15();
                 scheduleOnDisposeCallbacks();
                 refs.unref();
               });
@@ -234869,7 +235022,7 @@ is not a problem with esbuild. You need to fix your environment instead.
             onLoad: []
           };
           i++;
-          let resolve14 = (path3, options = {}) => {
+          let resolve15 = (path3, options = {}) => {
             if (!isSetupDone) throw new Error('Cannot call "resolve" before plugin setup has completed');
             if (typeof path3 !== "string") throw new Error(`The path to resolve must be a string`);
             let keys2 = /* @__PURE__ */ Object.create(null);
@@ -234913,7 +235066,7 @@ is not a problem with esbuild. You need to fix your environment instead.
           };
           let promise2 = setup({
             initialOptions,
-            resolve: resolve14,
+            resolve: resolve15,
             onStart(callback) {
               let registeredText = `This error came from the "onStart" callback registered here:`;
               let registeredNote = extractCallerV8(new Error(registeredText), streamIn, "onStart");
@@ -235800,46 +235953,46 @@ More information: The file containing the code for esbuild's JavaScript API (${_
         }
       };
       longLivedService = {
-        build: (options) => new Promise((resolve14, reject2) => {
+        build: (options) => new Promise((resolve15, reject2) => {
           service.buildOrContext({
             callName: "build",
             refs,
             options,
             isTTY: isTTY(),
             defaultWD,
-            callback: (err, res) => err ? reject2(err) : resolve14(res)
+            callback: (err, res) => err ? reject2(err) : resolve15(res)
           });
         }),
-        context: (options) => new Promise((resolve14, reject2) => service.buildOrContext({
+        context: (options) => new Promise((resolve15, reject2) => service.buildOrContext({
           callName: "context",
           refs,
           options,
           isTTY: isTTY(),
           defaultWD,
-          callback: (err, res) => err ? reject2(err) : resolve14(res)
+          callback: (err, res) => err ? reject2(err) : resolve15(res)
         })),
-        transform: (input, options) => new Promise((resolve14, reject2) => service.transform({
+        transform: (input, options) => new Promise((resolve15, reject2) => service.transform({
           callName: "transform",
           refs,
           input,
           options: options || {},
           isTTY: isTTY(),
           fs: fsAsync,
-          callback: (err, res) => err ? reject2(err) : resolve14(res)
+          callback: (err, res) => err ? reject2(err) : resolve15(res)
         })),
-        formatMessages: (messages, options) => new Promise((resolve14, reject2) => service.formatMessages({
+        formatMessages: (messages, options) => new Promise((resolve15, reject2) => service.formatMessages({
           callName: "formatMessages",
           refs,
           messages,
           options,
-          callback: (err, res) => err ? reject2(err) : resolve14(res)
+          callback: (err, res) => err ? reject2(err) : resolve15(res)
         })),
-        analyzeMetafile: (metafile, options) => new Promise((resolve14, reject2) => service.analyzeMetafile({
+        analyzeMetafile: (metafile, options) => new Promise((resolve15, reject2) => service.analyzeMetafile({
           callName: "analyzeMetafile",
           refs,
           metafile: typeof metafile === "string" ? metafile : JSON.stringify(metafile),
           options,
-          callback: (err, res) => err ? reject2(err) : resolve14(res)
+          callback: (err, res) => err ? reject2(err) : resolve15(res)
         }))
       };
       return longLivedService;
@@ -235917,13 +236070,13 @@ error: ${text2}`);
         worker.postMessage(msg);
         let status = Atomics.wait(sharedBufferView, 0, 0);
         if (status !== "ok" && status !== "not-equal") throw new Error("Internal error: Atomics.wait() failed: " + status);
-        let { message: { id: id2, resolve: resolve14, reject: reject2, properties } } = worker_threads2.receiveMessageOnPort(mainPort);
+        let { message: { id: id2, resolve: resolve15, reject: reject2, properties } } = worker_threads2.receiveMessageOnPort(mainPort);
         if (id !== id2) throw new Error(`Internal error: Expected id ${id} but got id ${id2}`);
         if (reject2) {
           applyProperties(reject2, properties);
           throw reject2;
         }
-        return resolve14;
+        return resolve15;
       };
       worker.unref();
       return {
@@ -236010,7 +236163,7 @@ error: ${text2}`);
 import { existsSync as existsSync5, mkdtempSync, readFileSync as readFileSync4, realpathSync as realpathSync2, rmSync, statSync as statSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { createRequire as createRequire3 } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname as dirname7, join as join7, resolve as resolvePath } from "node:path";
+import { dirname as dirname8, join as join7, resolve as resolvePath } from "node:path";
 function getExternalPackagePathCache() {
   const g = globalThis;
   return g.__chantExternalPackagePathCache ?? (g.__chantExternalPackagePathCache = /* @__PURE__ */ new Map());
@@ -236043,7 +236196,7 @@ function fastResolvePackage(specifier, fromDir) {
         return void 0;
       }
     }
-    const parent = dirname7(dir);
+    const parent = dirname8(dir);
     if (parent === dir)
       return void 0;
     dir = parent;
@@ -236063,7 +236216,7 @@ function externalTrustedPackagesPlugin() {
       if (path === void 0)
         continue;
       resolved.set(name, path);
-      readPaths.push(dirname7(path));
+      readPaths.push(dirname8(path));
     } catch {
       pathCache.set(name, void 0);
     }
@@ -236142,7 +236295,7 @@ var init_params = __esm({
 });
 
 // node_modules/@intentius/chant/dist/discovery/sandbox/driver.js
-import { dirname as dirname8, join as join8 } from "node:path";
+import { dirname as dirname9, join as join8 } from "node:path";
 function lit(value) {
   return JSON.stringify(value);
 }
@@ -236227,12 +236380,12 @@ var init_driver = __esm({
     RESOLVE_MODULE = join8(DISCOVERY_DIR, "resolve.ts");
     ENTITY_WIRE_CODEC_MODULE = join8(DISCOVERY_DIR, "entity-wire-codec.ts");
     CHILD_ERRORS_MODULE = join8(HERE2, "child-errors.ts");
-    PROVENANCE_MODULE = join8(dirname8(DISCOVERY_DIR), "provenance.ts");
+    PROVENANCE_MODULE = join8(dirname9(DISCOVERY_DIR), "provenance.ts");
     CONFIG_WIRE_MODULE = join8(HERE2, "config-wire.ts");
     POLICY_WIRE_MODULE = join8(HERE2, "policy-wire.ts");
-    POST_SYNTH_MODULE = join8(dirname8(DISCOVERY_DIR), "lint", "post-synth.ts");
-    PARAMS_MODULE = join8(dirname8(DISCOVERY_DIR), "params.ts");
-    INTEROP_MODULE = join8(dirname8(DISCOVERY_DIR), "module-interop.ts");
+    POST_SYNTH_MODULE = join8(dirname9(DISCOVERY_DIR), "lint", "post-synth.ts");
+    PARAMS_MODULE = join8(dirname9(DISCOVERY_DIR), "params.ts");
+    INTEROP_MODULE = join8(dirname9(DISCOVERY_DIR), "module-interop.ts");
   }
 });
 
@@ -236399,7 +236552,7 @@ __export(config_run_exports, {
   evaluateConfigSandboxed: () => evaluateConfigSandboxed
 });
 import { realpathSync as realpathSync3, rmSync as rmSync2 } from "node:fs";
-import { resolve as resolve4 } from "node:path";
+import { resolve as resolve5 } from "node:path";
 function isConfigChildResponse(value) {
   return typeof value === "object" && value !== null && value.kind === "chant-config" && typeof value.ok === "boolean";
 }
@@ -236409,9 +236562,9 @@ async function evaluateConfigSandboxed(configPath2, projectRoot) {
   try {
     let projectRealpath;
     try {
-      projectRealpath = realpathSync3(resolve4(projectRoot));
+      projectRealpath = realpathSync3(resolve5(projectRoot));
     } catch {
-      projectRealpath = resolve4(projectRoot);
+      projectRealpath = resolve5(projectRoot);
     }
     const env2 = { PATH: process.env.PATH ?? "" };
     const activeEnv = process.env[ENV_VAR];
@@ -236453,12 +236606,12 @@ var init_config_run = __esm({
 });
 
 // node_modules/@intentius/chant/dist/config-sandbox.js
-import { dirname as dirname9 } from "node:path";
+import { dirname as dirname10 } from "node:path";
 function selectConfigExport(namespace) {
   const ns = esModuleNamespace(namespace);
   return ns.default ?? ns.config ?? ns;
 }
-async function evaluateProjectConfig(configPath2, projectRoot = dirname9(configPath2)) {
+async function evaluateProjectConfig(configPath2, projectRoot = dirname10(configPath2)) {
   if (!armed) {
     return selectConfigExport(await importConfigModule(configPath2));
   }
@@ -236481,7 +236634,7 @@ var init_config_sandbox = __esm({
 
 // node_modules/@intentius/chant/dist/lexicon-module.js
 import { createRequire as createRequire4 } from "node:module";
-import { dirname as dirname10, isAbsolute, join as join9, relative as relative2, resolve as resolve5, sep as sep3 } from "node:path";
+import { dirname as dirname11, isAbsolute, join as join9, relative as relative2, resolve as resolve6, sep as sep3 } from "node:path";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 function lexiconDeclarationName(entry) {
   return typeof entry === "string" ? entry : entry.name;
@@ -236494,11 +236647,11 @@ function isWithin(path, dir) {
   return rel === "" || !rel.startsWith("..") && !isAbsolute(rel);
 }
 function pathLexiconRoot(entry, baseDir, sourceDir = ".") {
-  const modulePath = isAbsolute(entry.module) ? entry.module : resolve5(baseDir, entry.module);
+  const modulePath = isAbsolute(entry.module) ? entry.module : resolve6(baseDir, entry.module);
   const declared = entry.root !== void 0;
-  const candidate = declared ? isAbsolute(entry.root) ? resolve5(entry.root) : resolve5(baseDir, entry.root) : dirname10(modulePath);
-  const project2 = resolve5(baseDir);
-  const source = resolve5(baseDir, sourceDir);
+  const candidate = declared ? isAbsolute(entry.root) ? resolve6(entry.root) : resolve6(baseDir, entry.root) : dirname11(modulePath);
+  const project2 = resolve6(baseDir);
+  const source = resolve6(baseDir, sourceDir);
   let problem;
   if (!isWithin(candidate, project2))
     problem = `${candidate} is outside the project (${project2})`;
@@ -236530,7 +236683,7 @@ function registerLexiconDeclarations(entries, baseDir, sourceDir) {
   return recorded;
 }
 function declaredModulePath(entry, baseDir) {
-  return isAbsolute(entry.module) ? entry.module : resolve5(baseDir, entry.module);
+  return isAbsolute(entry.module) ? entry.module : resolve6(baseDir, entry.module);
 }
 function lexiconModulePath(name) {
   return modulePaths.get(name);
@@ -236866,7 +237019,7 @@ var init_config_environments = __esm({
 
 // node_modules/@intentius/chant/dist/config.js
 import { existsSync as existsSync6, readFileSync as readFileSync5 } from "fs";
-import { dirname as dirname11, join as join10, resolve as resolve6 } from "path";
+import { dirname as dirname12, join as join10, resolve as resolve7 } from "path";
 async function loadChantConfig(dir) {
   const tsPath = join10(dir, "chant.config.ts");
   if (existsSync6(tsPath)) {
@@ -236891,7 +237044,7 @@ async function loadChantConfigUpward(startDir) {
 function findProjectConfigPastFragments(startDir) {
   let { dir, configPath: configPath2 } = findProjectConfig(startDir);
   while (configPath2 && isLintOnlyFragment(configPath2)) {
-    const parent = dirname11(dir);
+    const parent = dirname12(dir);
     if (parent === dir)
       break;
     ({ dir, configPath: configPath2 } = findProjectConfig(parent));
@@ -236910,7 +237063,7 @@ async function resolveDiscoveryGlobs(startDir, options = {}) {
       throw err;
     return void 0;
   }
-  const rootBuild = options.sourceWalk === true && config2.sourceDir === void 0 && resolve6(startDir) === resolve6(dir);
+  const rootBuild = options.sourceWalk === true && config2.sourceDir === void 0 && resolve7(startDir) === resolve7(dir);
   const exclude = [...config2.exclude ?? [], ...rootBuild ? ROOT_SOURCE_EXCLUDES : []];
   const include = config2.include ?? [];
   if (exclude.length === 0 && include.length === 0)
@@ -236957,7 +237110,7 @@ function normalizeConfig(raw, source) {
     throw new InvalidChantConfigError(`Invalid chant config${loc2}: ${path ? `${path}: ` : ""}${issue2.message}`, issue2.path.length > 0 ? String(issue2.path[0]) : void 0);
   }
   const lexicons = raw.lexicons;
-  const baseDir = source !== void 0 ? dirname11(source) : process.cwd();
+  const baseDir = source !== void 0 ? dirname12(source) : process.cwd();
   const sourceDir = raw.sourceDir;
   for (const [i, entry] of (lexicons ?? []).entries()) {
     if (typeof entry === "string" || entry.root === void 0)
@@ -237169,7 +237322,7 @@ var init_retention_policy = __esm({
 });
 
 // node_modules/@intentius/chant/dist/pr-report-url.js
-import { dirname as dirname12, isAbsolute as isAbsolute2, join as join11 } from "node:path";
+import { dirname as dirname13, isAbsolute as isAbsolute2, join as join11 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function parseReportUrl(raw, name = "--report-url") {
   const url2 = raw.trim();
@@ -240098,17 +240251,17 @@ var init_identity_gate_rule = __esm({
 
 // node_modules/@intentius/chant/dist/workspace/class-data.js
 import { existsSync as existsSync7, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
-import { dirname as dirname13, join as join13, posix as posix2, resolve as resolve7 } from "node:path";
+import { dirname as dirname14, join as join13, posix as posix2, resolve as resolve8 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function findInstalledPackage(name, fromDir) {
-  for (let dir = resolve7(fromDir); ; dir = dirname13(dir)) {
+  for (let dir = resolve8(fromDir); ; dir = dirname14(dir)) {
     const candidate = join13(dir, "node_modules", ...name.split("/"));
     try {
       if (statSync4(candidate).isDirectory() && existsSync7(join13(candidate, "package.json")))
         return candidate;
     } catch {
     }
-    if (dirname13(dir) === dir)
+    if (dirname14(dir) === dir)
       return void 0;
   }
 }
@@ -240116,7 +240269,7 @@ var CHANT_INSTALL, CORE_ROLES;
 var init_class_data = __esm({
   "node_modules/@intentius/chant/dist/workspace/class-data.js"() {
     init_identity_gate_rule();
-    CHANT_INSTALL = dirname13(fileURLToPath3(import.meta.url));
+    CHANT_INSTALL = dirname14(fileURLToPath3(import.meta.url));
     CORE_ROLES = new Set(CORE_CLASSES.map((c) => c.role).filter((r) => r !== null));
   }
 });
@@ -243737,12 +243890,12 @@ var init_gate_plan_context = __esm({
 });
 
 // node_modules/@intentius/chant/dist/op/gate-approval-base.js
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 function isStepOutputRef(value) {
   return typeof value === "object" && value !== null && value[STEP_OUTPUT_REF_BRAND] === true;
 }
 function gatePolicyVersion(text2) {
-  return `sha256:${createHash("sha256").update(text2).digest("hex")}`;
+  return `sha256:${createHash2("sha256").update(text2).digest("hex")}`;
 }
 function isGatePolicyRef(value) {
   if (typeof value !== "object" || value === null)
@@ -244918,9 +245071,9 @@ var init_declaration = __esm({
 // node_modules/@intentius/chant/dist/discovery/walk.js
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { closeSync, existsSync as existsSync8, openSync, readdirSync as readdirSync3, readSync, statSync as statSync5 } from "node:fs";
-import { isAbsolute as isAbsolute3, join as join14, relative as relative3, resolve as resolve8, sep as sep4 } from "node:path";
+import { isAbsolute as isAbsolute3, join as join14, relative as relative3, resolve as resolve9, sep as sep4 } from "node:path";
 function partsBelow(home, full) {
-  const rel = relative3(home, resolve8(full));
+  const rel = relative3(home, resolve9(full));
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep4}`) || isAbsolute3(rel))
     return void 0;
   return rel.split(sep4);
@@ -244928,7 +245081,7 @@ function partsBelow(home, full) {
 function compileGlobs(globs) {
   if (!globs || globs.exclude.length === 0 && globs.include.length === 0)
     return void 0;
-  const home = resolve8(globs.root);
+  const home = resolve9(globs.root);
   const matcher = (patterns) => {
     if (patterns.length === 0)
       return () => false;
@@ -244964,7 +245117,7 @@ function gitIgnoredBelow(root) {
     return /* @__PURE__ */ new Set();
   }
   const ignored = /* @__PURE__ */ new Set();
-  const abs = resolve8(root);
+  const abs = resolve9(root);
   for (const entry of out.split("\0")) {
     if (entry === "")
       continue;
@@ -244988,7 +245141,7 @@ async function workspaceMemberDirs(root) {
   const found = findWorkspaceRoot(root);
   if (!found)
     return [];
-  const start = resolve8(root);
+  const start = resolve9(root);
   const [{ readDeclaration: readDeclaration2, resolveGroups: resolveGroups2, rootExclusions: rootExclusions2 }, { workingTree: workingTree2 }] = await Promise.all([
     Promise.resolve().then(() => (init_declaration(), declaration_exports)),
     Promise.resolve().then(() => (init_tree(), tree_exports))
@@ -244997,7 +245150,7 @@ async function workspaceMemberDirs(root) {
   try {
     const tree = workingTree2(found.dir);
     const declaration = readDeclaration2(tree);
-    dirs = rootExclusions2(declaration, resolveGroups2(declaration, tree)).map((e) => resolve8(found.dir, e.dir));
+    dirs = rootExclusions2(declaration, resolveGroups2(declaration, tree)).map((e) => resolve9(found.dir, e.dir));
   } catch {
     return [];
   }
@@ -245022,10 +245175,10 @@ function walkDiscovery(opts) {
   const globs = compileGlobs(opts.globs);
   const ignored = gitIgnoredBelow(opts.root);
   const boundaries = childProjectsAreBoundaries(opts.walker, opts.root);
-  const excludeDirs = new Set((opts.excludeDirs ?? []).map((d) => resolve8(d)));
+  const excludeDirs = new Set((opts.excludeDirs ?? []).map((d) => resolve9(d)));
   const dotDirsKept = opts.walker === "audit" ? AUDIT_DOT_DIRS : /* @__PURE__ */ new Set();
   const limit = opts.limit;
-  const isIgnored = (full) => ignored.size > 0 && ignored.has(resolve8(full));
+  const isIgnored = (full) => ignored.size > 0 && ignored.has(resolve9(full));
   const take = (full) => {
     if (limit && out.length >= limit.max) {
       limit.truncated = true;
@@ -245064,7 +245217,7 @@ function walkDiscovery(opts) {
       const full = join14(dir, e.name);
       const type2 = kind(dir, e);
       if (type2 === "dir") {
-        if (NEVER_ENTER.has(e.name) || excludeDirs.has(resolve8(full)))
+        if (NEVER_ENTER.has(e.name) || excludeDirs.has(resolve9(full)))
           continue;
         const dotSkip = e.name.startsWith(".") && !dotDirsKept.has(e.name);
         if (dotSkip && opts.takeSkippedDir?.(e.name, full)) {
@@ -246331,14 +246484,6 @@ var init_config_static = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/declarable.js
-var DECLARABLE_MARKER;
-var init_declarable = __esm({
-  "node_modules/@intentius/chant/dist/declarable.js"() {
-    DECLARABLE_MARKER = /* @__PURE__ */ Symbol.for("chant.declarable");
-  }
-});
-
 // node_modules/@intentius/chant/dist/held-elsewhere.js
 var init_held_elsewhere = __esm({
   "node_modules/@intentius/chant/dist/held-elsewhere.js"() {
@@ -246408,90 +246553,6 @@ var init_secret_materialization = __esm({
         return REDACTED;
       }
     };
-  }
-});
-
-// node_modules/@intentius/chant/dist/content-digest.js
-import { createHash as createHash2 } from "node:crypto";
-function contentDigest(input) {
-  return `sha256:${createHash2("sha256").update(input, "utf8").digest("hex")}`;
-}
-var init_content_digest = __esm({
-  "node_modules/@intentius/chant/dist/content-digest.js"() {
-  }
-});
-
-// node_modules/@intentius/chant/dist/intrinsic.js
-var INTRINSIC_MARKER;
-var init_intrinsic = __esm({
-  "node_modules/@intentius/chant/dist/intrinsic.js"() {
-    INTRINSIC_MARKER = /* @__PURE__ */ Symbol.for("chant.intrinsic");
-  }
-});
-
-// node_modules/@intentius/chant/dist/effect-receipt.js
-function canonicalJson(value) {
-  const out = encodeCanonical(value, "$", /* @__PURE__ */ new Set());
-  if (out === void 0) {
-    throw new Error(`canonicalJson: value at $ is not representable in JSON`);
-  }
-  return out;
-}
-function encodeCanonical(value, path, seen) {
-  if (value !== null && (typeof value === "object" || typeof value === "function")) {
-    const toJSON = value.toJSON;
-    if (typeof toJSON === "function") {
-      value = toJSON.call(value);
-    }
-  }
-  if (value === void 0)
-    return void 0;
-  if (value === null)
-    return "null";
-  switch (typeof value) {
-    case "boolean":
-      return value ? "true" : "false";
-    case "number":
-      if (!Number.isFinite(value)) {
-        throw new Error(`canonicalJson: non-finite number at ${path}`);
-      }
-      return String(value);
-    // ECMAScript ToString — what JCS specifies.
-    case "string":
-      return JSON.stringify(value);
-    case "bigint":
-      throw new Error(`canonicalJson: bigint at ${path} is not representable in JSON`);
-    case "function":
-    case "symbol":
-      throw new Error(`canonicalJson: ${typeof value} at ${path} is not representable in JSON`);
-  }
-  const obj = value;
-  if (seen.has(obj)) {
-    throw new Error(`canonicalJson: circular structure at ${path}`);
-  }
-  seen.add(obj);
-  try {
-    if (Array.isArray(obj)) {
-      const parts2 = obj.map((el, i) => encodeCanonical(el, `${path}[${i}]`, seen) ?? "null");
-      return `[${parts2.join(",")}]`;
-    }
-    const keys = Object.keys(obj).sort();
-    const parts = [];
-    for (const key of keys) {
-      const encoded = encodeCanonical(obj[key], `${path}.${key}`, seen);
-      if (encoded !== void 0)
-        parts.push(`${JSON.stringify(key)}:${encoded}`);
-    }
-    return `{${parts.join(",")}}`;
-  } finally {
-    seen.delete(obj);
-  }
-}
-var init_effect_receipt = __esm({
-  "node_modules/@intentius/chant/dist/effect-receipt.js"() {
-    init_content_digest();
-    init_declarable();
-    init_intrinsic();
   }
 });
 
@@ -247417,10 +247478,10 @@ var init_format = __esm({
 });
 
 // node_modules/@intentius/chant/dist/runtime-adapter.js
-import { dirname as dirname14 } from "path";
+import { dirname as dirname15 } from "path";
 import { fileURLToPath as fileURLToPath5 } from "url";
 function moduleDir(importMetaUrl) {
-  return dirname14(fileURLToPath5(importMetaUrl));
+  return dirname15(fileURLToPath5(importMetaUrl));
 }
 var init_runtime_adapter = __esm({
   "node_modules/@intentius/chant/dist/runtime-adapter.js"() {
@@ -247749,7 +247810,7 @@ var init_strict = __esm({
 });
 
 // node_modules/@intentius/chant/dist/lint/config.js
-import { join as join15, dirname as dirname15, resolve as resolve9 } from "path";
+import { join as join15, dirname as dirname16, resolve as resolve10 } from "path";
 var BUILTIN_PRESETS, SeveritySchema, RuleConfigSchema, LintConfigSchema, DEFAULT_CONFIG;
 var init_config2 = __esm({
   "node_modules/@intentius/chant/dist/lint/config.js"() {
@@ -247760,8 +247821,8 @@ var init_config2 = __esm({
     init_strict();
     init_project_root();
     BUILTIN_PRESETS = {
-      "@intentius/chant/lint/presets/strict": resolve9(moduleDir(import.meta.url), "presets/strict.json"),
-      "@intentius/chant/lint/presets/relaxed": resolve9(moduleDir(import.meta.url), "presets/relaxed.json")
+      "@intentius/chant/lint/presets/strict": resolve10(moduleDir(import.meta.url), "presets/strict.json"),
+      "@intentius/chant/lint/presets/relaxed": resolve10(moduleDir(import.meta.url), "presets/relaxed.json")
     };
     SeveritySchema = external_exports.enum(["off", "error", "warning", "info"]);
     RuleConfigSchema = external_exports.union([
@@ -247877,11 +247938,11 @@ function q(value) {
 function probeBoltPort(endpoint, timeoutMs = 5e3) {
   const [host, portStr] = endpoint.split(":");
   const port = Number(portStr ?? 7687);
-  return new Promise((resolve14) => {
+  return new Promise((resolve15) => {
     const socket = createConnection({ host, port, timeout: timeoutMs });
     const finish = (healthy) => {
       socket.destroy();
-      resolve14(healthy);
+      resolve15(healthy);
     };
     socket.once("connect", () => finish(true));
     socket.once("timeout", () => finish(false));
@@ -247897,7 +247958,7 @@ function defaultCloudExecutor() {
   return defaultExecutor;
 }
 function sleep(ms) {
-  return new Promise((resolve14) => setTimeout(resolve14, ms));
+  return new Promise((resolve15) => setTimeout(resolve15, ms));
 }
 var execFileAsync, realDocker, realNeo4j, defaultExecutor;
 var init_cloud_executor = __esm({
@@ -248194,8 +248255,8 @@ function createPublishArtifactCapability(options = {}) {
     async run(ctx, input) {
       const localPath = archiveRelativePath(input.from);
       const digest = `sha256:${createHash4("sha256").update(readFileSync11(localPath)).digest("hex")}`;
-      const basename4 = localPath.split("/").pop() ?? localPath;
-      const uri = input.to.endsWith("/") ? `${input.to}${basename4}` : input.to;
+      const basename5 = localPath.split("/").pop() ?? localPath;
+      const uri = input.to.endsWith("/") ? `${input.to}${basename5}` : input.to;
       const envBackend = ctx.vars?.publish?.backend;
       const backend = selectStorageBackend(backends, uri, input.backend ?? (typeof envBackend === "string" ? envBackend : void 0));
       await backend.upload({ from: localPath, to: uri });
@@ -248266,7 +248327,7 @@ var init_sbom = __esm({
 });
 
 // node_modules/@intentius/chant/dist/components/verbs/tool-sbom-generator.js
-import { basename, dirname as dirname16, join as join17 } from "node:path";
+import { basename as basename2, dirname as dirname17, join as join17 } from "node:path";
 import { existsSync as existsSync10 } from "node:fs";
 function countPackages(format, bytes) {
   try {
@@ -248281,7 +248342,7 @@ function countPackages(format, bytes) {
 }
 function scratchPath(workDir, subject, format) {
   const dir = workDir ?? "/tmp/chant-sbom";
-  const safeName = basename(subject).replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const safeName = basename2(subject).replace(/[^a-zA-Z0-9_.-]/g, "_");
   return join17(dir, `${safeName}.${Date.now()}.${format}.json`);
 }
 function createToolSbomGenerator(options = {}) {
@@ -248296,7 +248357,7 @@ function createToolSbomGenerator(options = {}) {
   return {
     async forImage(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
-      const buildContext = dirname16(input.imagePath);
+      const buildContext = dirname17(input.imagePath);
       const hasDockerfile = existsSync10(join17(buildContext, "Dockerfile"));
       if (hasDockerfile && await runner.available("docker")) {
         const out = scratchPath(options.workDir, input.imagePath, format);
@@ -248315,12 +248376,12 @@ function createToolSbomGenerator(options = {}) {
     },
     async forJar(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
-      const projectDir = dirname16(input.jarPath);
+      const projectDir = dirname17(input.jarPath);
       const hasPom = existsSync10(join17(projectDir, "pom.xml"));
       if (hasPom && await runner.available("mvn")) {
         await requireTool(runner, "mvn", `run cyclonedx-maven against ${projectDir}`);
         const out = scratchPath(options.workDir, input.jarPath, "cyclonedx");
-        await runner.run(`mvn -f ${q2(join17(projectDir, "pom.xml"))} org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json -DoutputName=${q2(basename(out, ".json"))}`, { cwd: projectDir });
+        await runner.run(`mvn -f ${q2(join17(projectDir, "pom.xml"))} org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json -DoutputName=${q2(basename2(out, ".json"))}`, { cwd: projectDir });
         const { stdout } = await runner.run(`cat ${q2(out)}`);
         return {
           format: "cyclonedx",
@@ -248850,20 +248911,6 @@ var init_r2_sync = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/lifecycle/plan-digest.js
-function computePlanDigest(kind, subject) {
-  return PLAN_DIGEST_PREFIX + contentDigest(canonicalJson({ kind, subject })).slice(LEGACY_PLAN_DIGEST_PREFIX.length);
-}
-var PLAN_DIGEST_PREFIX, LEGACY_PLAN_DIGEST_PREFIX;
-var init_plan_digest = __esm({
-  "node_modules/@intentius/chant/dist/lifecycle/plan-digest.js"() {
-    init_effect_receipt();
-    init_content_digest();
-    PLAN_DIGEST_PREFIX = "jcs1-sha256:";
-    LEGACY_PLAN_DIGEST_PREFIX = "sha256:";
-  }
-});
-
 // node_modules/@intentius/chant/dist/workspace/which-chant.js
 var which_chant_exports = {};
 __export(which_chant_exports, {
@@ -248875,7 +248922,7 @@ __export(which_chant_exports, {
 });
 import { spawn } from "node:child_process";
 import { existsSync as existsSync11, readFileSync as readFileSync12, realpathSync as realpathSync4 } from "node:fs";
-import { join as join18, relative as relative5, resolve as resolve10 } from "node:path";
+import { join as join18, relative as relative5, resolve as resolve11 } from "node:path";
 function locateWorkspace(cwd, at) {
   const top = gitTop(cwd);
   if (at !== void 0) {
@@ -248885,7 +248932,7 @@ function locateWorkspace(cwd, at) {
     if (!commit)
       throw new WorkspaceReadError2("revision-unknown", `--at ${at} names no commit in this repository`);
     const whole = gitTree(top, commit);
-    const start = posix3(relative5(top, realpathSync4(resolve10(cwd))));
+    const start = posix3(relative5(top, realpathSync4(resolve11(cwd))));
     const found2 = findDeclarationDir(whole, start.startsWith("..") ? "" : start);
     if (found2 === void 0) {
       throw new WorkspaceReadError2("declaration-missing", `no chant.workspace.json or .jsonc between ${start || "."} and the git root at ${commit.slice(0, 8)}`);
@@ -248996,7 +249043,7 @@ function outputsPart(member, planDigest, unknown2) {
 function memberOutputsCapability(options = {}) {
   const sources = options.sources ?? [];
   const lookup = options.lookup ?? workspaceMemberLookup;
-  async function resolve14(input) {
+  async function resolve15(input) {
     requireMember(input);
     const ref = await lookup(input.cwd ?? process.cwd(), input.member);
     const source = sources.find((s) => s.kinds.includes(ref.kind));
@@ -249010,7 +249057,7 @@ function memberOutputsCapability(options = {}) {
     rollbackPolicy: "none-by-design",
     targets: { refuse: "it reads another member's outputs; narrow that member's own plan instead" },
     async plan(ctx, input) {
-      const { ref, source } = await resolve14(input);
+      const { ref, source } = await resolve15(input);
       const planned = await source.planned(ctx, ref);
       const unknown2 = [...new Set(planned.unknown)].sort();
       const known = Object.fromEntries(Object.entries(planned.known).filter(([name]) => !unknown2.includes(name)));
@@ -249019,11 +249066,11 @@ function memberOutputsCapability(options = {}) {
       return { member, planDigest, changeSet: outputsPart(ref.member, planDigest, unknown2), outputs: { known, unknown: unknown2 } };
     },
     async outputs(ctx, input) {
-      const { ref, source } = await resolve14(input);
+      const { ref, source } = await resolve15(input);
       return source.applied(ctx, ref);
     },
     async run(ctx, input) {
-      const { ref, source } = await resolve14(input);
+      const { ref, source } = await resolve15(input);
       const now = await source.planned(ctx, ref);
       if (now.changes)
         throw new MemberOutputsPendingError(ref.member);
@@ -250389,7 +250436,7 @@ var init_disruption = __esm({
 });
 
 // node_modules/@intentius/chant/dist/lifecycle/change-set.js
-var init_change_set = __esm({
+var init_change_set2 = __esm({
   "node_modules/@intentius/chant/dist/lifecycle/change-set.js"() {
     init_live_diff();
     init_observation();
@@ -250532,18 +250579,11 @@ var init_delivery_metrics = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/change-set.js
-var init_change_set2 = __esm({
-  "node_modules/@intentius/chant/dist/change-set.js"() {
-    init_plan_digest();
-  }
-});
-
 // node_modules/@intentius/chant/dist/lifecycle/change-set-store.js
 var init_change_set_store = __esm({
   "node_modules/@intentius/chant/dist/lifecycle/change-set-store.js"() {
     init_utils();
-    init_change_set2();
+    init_change_set();
     init_git();
   }
 });
@@ -250633,7 +250673,7 @@ var init_assert_live = __esm({
 // node_modules/@intentius/chant/dist/lifecycle/symptoms.js
 var init_symptoms = __esm({
   "node_modules/@intentius/chant/dist/lifecycle/symptoms.js"() {
-    init_change_set();
+    init_change_set2();
     init_observation();
   }
 });
@@ -250664,7 +250704,7 @@ var init_run_ledger = __esm({
 // node_modules/@intentius/chant/dist/lifecycle/scenario-eval.js
 var init_scenario_eval = __esm({
   "node_modules/@intentius/chant/dist/lifecycle/scenario-eval.js"() {
-    init_change_set();
+    init_change_set2();
     init_unobserved_gate();
     init_observation();
     init_behaviour();
@@ -250687,7 +250727,7 @@ var init_lifecycle = __esm({
     init_deep_diff();
     init_deep_observe();
     init_observation_baseline();
-    init_change_set();
+    init_change_set2();
     init_disruption();
     init_unobserved_gate();
     init_receipt_plan();
@@ -251170,7 +251210,7 @@ var init_gate = __esm({
 // node_modules/@intentius/chant/dist/gated-waves.js
 var init_gated_waves = __esm({
   "node_modules/@intentius/chant/dist/gated-waves.js"() {
-    init_change_set2();
+    init_change_set();
   }
 });
 
@@ -252022,7 +252062,7 @@ var init_lock_rows = __esm({
 var init_op_waves_capability = __esm({
   "node_modules/@intentius/chant/dist/op/op-waves-capability.js"() {
     init_capability();
-    init_change_set2();
+    init_change_set();
     init_plan_digest();
     init_group_digest();
     init_lock_rows();
@@ -252918,11 +252958,11 @@ var init_conflict_check = __esm({
 // node_modules/@intentius/chant/dist/project-codegen.js
 import { createHash as createHash6 } from "node:crypto";
 import { existsSync as existsSync12, mkdirSync as mkdirSync2, readFileSync as readFileSync14, readdirSync as readdirSync4, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname17, isAbsolute as isAbsolute5, join as join20, relative as relative6, resolve as resolve11, sep as sep5 } from "node:path";
+import { dirname as dirname18, isAbsolute as isAbsolute5, join as join20, relative as relative6, resolve as resolve12, sep as sep5 } from "node:path";
 function resolveCodegenRoot(projectRoot, config2) {
   const codegen = config2.codegen;
   const outDir = typeof codegen?.outDir === "string" && codegen.outDir.length > 0 ? codegen.outDir : DEFAULT_CODEGEN_OUT_DIR;
-  return resolve11(projectRoot, outDir);
+  return resolve12(projectRoot, outDir);
 }
 function projectCodegenContext(lexicon, projectRoot, config2) {
   return { projectRoot, config: config2, outDir: join20(resolveCodegenRoot(projectRoot, config2), lexicon) };
@@ -252989,7 +253029,7 @@ async function prepareProjectCodegen(plugin, projectRoot, config2) {
   await plugin.projectCodegen?.().load?.(projectCodegenContext(plugin.name, projectRoot, config2));
 }
 function safeJoin(outDir, file2) {
-  const target = resolve11(outDir, file2);
+  const target = resolve12(outDir, file2);
   if (isAbsolute5(file2) || target !== outDir && !target.startsWith(outDir + sep5)) {
     throw new Error(`generated file path "${file2}" is outside ${outDir}`);
   }
@@ -253024,13 +253064,13 @@ __export(plugins_exports, {
   unknownPathLexiconsNotice: () => unknownPathLexiconsNotice
 });
 import { createRequire as createRequire8 } from "node:module";
-import { dirname as dirname18, join as join21, resolve as resolve12 } from "node:path";
+import { dirname as dirname19, join as join21, resolve as resolve13 } from "node:path";
 import { fileURLToPath as fileURLToPath6 } from "node:url";
 import { existsSync as existsSync13, readdirSync as readdirSync5, readFileSync as readFileSync15 } from "node:fs";
 function recordProjectLexicons(dir) {
   const read = readLexiconDeclarationsStatically(dir);
   if (read.status === "read")
-    registerLexiconDeclarations(read.entries, dirname18(read.configPath));
+    registerLexiconDeclarations(read.entries, dirname19(read.configPath));
   return read;
 }
 async function loadPlugin(lexiconName) {
@@ -253072,7 +253112,7 @@ async function loadPlugin(lexiconName) {
 }
 function listInstalledLexicons(projectDir = process.cwd()) {
   const names = /* @__PURE__ */ new Set();
-  const starts = [dirname18(fileURLToPath6(import.meta.url)), resolve12(projectDir)];
+  const starts = [dirname19(fileURLToPath6(import.meta.url)), resolve13(projectDir)];
   for (const start of starts) {
     let dir = start;
     for (; ; ) {
@@ -253091,7 +253131,7 @@ function listInstalledLexicons(projectDir = process.cwd()) {
         if (name !== "")
           names.add(name);
       }
-      const parent = dirname18(dir);
+      const parent = dirname19(dir);
       if (parent === dir)
         break;
       dir = parent;
@@ -253115,7 +253155,7 @@ function resolveLexiconVersions(lexiconNames2) {
         if (entry === void 0)
           throw err;
       }
-      let dir = dirname18(entry);
+      let dir = dirname19(entry);
       for (let depth = 0; depth < 10; depth++) {
         const candidate = join21(dir, "package.json");
         if (existsSync13(candidate)) {
@@ -253125,7 +253165,7 @@ function resolveLexiconVersions(lexiconNames2) {
             break;
           }
         }
-        const parent = dirname18(dir);
+        const parent = dirname19(dir);
         if (parent === dir)
           break;
         dir = parent;
@@ -253226,7 +253266,7 @@ __export(discover_exports, {
   walkCandidates: () => walkCandidates
 });
 import { readFileSync as readFileSync16, statSync as statSync6 } from "fs";
-import { basename as basename2, join as join22, relative as relative7, resolve as resolve13 } from "path";
+import { basename as basename3, join as join22, relative as relative7, resolve as resolve14 } from "path";
 async function loadAuditPlugins(names = AUDIT_LEXICONS) {
   const { loadPlugin: loadPlugin2 } = await Promise.resolve().then(() => (init_plugins(), plugins_exports));
   const plugins = [];
@@ -253335,7 +253375,7 @@ function ciLexiconForPath(path) {
   return void 0;
 }
 function isCandidatePath(path) {
-  const name = basename2(path);
+  const name = basename3(path);
   if (ciLexiconForPath(path))
     return true;
   if (isDockerfileName(name))
@@ -253351,7 +253391,7 @@ function isCandidatePath(path) {
   return /\.(ya?ml|json|template)$/i.test(name);
 }
 function hintLexiconForFile(path, content) {
-  const name = basename2(path);
+  const name = basename3(path);
   const ci = ciLexiconForPath(path);
   if (ci)
     return ci;
@@ -253477,7 +253517,7 @@ function classifyTerraform(files, plugin, baseDir) {
     return { inputs, claimed };
   const byDir = /* @__PURE__ */ new Map();
   for (const f of files) {
-    if (!isTerraformFileName(basename2(f.path)))
+    if (!isTerraformFileName(basename3(f.path)))
       continue;
     const slash = f.path.lastIndexOf("/");
     const dir = slash === -1 ? "" : f.path.slice(0, slash);
@@ -253498,14 +253538,14 @@ ${bundle[name]}`).join("\n");
       content,
       lexicon: "terraform",
       files: bundle,
-      ...baseDir === void 0 ? {} : { dir: resolve13(baseDir, dir), baseDir }
+      ...baseDir === void 0 ? {} : { dir: resolve14(baseDir, dir), baseDir }
     });
   }
   return { inputs, claimed };
 }
 function classifyFiles(files, plugins, opts = {}) {
   const byName = new Map(plugins.map((p) => [p.name, p]));
-  const baseDir = opts.baseDir === void 0 ? void 0 : resolve13(opts.baseDir);
+  const baseDir = opts.baseDir === void 0 ? void 0 : resolve14(opts.baseDir);
   const helm = classifyHelm(files, byName.get("helm"));
   const underChart = (p) => helm.prefixes.some((pre) => pre === "" ? true : p.startsWith(pre));
   const terraform = classifyTerraform(files, byName.get("terraform"), baseDir);
@@ -253515,7 +253555,7 @@ function classifyFiles(files, plugins, opts = {}) {
       continue;
     if (terraform.claimed.has(path))
       continue;
-    const name = basename2(path);
+    const name = basename3(path);
     const ci = ciLexiconForPath(path);
     if (ci) {
       if (byName.has(ci))
@@ -253565,7 +253605,7 @@ function walkCandidates(root, opts = {}) {
         files.push({ path, content: "" });
       continue;
     }
-    if (isTerraformFileName(basename2(path))) {
+    if (isTerraformFileName(basename3(path))) {
       const content2 = readSafe(full);
       if (content2 !== void 0)
         files.push({ path, content: content2 });
@@ -254069,7 +254109,7 @@ var init_suppressions = __esm({
 });
 
 // node_modules/@intentius/chant/dist/audit/core.js
-import { basename as basename3 } from "path";
+import { basename as basename4 } from "path";
 function dedupeById(checks) {
   const byId = /* @__PURE__ */ new Map();
   for (const check2 of checks) {
@@ -254156,7 +254196,7 @@ function toOutput(file2) {
     return { primary: file2.content, files: file2.files };
   if (file2.lexicon === "gcp")
     return file2.content;
-  return { primary: file2.content, files: { [basename3(file2.path)]: file2.content } };
+  return { primary: file2.content, files: { [basename4(file2.path)]: file2.content } };
 }
 function runChecks(checks, outputs, entities = /* @__PURE__ */ new Map()) {
   const buildResult = { outputs, entities, warnings: [], errors: [], sourceFileCount: outputs.size };
@@ -258571,6 +258611,27 @@ var NO_POLICY_MESSAGE = `no --config given and no ${POLICY_FILE} or ${TS_POLICY_
 init_app_client();
 init_runner();
 
+// src/reconcile/plan-part.ts
+init_change_set();
+import { basename, dirname as dirname2, resolve as resolve3 } from "node:path";
+var PLAN_PART_LEXICON = "github";
+function defaultMemberName(configPath2) {
+  const name = basename(dirname2(resolve3(configPath2)));
+  return name === "" ? void 0 : name;
+}
+function planPart(input) {
+  const part = reconcilePlanPart({ member: input.member, plan: input.changeSets, lexicon: PLAN_PART_LEXICON });
+  const missing = [
+    ...(input.errored ?? []).map((e) => `${e.name} @ ${e.org} errored in ${e.stage}: ${e.error}`),
+    ...(input.deferred?.skippedCycles ?? []).map((c) => `${c} was deferred by the request budget`)
+  ];
+  if (missing.length === 0) return part;
+  return {
+    ...part,
+    member: { ...part.member, status: "failed", planDigest: null, error: missing.join("; ") }
+  };
+}
+
 // src/cycles/branch-protection.ts
 init_notes();
 async function fetchBranchProtection(client, owner, repo, branch, budget, onGated) {
@@ -260411,7 +260472,7 @@ function complianceArtifact(report2) {
 import { execFile } from "node:child_process";
 import { existsSync as existsSync2 } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname as dirname2, join as join3 } from "node:path";
+import { dirname as dirname3, join as join3 } from "node:path";
 var READ_CONTRACT = 1;
 var WorkspaceReadError = class extends Error {
   constructor(message) {
@@ -260419,14 +260480,14 @@ var WorkspaceReadError = class extends Error {
     this.name = "WorkspaceReadError";
   }
 };
-var defaultRunner = (cmd, args, cwd) => new Promise((resolve14, reject2) => {
+var defaultRunner = (cmd, args, cwd) => new Promise((resolve15, reject2) => {
   execFile(cmd, args, { cwd, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
     if (err && err.code === "ENOENT") {
       reject2(err);
       return;
     }
     const code = err ? err.code : 0;
-    resolve14({ stdout, stderr, code: typeof code === "number" ? code : 1 });
+    resolve15({ stdout, stderr, code: typeof code === "number" ? code : 1 });
   });
 });
 function parseGenerated(raw) {
@@ -260491,8 +260552,8 @@ function parseLsDocument(stdout) {
 }
 function chantLauncher() {
   try {
-    let dir = dirname2(createRequire(import.meta.url).resolve("@intentius/chant"));
-    for (let i = 0; i < 6; i++, dir = dirname2(dir)) {
+    let dir = dirname3(createRequire(import.meta.url).resolve("@intentius/chant"));
+    for (let i = 0; i < 6; i++, dir = dirname3(dir)) {
       const bin = join3(dir, "bin", "chant");
       if (existsSync2(join3(dir, "package.json")) && existsSync2(bin)) return bin;
     }
@@ -260718,7 +260779,8 @@ function parseReconcileArgs(argv) {
     tokenEnv: void 0,
     allowGuardrailOverride: false,
     removalCapFraction: void 0,
-    planJson: void 0
+    planJson: void 0,
+    member: void 0
   };
   const knownFlags = /* @__PURE__ */ new Set([
     "--config",
@@ -260730,7 +260792,8 @@ function parseReconcileArgs(argv) {
     "--token-env",
     "--allow-guardrail-override",
     "--removal-cap-fraction",
-    "--plan-json"
+    "--plan-json",
+    "--member"
   ]);
   let i = 0;
   while (i < argv.length) {
@@ -260818,11 +260881,22 @@ function parseReconcileArgs(argv) {
         args.planJson = val;
         break;
       }
+      case "--member": {
+        const val = argv[++i];
+        if (val === void 0 || val.startsWith("--"))
+          throw new CliError(2, "--member requires a value");
+        if (val.trim() === "") throw new CliError(2, "--member requires a non-empty name");
+        args.member = val;
+        break;
+      }
     }
     i++;
   }
   if (args.planJson !== void 0 && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
+  }
+  if (args.member !== void 0 && args.planJson === void 0) {
+    throw new CliError(2, "--member names the member of the --plan-json part; give it with --plan-json");
   }
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
@@ -261115,7 +261189,12 @@ async function main(argv = process.argv.slice(2)) {
     if (err instanceof CliError) die(err.code, err.message);
     throw err;
   }
-  const { config: config2, provenance } = await readPolicy(args.config, args.configMode);
+  const { config: config2, provenance, path: configPath2 } = await readPolicy(args.config, args.configMode);
+  let member;
+  if (args.planJson !== void 0) {
+    member = args.member ?? defaultMemberName(configPath2);
+    if (!member) die(2, `cannot name the --plan-json member from "${configPath2}"'s directory; give --member <name>`);
+  }
   let client;
   try {
     client = buildClient(args);
@@ -261151,8 +261230,9 @@ async function main(argv = process.argv.slice(2)) {
     die(3, `reconcile failed: ${errMsg2(err)}`);
   }
   if (args.planJson !== void 0) {
+    const part = planPart({ member, changeSets: result.changeSets, errored: result.errored, deferred: result.deferred });
     try {
-      writeFileSync5(args.planJson, `${JSON.stringify(result.changeSets, null, 2)}
+      writeFileSync5(args.planJson, `${JSON.stringify(part, null, 2)}
 `, "utf-8");
     } catch (err) {
       die(3, `failed to write plan to "${args.planJson}": ${errMsg2(err)}`);
@@ -261220,7 +261300,7 @@ async function readPolicy(given, mode) {
   const path = resolvePolicyPath(given);
   if (path === void 0) die(2, NO_POLICY_MESSAGE);
   try {
-    return await loadGovernancePolicy(path, mode);
+    return { ...await loadGovernancePolicy(path, mode), path };
   } catch (err) {
     if (err instanceof GovernanceConfigError) die(2, `invalid governance config: ${errMsg2(err)}`);
     die(3, `failed to read config file "${path}": ${errMsg2(err)}`);
@@ -261606,6 +261686,8 @@ function printUsage() {
       "  --allow-guardrail-override    Apply even when guardrails trip.",
       "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
       "                                delete per resource type, in (0,1]. Default: 0.25.",
+      "  --plan-json <file>            Write the plan as a chant change-set part (dry-run only).",
+      "  --member <name>               Member the part names (default: the policy file's directory name).",
       "",
       "Flags (audit):",
       "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
