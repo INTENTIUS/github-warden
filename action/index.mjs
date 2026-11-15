@@ -257907,10 +257907,10 @@ function slugFromUrl(url2) {
     return url2;
   }
 }
-async function auditOneRepo(repoUrl, token, opts) {
-  const slug2 = slugFromUrl(repoUrl);
+async function auditOneRepo(repoUrl2, token, opts) {
+  const slug2 = slugFromUrl(repoUrl2);
   try {
-    const files = await fetchRepoFiles(repoUrl, {
+    const files = await fetchRepoFiles(repoUrl2, {
       token,
       maxFiles: opts.maxFiles,
       fetchImpl: opts.fetchImpl
@@ -257920,10 +257920,10 @@ async function auditOneRepo(repoUrl, token, opts) {
     const model = buildReportModel(findings, {
       files: inputs.map((i) => ({ path: i.path, content: i.content }))
     });
-    return { repoUrl, slug: slug2, scanned: files.length, model };
+    return { repoUrl: repoUrl2, slug: slug2, scanned: files.length, model };
   } catch (err) {
     return {
-      repoUrl,
+      repoUrl: repoUrl2,
       slug: slug2,
       scanned: 0,
       model: buildReportModel([]),
@@ -258632,6 +258632,88 @@ function planPart(input) {
   };
 }
 
+// src/repos.ts
+var FORGE = "github";
+var WEB_BASE = "https://github.com";
+var PER_PAGE = 100;
+function isStatus(err, codes) {
+  const msg = err instanceof Error ? err.message : String(err);
+  return codes.some((c) => msg.includes(`returned ${c}`));
+}
+async function allPages(client, path, pick3) {
+  const out = [];
+  const sep6 = path.includes("?") ? "&" : "?";
+  for (let page = 1; ; page++) {
+    const chunk = pick3(await client.request("GET", `${path}${sep6}per_page=${PER_PAGE}&page=${page}`));
+    if (!Array.isArray(chunk)) throw new Error(`GET ${path} did not return a list`);
+    out.push(...chunk);
+    if (chunk.length < PER_PAGE) return out;
+  }
+}
+var asList = (page) => Array.isArray(page) ? page : void 0;
+var sameLogin = (a, b) => a !== void 0 && a.toLowerCase() === b.toLowerCase();
+async function listAccountRepos(client, login) {
+  const enc = encodeURIComponent(login);
+  let account;
+  try {
+    account = await client.request("GET", `/users/${enc}`);
+  } catch (err) {
+    if (isStatus(err, [404])) throw new Error(`GitHub has no organization or user named ${login} (GET /users/${login} returned 404)`);
+    throw err;
+  }
+  if (account.type !== "User") {
+    return allPages(client, `/orgs/${enc}/repos?type=all`, asList);
+  }
+  return listUserRepos(client, login);
+}
+async function listUserRepos(client, login) {
+  let reachable;
+  try {
+    reachable = await allPages(
+      client,
+      "/installation/repositories",
+      (p) => p?.repositories
+    );
+  } catch (err) {
+    if (!isStatus(err, [401, 403])) throw err;
+  }
+  if (reachable !== void 0) {
+    const own = reachable.filter((r) => sameLogin(r.owner?.login, login));
+    if (own.length === 0) {
+      throw new Error(
+        `${login} is a personal account and the App installation reaches none of its repositories; install the App on ${login}`
+      );
+    }
+    return own;
+  }
+  const me = await client.request("GET", "/user");
+  if (!sameLogin(me.login, login)) {
+    throw new Error(
+      `${login} is a personal account; list it with an App installation on ${login} or ${login}'s own token (this token is ${me.login ?? "unknown"}'s)`
+    );
+  }
+  return allPages(client, "/user/repos?affiliation=owner", asList);
+}
+function repoUrl(repo, login) {
+  if (repo.html_url) return repo.html_url;
+  return `${WEB_BASE}/${repo.full_name ?? `${login}/${repo.name}`}`;
+}
+async function forgeRepoList(client, login) {
+  const repos = (await listAccountRepos(client, login)).map((r) => ({ url: repoUrl(r, login), ...r.archived === true ? { archived: true } : {} })).sort((a, b) => a.url < b.url ? -1 : a.url > b.url ? 1 : 0);
+  return { forge: FORGE, org: login, repos };
+}
+function pickOrg(policyOrgs, requested) {
+  if (requested !== void 0) {
+    if (!policyOrgs.includes(requested)) {
+      throw new Error(`--org ${requested} is not an org the policy governs (${policyOrgs.join(", ") || "none"})`);
+    }
+    return requested;
+  }
+  if (policyOrgs.length === 1) return policyOrgs[0];
+  if (policyOrgs.length === 0) throw new Error("the policy governs no org");
+  throw new Error(`the policy governs ${policyOrgs.length} orgs (${policyOrgs.join(", ")}); pick one with --org <name>`);
+}
+
 // src/cycles/branch-protection.ts
 init_notes();
 async function fetchBranchProtection(client, owner, repo, branch, budget, onGated) {
@@ -259055,20 +259137,20 @@ async function fetchLiveRepoSettings(client, orgLogin, repos, budget) {
 
 // src/cycles/membership.ts
 init_notes();
-var PER_PAGE = 100;
+var PER_PAGE2 = 100;
 async function listOrgMembers(client, orgLogin, role, budget) {
   const logins = [];
   let page = 1;
   for (; ; ) {
     if (budget.exhausted) break;
     budget.use(1);
-    const path = `/orgs/${orgLogin}/members?role=${role}&per_page=${PER_PAGE}&page=${page}`;
+    const path = `/orgs/${orgLogin}/members?role=${role}&per_page=${PER_PAGE2}&page=${page}`;
     const batch = await client.request("GET", path);
     if (!Array.isArray(batch) || batch.length === 0) break;
     for (const u of batch) {
       if (u && typeof u.login === "string") logins.push(u.login);
     }
-    if (batch.length < PER_PAGE) break;
+    if (batch.length < PER_PAGE2) break;
     page++;
   }
   return logins;
@@ -259125,7 +259207,7 @@ var membershipCycle = {
 
 // src/cycles/teams.ts
 init_notes();
-var PER_PAGE2 = 100;
+var PER_PAGE3 = 100;
 var VALID_PRIVACY = /* @__PURE__ */ new Set(["secret", "closed"]);
 var VALID_TEAM_PERMISSIONS = ["admin", "maintain", "push", "triage", "pull"];
 async function paginate(client, makePath, budget) {
@@ -259137,7 +259219,7 @@ async function paginate(client, makePath, budget) {
     const batch = await client.request("GET", makePath(page));
     if (!Array.isArray(batch) || batch.length === 0) break;
     out.push(...batch);
-    if (batch.length < PER_PAGE2) break;
+    if (batch.length < PER_PAGE3) break;
     page++;
   }
   return out;
@@ -259156,12 +259238,12 @@ function mapTeamRepoPermission(repo) {
 async function fetchTeamMembers(client, org, slug2, budget) {
   const maintainers = await paginate(
     client,
-    (page) => `/orgs/${org}/teams/${slug2}/members?role=maintainer&per_page=${PER_PAGE2}&page=${page}`,
+    (page) => `/orgs/${org}/teams/${slug2}/members?role=maintainer&per_page=${PER_PAGE3}&page=${page}`,
     budget
   );
   const members = await paginate(
     client,
-    (page) => `/orgs/${org}/teams/${slug2}/members?role=member&per_page=${PER_PAGE2}&page=${page}`,
+    (page) => `/orgs/${org}/teams/${slug2}/members?role=member&per_page=${PER_PAGE3}&page=${page}`,
     budget
   );
   return [
@@ -259172,7 +259254,7 @@ async function fetchTeamMembers(client, org, slug2, budget) {
 async function fetchTeamRepos(client, org, slug2, budget) {
   const repos = await paginate(
     client,
-    (page) => `/orgs/${org}/teams/${slug2}/repos?per_page=${PER_PAGE2}&page=${page}`,
+    (page) => `/orgs/${org}/teams/${slug2}/repos?per_page=${PER_PAGE3}&page=${page}`,
     budget
   );
   return repos.map((r) => ({ name: r.name, permission: mapTeamRepoPermission(r) }));
@@ -259216,7 +259298,7 @@ var teamsCycle = {
     try {
       ghTeams = await paginate(
         client,
-        (page) => `/orgs/${orgLogin}/teams?per_page=${PER_PAGE2}&page=${page}`,
+        (page) => `/orgs/${orgLogin}/teams?per_page=${PER_PAGE3}&page=${page}`,
         budget
       );
     } catch (err) {
@@ -259337,7 +259419,7 @@ async function applyTeamRepo(client, entry, org, budget) {
 
 // src/cycles/rulesets.ts
 init_notes();
-var PER_PAGE3 = 100;
+var PER_PAGE4 = 100;
 async function fetchRulesets(client, basePath, budget, onGated) {
   const summaries = [];
   let page = 1;
@@ -259348,7 +259430,7 @@ async function fetchRulesets(client, basePath, budget, onGated) {
     try {
       batch = await client.request(
         "GET",
-        `${basePath}?per_page=${PER_PAGE3}&page=${page}`
+        `${basePath}?per_page=${PER_PAGE4}&page=${page}`
       );
     } catch (err) {
       if (isNotFound(err)) return [];
@@ -259360,7 +259442,7 @@ async function fetchRulesets(client, basePath, budget, onGated) {
     }
     if (!Array.isArray(batch) || batch.length === 0) break;
     summaries.push(...batch);
-    if (batch.length < PER_PAGE3) break;
+    if (batch.length < PER_PAGE4) break;
     page++;
   }
   const out = [];
@@ -259751,7 +259833,7 @@ var environmentsCycle = {
 
 // src/cycles/secrets-variables.ts
 init_notes();
-var PER_PAGE4 = 100;
+var PER_PAGE5 = 100;
 async function listWrapped(client, makePath, field, budget) {
   const out = [];
   let page = 1;
@@ -259762,7 +259844,7 @@ async function listWrapped(client, makePath, field, budget) {
     const batch = data?.[field] ?? [];
     if (!Array.isArray(batch) || batch.length === 0) break;
     out.push(...batch);
-    if (batch.length < PER_PAGE4) break;
+    if (batch.length < PER_PAGE5) break;
     page++;
   }
   return out;
@@ -259771,7 +259853,7 @@ async function fetchSecrets(client, basePath, budget, onGated) {
   try {
     const raw = await listWrapped(
       client,
-      (page) => `${basePath}?per_page=${PER_PAGE4}&page=${page}`,
+      (page) => `${basePath}?per_page=${PER_PAGE5}&page=${page}`,
       "secrets",
       budget
     );
@@ -259789,7 +259871,7 @@ async function fetchVariables(client, basePath, budget, onGated) {
   try {
     const raw = await listWrapped(
       client,
-      (page) => `${basePath}?per_page=${PER_PAGE4}&page=${page}`,
+      (page) => `${basePath}?per_page=${PER_PAGE5}&page=${page}`,
       "variables",
       budget
     );
@@ -260035,7 +260117,7 @@ var dependencyHygieneCycle = {
 
 // src/cycles/repo-baseline.ts
 init_notes();
-var PER_PAGE5 = 100;
+var PER_PAGE6 = 100;
 async function listOrgRepoNames(client, orgLogin, budget) {
   const repos = {};
   let page = 1;
@@ -260044,13 +260126,13 @@ async function listOrgRepoNames(client, orgLogin, budget) {
     budget.use(1);
     const batch = await client.request(
       "GET",
-      `/orgs/${orgLogin}/repos?per_page=${PER_PAGE5}&page=${page}`
+      `/orgs/${orgLogin}/repos?per_page=${PER_PAGE6}&page=${page}`
     );
     if (!Array.isArray(batch) || batch.length === 0) break;
     for (const r of batch) {
       if (r && typeof r.name === "string") repos[r.name] = {};
     }
-    if (batch.length < PER_PAGE5) break;
+    if (batch.length < PER_PAGE6) break;
     page++;
   }
   return repos;
@@ -260111,7 +260193,7 @@ var repoBaselineCycle = {
 
 // src/cycles/token-governance.ts
 init_notes();
-var PER_PAGE6 = 100;
+var PER_PAGE7 = 100;
 function toMs(iso) {
   if (!iso) return void 0;
   const ms = Date.parse(iso);
@@ -260147,7 +260229,7 @@ var tokenGovernanceCycle = {
       try {
         batch = await client.request(
           "GET",
-          `/orgs/${orgLogin}/personal-access-tokens?per_page=${PER_PAGE6}&page=${page}`
+          `/orgs/${orgLogin}/personal-access-tokens?per_page=${PER_PAGE7}&page=${page}`
         );
       } catch (err) {
         if (isNotFound(err)) return { tokenGrants: [] };
@@ -260159,7 +260241,7 @@ var tokenGovernanceCycle = {
       }
       if (!Array.isArray(batch) || batch.length === 0) break;
       for (const g of batch) if (g && typeof g.id === "number") grants.push(mapTokenGrant(g));
-      if (batch.length < PER_PAGE6) break;
+      if (batch.length < PER_PAGE7) break;
       page++;
     }
     return { tokenGrants: grants };
@@ -260183,7 +260265,7 @@ var tokenGovernanceCycle = {
 
 // src/cycles/token-approval.ts
 init_notes();
-var PER_PAGE7 = 100;
+var PER_PAGE8 = 100;
 function flattenRequestPermissions(permissions) {
   const out = [];
   if (!permissions) return out;
@@ -260216,7 +260298,7 @@ var tokenApprovalCycle = {
       try {
         batch = await client.request(
           "GET",
-          `/orgs/${orgLogin}/personal-access-token-requests?per_page=${PER_PAGE7}&page=${page}`
+          `/orgs/${orgLogin}/personal-access-token-requests?per_page=${PER_PAGE8}&page=${page}`
         );
       } catch (err) {
         if (isNotFound(err)) return { tokenRequests: [] };
@@ -260228,7 +260310,7 @@ var tokenApprovalCycle = {
       }
       if (!Array.isArray(batch) || batch.length === 0) break;
       for (const r of batch) if (r && typeof r.id === "number") requests.push(mapTokenRequest(r));
-      if (batch.length < PER_PAGE7) break;
+      if (batch.length < PER_PAGE8) break;
       page++;
     }
     return { tokenRequests: requests };
@@ -261107,6 +261189,73 @@ function parseReportArgs(argv) {
   }
   return args;
 }
+var REPOS_FLAGS = /* @__PURE__ */ new Set([
+  "--config",
+  "--config-mode",
+  "--org",
+  "--out",
+  "--token-env",
+  "--app-id-env",
+  "--installation-id-env"
+]);
+function parseReposArgs(argv) {
+  const args = {
+    config: void 0,
+    configMode: "fold",
+    org: void 0,
+    out: void 0,
+    appIdEnv: void 0,
+    installationIdEnv: void 0,
+    tokenEnv: void 0
+  };
+  const need = (i, flag) => {
+    const v = argv[i];
+    if (v === void 0 || v.startsWith("--") || v === "") throw new CliError(2, `${flag} requires a value`);
+    return v;
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i];
+    if (!flag.startsWith("--")) throw new CliError(2, `unexpected positional argument: ${flag}`);
+    if (!REPOS_FLAGS.has(flag)) throw new CliError(2, `unknown flag for repos: ${flag}`);
+    switch (flag) {
+      case "--config":
+        args.config = need(++i, flag);
+        break;
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val;
+        break;
+      }
+      case "--org":
+        args.org = need(++i, flag);
+        break;
+      case "--out":
+        args.out = need(++i, flag);
+        break;
+      case "--token-env":
+        args.tokenEnv = need(++i, flag);
+        break;
+      case "--app-id-env":
+        args.appIdEnv = need(++i, flag);
+        break;
+      case "--installation-id-env":
+        args.installationIdEnv = need(++i, flag);
+        break;
+    }
+  }
+  const hasTokenAuth = !!args.tokenEnv;
+  const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
+  if (!hasTokenAuth && !hasAppAuth) {
+    throw new CliError(
+      2,
+      "auth is required: supply --token-env <VAR>, or both --app-id-env <VAR> and --installation-id-env <VAR>"
+    );
+  }
+  return args;
+}
 function buildClient(args) {
   if (args.tokenEnv) {
     const token = env(args.tokenEnv);
@@ -261179,8 +261328,12 @@ async function main(argv = process.argv.slice(2)) {
     await runLifecycle(argv.slice(1));
     return;
   }
+  if (subcommand === "repos") {
+    await runRepos(argv.slice(1));
+    return;
+  }
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", "lifecycle", or "checks"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "repos", "codeowners", "lifecycle", or "checks"?`);
   }
   let args;
   try {
@@ -261474,6 +261627,45 @@ async function runReport(argv) {
   }
   process.exit(0);
 }
+async function runRepos(argv) {
+  let args;
+  try {
+    args = parseReposArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+  const { config: config2 } = await readPolicy(args.config, args.configMode);
+  let org;
+  try {
+    org = pickOrg(Object.keys(config2.orgs), args.org);
+  } catch (err) {
+    die(2, errMsg2(err));
+  }
+  let client;
+  try {
+    client = buildClient(args);
+  } catch (err) {
+    die(3, `auth setup failed: ${errMsg2(err)}`);
+  }
+  let text2;
+  try {
+    text2 = `${JSON.stringify(await forgeRepoList(client, org), null, 2)}
+`;
+  } catch (err) {
+    die(3, `listing the repositories of ${org} failed: ${errMsg2(err)}`);
+  }
+  if (args.out === void 0) {
+    process.stdout.write(text2);
+  } else {
+    try {
+      writeFileSync5(args.out, text2, "utf-8");
+    } catch (err) {
+      die(3, `failed to write the repository list to "${args.out}": ${errMsg2(err)}`);
+    }
+  }
+  process.exit(0);
+}
 function parseCodeownersArgs(argv) {
   const args = { owners: "", dir: ".", out: void 0, check: false };
   for (let i = 0; i < argv.length; i++) {
@@ -261673,6 +261865,7 @@ function printUsage() {
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
       "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
       "  checks      Print the ruleset requiring each member pipeline's job names.",
+      "  repos       Write the policy's org's repository list for chant workspace check.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
@@ -261709,6 +261902,17 @@ function printUsage() {
       "  --audit                       Include an audit pass in the report.",
       "  --identity                    Include an identity & service-account hygiene pass.",
       "  --fail-on none|attention      Exit 4 when the report needs attention (default: none).",
+      "",
+      "repos writes the policy's org's repository list, archived repos included, as",
+      "the JSON `chant workspace check --forge-repos <file>` reads.",
+      "",
+      "Flags (repos):",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
+      "  --org <name>                  Org to list (default: the policy's only org).",
+      "  --out <file>                  File to write (default: stdout).",
+      "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "",
       "Flags (codeowners):",
       "  --owners <path>               Owners by workspace member name (YAML or JSON). Required.",

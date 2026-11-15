@@ -320,6 +320,9 @@ An account has none of the org-level fields in the tables below, so declare
 only `repos` under it and run the repo-level cycles by name, for example
 `--cycles repo-settings,branch-protection,rulesets`. repo-baseline lists and
 creates repos through the org endpoints and does not work on an account.
+`github-warden repos` lists an account's repositories from the App
+installation on it, or from the account's own token (see
+[CLI.md](CLI.md#repos)).
 
 Writes need admin rights on the repo. A collaborator with push access can read
 some settings but GitHub refuses the write with a 403 or 404. Rulesets and

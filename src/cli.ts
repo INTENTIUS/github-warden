@@ -10,6 +10,8 @@
  *   codeowners  Generate CODEOWNERS from a chant workspace's members.
  *   lifecycle   Show the chant/lifecycle ledger paths and its ruleset.
  *   checks      Required status checks from the members' pipeline job names.
+ *   repos       Write the policy's org's repository list in the format
+ *               `chant workspace check --forge-repos` reads.
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
@@ -60,6 +62,7 @@ import type { GovernanceConfig } from "./config/types.js";
 import { createAppClient } from "./auth/app-client.js";
 import { runReconcile } from "./reconcile/runner.js";
 import { defaultMemberName, planPart } from "./reconcile/plan-part.js";
+import { forgeRepoList, pickOrg } from "./repos.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
 // NOTE: ./audit/engine.js is deliberately NOT imported statically. Its import
 // graph reaches chant's audit pipeline and the lexicon's lint rules, which pull
@@ -562,6 +565,105 @@ export function parseReportArgs(argv: string[]): ReportArgs {
 }
 
 // ---------------------------------------------------------------------------
+// Repos subcommand
+// ---------------------------------------------------------------------------
+
+export interface ReposArgs {
+  /** `--config`; undefined reads governance.yml (or governance.ts) in the working directory. */
+  config: string | undefined;
+  /** How a `.ts` policy is evaluated. Default: fold. */
+  configMode: ConfigMode;
+  /** The org (or account) to list; undefined means the policy's only org. */
+  org: string | undefined;
+  /** File to write; undefined writes to stdout. */
+  out: string | undefined;
+  appIdEnv: string | undefined;
+  installationIdEnv: string | undefined;
+  tokenEnv: string | undefined;
+}
+
+const REPOS_FLAGS = new Set([
+  "--config",
+  "--config-mode",
+  "--org",
+  "--out",
+  "--token-env",
+  "--app-id-env",
+  "--installation-id-env",
+]);
+
+/**
+ * Parse repos argv (everything after the `repos` subcommand). Pure: throws
+ * `CliError` (carrying an exit code) on any parse error.
+ *
+ * Accepted flags:
+ *   --config <path>               Governance policy. Default: governance.yml,
+ *                                 else governance.ts, in the working directory.
+ *   --config-mode fold|run|check  How a .ts policy is evaluated. Default: fold.
+ *   --org <name>                  Org to list. Default: the policy's only org.
+ *   --out <file>                  File to write. Default: stdout.
+ *   --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).
+ */
+export function parseReposArgs(argv: string[]): ReposArgs {
+  const args: ReposArgs = {
+    config: undefined,
+    configMode: "fold",
+    org: undefined,
+    out: undefined,
+    appIdEnv: undefined,
+    installationIdEnv: undefined,
+    tokenEnv: undefined,
+  };
+  const need = (i: number, flag: string): string => {
+    const v = argv[i];
+    if (v === undefined || v.startsWith("--") || v === "") throw new CliError(2, `${flag} requires a value`);
+    return v;
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i]!;
+    if (!flag.startsWith("--")) throw new CliError(2, `unexpected positional argument: ${flag}`);
+    if (!REPOS_FLAGS.has(flag)) throw new CliError(2, `unknown flag for repos: ${flag}`);
+    switch (flag) {
+      case "--config":
+        args.config = need(++i, flag);
+        break;
+      case "--config-mode": {
+        const val = argv[++i];
+        if (!CONFIG_MODES.includes(val as ConfigMode)) {
+          throw new CliError(2, `--config-mode must be "fold", "run" or "check", got: ${val ?? "(missing)"}`);
+        }
+        args.configMode = val as ConfigMode;
+        break;
+      }
+      case "--org":
+        args.org = need(++i, flag);
+        break;
+      case "--out":
+        args.out = need(++i, flag);
+        break;
+      case "--token-env":
+        args.tokenEnv = need(++i, flag);
+        break;
+      case "--app-id-env":
+        args.appIdEnv = need(++i, flag);
+        break;
+      case "--installation-id-env":
+        args.installationIdEnv = need(++i, flag);
+        break;
+    }
+  }
+  const hasTokenAuth = !!args.tokenEnv;
+  const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
+  if (!hasTokenAuth && !hasAppAuth) {
+    throw new CliError(
+      2,
+      "auth is required: supply --token-env <VAR>, or both --app-id-env <VAR> and --installation-id-env <VAR>",
+    );
+  }
+  return args;
+}
+
+// ---------------------------------------------------------------------------
 // Auth client builder
 // ---------------------------------------------------------------------------
 
@@ -576,7 +678,7 @@ export function parseReportArgs(argv: string[]): ReportArgs {
  *
  * Accepts both ReconcileArgs and AuditArgs (both carry the same auth fields).
  */
-function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs) {
+function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs | ReposArgs) {
   if (args.tokenEnv) {
     const token = env(args.tokenEnv);
     // Wrap the pre-minted token in a minimal AppClient.
@@ -672,8 +774,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
     return;
   }
 
+  if (subcommand === "repos") {
+    await runRepos(argv.slice(1));
+    return;
+  }
+
   if (subcommand !== "reconcile") {
-    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "codeowners", "lifecycle", or "checks"?`);
+    die(2, `unknown subcommand: ${subcommand}. Did you mean "reconcile", "audit", "report", "repos", "codeowners", "lifecycle", or "checks"?`);
   }
 
   let args: ReconcileArgs;
@@ -1079,6 +1186,55 @@ async function runReport(argv: string[]): Promise<void> {
   process.exit(0);
 }
 
+/**
+ * Run `repos`: write the policy's org's repository list, archived repos
+ * included, as the JSON `chant workspace check --forge-repos` reads. Exits 2
+ * when the org cannot be chosen from the policy, 3 when GitHub has no such
+ * account, the listing fails, or the file cannot be written.
+ */
+async function runRepos(argv: string[]): Promise<void> {
+  let args: ReposArgs;
+  try {
+    args = parseReposArgs(argv);
+  } catch (err) {
+    if (err instanceof CliError) die(err.code, err.message);
+    throw err;
+  }
+
+  const { config } = await readPolicy(args.config, args.configMode);
+
+  let org: string;
+  try {
+    org = pickOrg(Object.keys(config.orgs), args.org);
+  } catch (err) {
+    die(2, errMsg(err));
+  }
+
+  let client;
+  try {
+    client = buildClient(args);
+  } catch (err) {
+    die(3, `auth setup failed: ${errMsg(err)}`);
+  }
+
+  let text: string;
+  try {
+    text = `${JSON.stringify(await forgeRepoList(client, org), null, 2)}\n`;
+  } catch (err) {
+    die(3, `listing the repositories of ${org} failed: ${errMsg(err)}`);
+  }
+  if (args.out === undefined) {
+    process.stdout.write(text);
+  } else {
+    try {
+      writeFileSync(args.out, text, "utf-8");
+    } catch (err) {
+      die(3, `failed to write the repository list to "${args.out}": ${errMsg(err)}`);
+    }
+  }
+  process.exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Codeowners subcommand
 // ---------------------------------------------------------------------------
@@ -1298,6 +1454,7 @@ function printUsage() {
       "  codeowners  Generate CODEOWNERS from a chant workspace's members.",
       "  lifecycle   Show the chant/lifecycle ledger paths, or print its ruleset.",
       "  checks      Print the ruleset requiring each member pipeline's job names.",
+      "  repos       Write the policy's org's repository list for chant workspace check.",
       "",
       "Flags (reconcile):",
       "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
@@ -1334,6 +1491,17 @@ function printUsage() {
       "  --audit                       Include an audit pass in the report.",
       "  --identity                    Include an identity & service-account hygiene pass.",
       "  --fail-on none|attention      Exit 4 when the report needs attention (default: none).",
+      "",
+      "repos writes the policy's org's repository list, archived repos included, as",
+      "the JSON `chant workspace check --forge-repos <file>` reads.",
+      "",
+      "Flags (repos):",
+      "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
+      "                                else governance.ts).",
+      "  --config-mode fold|run|check  How a .ts policy is evaluated (default: fold).",
+      "  --org <name>                  Org to list (default: the policy's only org).",
+      "  --out <file>                  File to write (default: stdout).",
+      "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "",
       "Flags (codeowners):",
       "  --owners <path>               Owners by workspace member name (YAML or JSON). Required.",

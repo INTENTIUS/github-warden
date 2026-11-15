@@ -1,8 +1,8 @@
 # CLI reference
 
-The `github-warden` binary has six subcommands. `reconcile`, `audit` and
-`report` load the policy file (`--config`) and authenticate the same way; they
-differ in what they do with live GitHub state. `codeowners`, `lifecycle` and `checks` read
+The `github-warden` binary has seven subcommands. `reconcile`, `audit`,
+`report` and `repos` load the policy file (`--config`) and authenticate the
+same way; they differ in what they do with live GitHub state. `codeowners`, `lifecycle` and `checks` read
 a chant workspace from disk and touch neither GitHub nor the policy file.
 
 | Subcommand | What it does | Mutates? |
@@ -10,6 +10,7 @@ a chant workspace from disk and touch neither GitHub nor the policy file.
 | `reconcile` | Diff desired vs live per cycle, guardrail-check, print the plan (`dry-run`) or apply it. | Only with `--mode apply`. |
 | `audit` | Run chant's posture-audit engine over every repo declared in the config. | Never. |
 | `report` | Run cycles in dry-run, optionally add audit and identity passes, print a compliance snapshot, optionally write a JSON artifact. | Never. |
+| `repos` | Write the policy's org's repository list for `chant workspace check --forge-repos`. | Only the `--out` file. |
 | `codeowners` | Generate CODEOWNERS from the members of a chant workspace. | Only the `--out` file, and not with `--check`. |
 | `checks` | Print the ruleset that requires each member pipeline's job names as status checks. | Never. |
 | `lifecycle` | Show the `chant/lifecycle` ledger paths, or print the ruleset that protects the branch. | Never. |
@@ -165,6 +166,65 @@ github-warden report [--config <path>] [--config-mode fold|run|check] [auth flag
 
 Report is detect-only; cycles run in dry-run and nothing is mutated.
 
+## `repos`
+
+```
+github-warden repos [--config <path>] [--config-mode fold|run|check] [auth flags] [--org <name>] [--out <file>]
+```
+
+`repos` writes the policy's org's repository list, archived repos included,
+as the JSON `chant workspace check --forge-repos <file>` reads. chant
+compares it with an org workspace (`scope: "org"`, one `repo` member per
+repository) and reports a repository GitHub has that no member names
+(WSP014) and a member naming one GitHub no longer has (WSP015).
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--config <path>` | `governance.yml`, else `governance.ts` | Governance config. |
+| `--config-mode fold\|run\|check` | `fold` | How a `.ts` policy is evaluated. |
+| `--org <name>` | the policy's only org | Org to list. It must be a key of the policy's `orgs`; one the policy does not govern exits 2, and so does a policy with several orgs (or none) and no `--org`. |
+| `--out <file>` | stdout | File to write. |
+| `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
+
+Reconcile's other flags (`--mode`, `--cycles`, and so on) exit 2 here.
+
+The output is indented JSON with a trailing newline:
+
+```json
+{
+  "forge": "github",
+  "org": "acme",
+  "repos": [
+    { "url": "https://github.com/acme/api" },
+    { "url": "https://github.com/acme/legacy", "archived": true }
+  ]
+}
+```
+
+`url` is the repository's `html_url` (or `https://github.com/<full_name>`
+when the API leaves it out). chant matches URLs by host, owner and name, so
+members declared with clone URLs (`https`, `ssh` or `git@github.com:`, with
+or without `.git`) match. `archived: true` marks an archived repository and is
+left out for a live one. The list is sorted by `url`, so a run with nothing
+changed writes the same bytes.
+
+The org key can be an organization or a personal account (see
+[POLICY.md](POLICY.md#repos-owned-by-a-personal-account)); `GET /users/<login>`
+tells them apart. An organization is listed with
+`GET /orgs/<org>/repos?type=all`. A personal account is listed from the
+repositories the App installation reaches (`GET /installation/repositories`,
+keeping those the account owns), so install the App on the account with
+access to all its repositories. A `--token-env` token that is not an
+installation token works only when it belongs to the account itself, and
+then lists `GET /user/repos?affiliation=owner`. Either way the list holds the
+repositories the credential can see, so a token or installation limited to
+selected repositories gives a partial list.
+
+A login GitHub does not have (404) exits 3 and writes nothing; it is never
+written as an empty list, which chant would read as every member dropped. A
+personal account the credential cannot list, other API errors and a failed
+write also exit 3.
+
 ## Auth
 
 Warden authenticates in one of two mutually exclusive modes; `--token-env`
@@ -195,7 +255,7 @@ several org administration endpoints are callable only by a GitHub App. See
 | 0 | Success: the plan printed (dry-run), or apply completed with no failures. |
 | 1 | Guardrail block: apply mode, at least one guardrail tripped, and `--allow-guardrail-override` was not set. |
 | 2 | Argument or config error (unknown flag, unknown cycle, invalid config shape, missing auth). |
-| 3 | Runtime error (unreadable config file, API failure, an errored cycle, or failed apply entries). |
+| 3 | Runtime error (unreadable config file, API failure, an errored cycle, failed apply entries, or `repos` on an account GitHub does not have). |
 | 4 | `audit`: findings exceed `--fail-on`; `report`: needs attention with `--fail-on attention`. |
 
 ## `codeowners`

@@ -5,6 +5,13 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- New `repos` subcommand writes the policy's org's repository list, archived
+  repos included, as the `{ forge, org, repos: [{ url, archived? }] }` JSON
+  `chant workspace check --forge-repos <file>` reads (#75). `--org` picks the
+  org when the policy has several and `--out` names the file (default
+  stdout). An org key that is a personal account is listed from the App
+  installation's repositories, or from the account's own token. A login
+  GitHub does not have exits 3 rather than writing an empty list.
 - The policy can be a `.ts` file whose default export is the policy, typed with
   `satisfies GovernanceConfig` (#69). Warden folds it to its value with
   `@intentius/tsad-reference` without running it, so a file that reads the
