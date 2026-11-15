@@ -270,8 +270,8 @@ export default {
 `examples/governance.yml` is the same policy with every field written out.
 `satisfies GovernanceConfig` gives completion and a compile error on a
 misspelt key; the type comes from the package root. A file that is code
-rather than data, such as one reading `process.env`, is refused with its line
-and column (`examples/not-data.ts`). `--config-mode run` imports the file
+rather than data is refused with its line and column (`examples/not-data.ts`).
+One reading `process.env` is an example. `--config-mode run` imports the file
 instead, and `--config-mode check` does both and refuses a file on which they
 differ. When a field set by the preset drifts, the plan names the preset
 argument and the line it is on; a field written on the repo itself is reported

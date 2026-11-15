@@ -23,7 +23,7 @@ releases before `0.4.1` are not recorded here.
   `not-observed` nodes when a cycle errors or the request budget defers one.
   It takes the token from `GH_TOKEN` and the API base from `GITHUB_API_URL`,
   and refuses with `no-drift-read` without them. The kind now needs chant
-  0.124.96 or newer, the first chant that reads a kinds file's `drift` block.
+  `0.124.96` or newer, the first chant that reads a kinds file's `drift` block.
 - New `repos` subcommand writes the policy's org's repository list, archived
   repos included, as the `{ forge, org, repos: [{ url, archived? }] }` JSON
   `chant workspace check --forge-repos <file>` reads (#75). `--org` picks the
@@ -60,8 +60,8 @@ releases before `0.4.1` are not recorded here.
 - `reconcile --plan-json <file>` writes the plan as a chant change-set part:
   the object `reconcilePlanPart` from `@intentius/chant/change-set` returns,
   with planner `warden` and lexicon `github`, which chant's
-  `readChangeSetPartFile` reads (#74). This changes the file's shape: up to
-  0.6.x it was a bare JSON array of chant's reconcile `ChangeSet`, and a
+  `readChangeSetPartFile` reads (#74). This changes the file's shape: through
+  `0.6.x` it was a bare JSON array of chant's reconcile `ChangeSet`, and a
   reader of that array now reads the part (or takes `runReconcile`'s
   `changeSets` as a library). The new `--member <name>` names the member,
   defaulting to the policy file's directory name. A run where a cycle errored
@@ -71,10 +71,10 @@ releases before `0.4.1` are not recorded here.
 - New `checks` subcommand reads each member's generated pipeline job names from
   `chant workspace ls --json` and prints the ruleset that requires them as
   status checks. It needs chant 0.101 or newer, which publishes the names.
-- New `lifecycle` subcommand reads the `chant/lifecycle` branch name and each member's
-  ledger paths from `chant workspace status --json`, and prints the ruleset that
+- Another new subcommand, `lifecycle`, reads the `chant/lifecycle` branch name and each member's
+  ledger paths from `chant workspace status --json`. It prints the ruleset that
   protects the branch (no deletion, no force push) for the `rulesets` cycle.
-- New `codeowners` subcommand generates CODEOWNERS with one rule per member of a
+- The third, `codeowners`, generates CODEOWNERS with one rule per member of a
   chant workspace. Members are read through chant's read contract
   (`chant workspace ls --json`), and owners are declared by member name in an
   owners file. See [CLI.md](CLI.md#codeowners).
@@ -84,13 +84,13 @@ releases before `0.4.1` are not recorded here.
 - The governance pipeline the emitter writes pins `actions/checkout` from
   chant's action pin table (`@intentius/chant/action-pins`) instead of its own
   SHA, and every `uses:` line carries its release as a YAML comment. The
-  emitted pipeline's own pin moves from v0.3.1 to the v0.6.1 commit (#71).
+  emitted pipeline's own pin moves from `v0.3.1` to the `v0.6.1` commit (#71).
 - Node 24 is the supported runtime: `engines.node` is `>=24`, the Action runs
   on `node24`, and every workflow runs Node 24 with one `actions/checkout` pin.
   CI's check job also runs `npm run build` (#72). CI.md's and the README's
   workflow examples pin `actions/checkout` and the Action to commit SHAs.
-- The `forge-governance` kind needs chant 0.124.49 or newer (`memberFile` from
-  0.124.48, `graph.reader` from 0.124.49). The test suite validates
+- The `forge-governance` kind needs chant `0.124.49` or newer (`memberFile` from
+  `0.124.48`, `graph.reader` from `0.124.49`). The test suite validates
   `workspace-kinds.json` against chant's kinds schema and the graph reader's
   output against chant's workspace graph schema (#73).
 - `--config` is optional for `reconcile`, `audit` and `report`. Without it the

@@ -89,7 +89,7 @@ cycle finished.
 document: the object chant's `reconcilePlanPart` returns (from
 `@intentius/chant/change-set`), with planner `warden` and lexicon `github`.
 chant reads the file with `readChangeSetPartFile(part, "warden", member,
-"github")` and composes it with the other members' parts. Each planned change
+"github")`. It then composes the result with the other members' parts. Each planned change
 is an entry with its action (`create`, `update`, `delete`), its address (the
 change set's resource type and key, as in `member.bob`) and its scope (the
 org or account login). The file holds only the part, written as indented JSON
@@ -138,8 +138,8 @@ governance drift. It passes the run's drift to `keepDriftIssue` from
 `@intentius/chant/drift-issue`. A run that finds drift opens the issue, or
 updates the open one when the drift changed; a run that finds the same drift
 leaves it as it is, so a nightly schedule does not open a second issue or
-edit the first. A run that finds no drift closes the open issue with a
-comment. A run where a cycle failed and found no drift leaves the open issue
+edit the first. When no drift is found, the run closes the open issue with a
+comment. If a cycle failed and found no drift, the run leaves the open issue
 alone, since it cannot say GitHub matches.
 
 ```bash
@@ -251,9 +251,9 @@ The output is indented JSON with a trailing newline:
 ```
 
 `url` is the repository's `html_url` (or `https://github.com/<full_name>`
-when the API leaves it out). chant matches URLs by host, owner and name, so
-members declared with clone URLs (`https`, `ssh` or `git@github.com:`, with
-or without `.git`) match. `archived: true` marks an archived repository and is
+when the API leaves it out). chant matches URLs by host, owner and name. Members declared with
+clone URLs therefore match, whether the URL uses `https`, `ssh` or `git@github.com:`
+and whether or not it ends in `.git`. `archived: true` marks an archived repository and is
 left out for a live one. The list is sorted by `url`, so a run with nothing
 changed writes the same bytes.
 

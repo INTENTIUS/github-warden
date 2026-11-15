@@ -266,9 +266,8 @@ as a member, so `chant workspace ls` and `chant workspace graph` list the policy
 The kind is data in `workspace-kinds.json`, exported at `@intentius/github-warden/workspace-kinds`. chant reads it without
 importing the package.
 
-The kind needs chant 0.124.96 or newer. It uses `memberFile`, which chant reads from 0.124.48, `graph.reader`, which
-chant reads from 0.124.49, and `drift.reader`, which chant reads from 0.124.96; an older chant drops the kind with
-`WSP002`. The test suite validates `workspace-kinds.json`
+The kind needs chant `0.124.96` or newer. `memberFile` is read since `0.124.48`, `graph.reader` since
+`0.124.49` and `drift.reader` since `0.124.96`. An older chant drops the kind with `WSP002`. The test suite validates `workspace-kinds.json`
 against chant's `workspace-kinds.schema.json`, the graph reader's output for the example policy against chant's
 workspace `graph.schema.json`, and the drift reader's output against chant's `drift-reader.schema.json`.
 
@@ -288,8 +287,8 @@ chant fails the kinds file with `WSP002`.
 ### Drift in a chant workspace
 
 `chant workspace drift --member <name>` reads a governance member through the kind's drift reader, which needs chant
-0.124.96 or newer (`KIND_DRIFT_READER_FLOOR`); an older chant can't read the kinds file's `drift` block and drops the
-kind with `WSP002`. The reader runs every cycle as a dry-run reconcile against GitHub, so it reads and never writes, and
+`0.124.96` or newer (`KIND_DRIFT_READER_FLOOR`). With an older chant the kinds file's `drift` block is unreadable, so the
+kind is dropped with `WSP002`. The reader runs every cycle as a dry-run reconcile against GitHub, so it reads and never writes, and
 returns chant's drift stream for the `live-read` read. It runs inside chant's process and takes its credentials from
 the environment:
 
@@ -308,11 +307,11 @@ Each record is one node of the member's graph, named by the graph reader's id, s
 `ruleset/<org>/<repo>/<name>` for a repo's, and `protection/<org>/<repo>/<pattern>`. A node with planned changes is
 `drifted`, and each planned change under it is an attribute: an update gives one per field (`repo[#api].hasWiki`,
 the declared value before and the live value after), a create the declared value with nothing live, a delete the live
-value with nothing declared. Org settings, members, org secrets and variables and token grants count under the org
-node; a team's members and repos under the team; a repo's security settings, dependabot file, environments, secrets
-and variables under the repo. Secrets keep their path and never carry values. A node the plan leaves alone is
+value with nothing declared. The org node holds the org settings, members and token grants, and also the org's
+secrets and variables. A team's members and repos count under the team. A repo's security
+settings, dependabot file and environments count under the repo, and so do its secrets and variables. Secrets keep their path and never carry values. A node the plan leaves alone is
 `in-sync`. A change under a node the policy does not declare, such as an owned delete of a repo the policy does not
-list, is a record of its own. Ruleset bypass apps are graph nodes but no cycle reads them, so they get no record.
+list, is a record of its own. No cycle reads the ruleset bypass apps, which are graph nodes, so they get no record.
 
 When a cycle errors for an org, that org's nodes are `not-observed` with reason `read-failed` (or `drifted` with
 `attributesUnobserved` where other cycles found drift), and a cycle the request budget skipped makes every node
