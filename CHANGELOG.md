@@ -3,7 +3,7 @@
 Notable changes to `@intentius/github-warden`. Versions follow semver, and
 releases before `0.4.1` are not recorded here.
 
-## Unreleased
+## 0.7.0 (2026-11-14)
 
 - `reconcile --drift-issue` keeps one issue tracking the drift a dry run
   finds, through `keepDriftIssue` from `@intentius/chant/drift-issue` (#77):
