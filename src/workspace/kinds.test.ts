@@ -35,6 +35,9 @@ describe("forge-governance kinds file", () => {
     expect(kind.precedence).toBeLessThan(500);
     expect(kind.outputs).toEqual(["repos", "teams"]);
     expect(kind.graph.reader).toBe("dist/graph-reader.mjs");
+    expect(kind.drift).toEqual({ reader: "dist/drift-reader.mjs", config: { dir: "{dir}", file: "governance.yml" } });
+    expect(pkg.scripts.build).toContain("npm run build:drift");
+    expect(pkg.scripts["build:drift"]).toContain("--outfile=dist/drift-reader.mjs");
   });
 
   test("validates against chant's workspace-kinds.schema.json", () => {

@@ -5,6 +5,14 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- The `forge-governance` kind names a drift reader, `dist/drift-reader.mjs`
+  (#76), so `chant workspace drift --member` reads a governance member: a
+  dry-run reconcile of every cycle against GitHub, one record per graph node
+  (`in-sync`, or `drifted` with each planned change an attribute), and
+  `not-observed` nodes when a cycle errors or the request budget defers one.
+  It takes the token from `GH_TOKEN` and the API base from `GITHUB_API_URL`,
+  and refuses with `no-drift-read` without them. The kind now needs chant
+  0.124.96 or newer, the first chant that reads a kinds file's `drift` block.
 - New `repos` subcommand writes the policy's org's repository list, archived
   repos included, as the `{ forge, org, repos: [{ url, archived? }] }` JSON
   `chant workspace check --forge-repos <file>` reads (#75). `--org` picks the

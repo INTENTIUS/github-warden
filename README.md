@@ -253,7 +253,8 @@ orgs:
 
 The package ships a `forge-governance` member kind for [chant](https://github.com/INTENTIUS/chant) workspaces
 ([chant#3180](https://github.com/INTENTIUS/chant/issues/3180)). A repo that holds a governance policy declares it
-as a member, so `chant workspace ls` and `chant workspace graph` list the policy beside the rest of the estate.
+as a member, so `chant workspace ls` and `chant workspace graph` list the policy beside the rest of the estate, and
+`chant workspace drift --member` reads its drift from GitHub.
 
 ```json
 {
@@ -265,22 +266,59 @@ as a member, so `chant workspace ls` and `chant workspace graph` list the policy
 The kind is data in `workspace-kinds.json`, exported at `@intentius/github-warden/workspace-kinds`. chant reads it without
 importing the package.
 
-The kind needs chant 0.124.49 or newer. It uses `memberFile`, which chant reads from 0.124.48, and `graph.reader`, which
-chant reads from 0.124.49; an older chant drops the kind with `WSP002`. The test suite validates `workspace-kinds.json`
-against chant's `workspace-kinds.schema.json`, and the graph reader's output for the example policy against chant's
-workspace `graph.schema.json`.
+The kind needs chant 0.124.96 or newer. It uses `memberFile`, which chant reads from 0.124.48, `graph.reader`, which
+chant reads from 0.124.49, and `drift.reader`, which chant reads from 0.124.96; an older chant drops the kind with
+`WSP002`. The test suite validates `workspace-kinds.json`
+against chant's `workspace-kinds.schema.json`, the graph reader's output for the example policy against chant's
+workspace `graph.schema.json`, and the drift reader's output against chant's `drift-reader.schema.json`.
 
 | Part | Value |
 |---|---|
 | Probe | `governance.yml` directly in the member's directory |
 | Member file | `governance.yml` must pass `schemas/governance.schema.json`. `chant workspace check` reports a missing file, a file that does not parse, or a field the schema does not know as `WSP012` |
 | Outputs | `repos`, the repos in `orgs.<org>.repos`, and `teams`, the teams in `orgs.<org>.teams`, for [member links](https://intentius.io/chant/reference/workspace-declaration/#member-links) |
-| Graph | `graph.reader` names `dist/graph-reader.mjs`, which turns `governance.yml` into graph IR with no GitHub call: nodes for the org, repos, teams, rulesets, branch protection rules and the GitHub Apps named as ruleset bypass actors, and edges for a team's access to a repo, a ruleset's reach over a repo, a rule's repo, an app's bypass and a team's parent. It draws the policy as declared; drift colouring needs a live read and is not part of it. Needs chant 0.124.49 or newer ([chant#4413](https://github.com/INTENTIUS/chant/issues/4413)) |
+| Graph | `graph.reader` names `dist/graph-reader.mjs`, which turns `governance.yml` into graph IR with no GitHub call: nodes for the org, repos, teams, rulesets, branch protection rules and the GitHub Apps named as ruleset bypass actors, and edges for a team's access to a repo, a ruleset's reach over a repo, a rule's repo, an app's bypass and a team's parent. It draws the policy as declared. Needs chant 0.124.49 or newer ([chant#4413](https://github.com/INTENTIUS/chant/issues/4413)) |
+| Drift | `drift.reader` names `dist/drift-reader.mjs`, which runs a dry-run reconcile against GitHub and answers `chant workspace drift --member`. See [Drift in a chant workspace](#drift-in-a-chant-workspace). Needs chant 0.124.96 or newer ([chant#5068](https://github.com/INTENTIUS/chant/issues/5068)) |
 
 The schema is stricter than the loader: the loader drops a field it does not know, and the schema refuses it, so a
 misspelled field fails `chant workspace check` before a reconcile silently leaves it unmanaged. A member kind with a
 `memberFile` needs chant 0.124.48 or newer ([chant#3672](https://github.com/INTENTIUS/chant/issues/3672)); an older
 chant fails the kinds file with `WSP002`.
+
+### Drift in a chant workspace
+
+`chant workspace drift --member <name>` reads a governance member through the kind's drift reader, which needs chant
+0.124.96 or newer (`KIND_DRIFT_READER_FLOOR`); an older chant can't read the kinds file's `drift` block and drops the
+kind with `WSP002`. The reader runs every cycle as a dry-run reconcile against GitHub, so it reads and never writes, and
+returns chant's drift stream for the `live-read` read. It runs inside chant's process and takes its credentials from
+the environment:
+
+| Variable | Use |
+|---|---|
+| `GH_TOKEN` | The token, as `--token-env GH_TOKEN` reads it. The kind's `drift.config.tokenEnv` can name another variable |
+| `GITHUB_API_URL` | The API base, default `https://api.github.com`. GitHub Actions sets it, to the GHES API on GHES. `drift.config.baseUrlEnv` can name another variable |
+| App auth | With no token set, and `drift.config.appIdEnv` and `drift.config.installationIdEnv` naming the App ID and installation ID variables, the reader mints an installation token with the private key in `GOVERNANCE_APP_PRIVATE_KEY` (or `GITHUB_APP_PRIVATE_KEY`), as the CLI's App auth does |
+
+Without credentials, or without a policy in the member's directory, the read is refused with `no-drift-read`. The
+policy is the member's `governance.yml`, or `governance.ts` when there is no `governance.yml`, folded as `reconcile`
+folds it. A policy that does not load fails the read.
+
+Each record is one node of the member's graph, named by the graph reader's id, so chant colours the graph by it:
+`org/<org>`, `repo/<org>/<repo>`, `team/<org>/<team>`, `ruleset/<org>/<name>` for an org ruleset,
+`ruleset/<org>/<repo>/<name>` for a repo's, and `protection/<org>/<repo>/<pattern>`. A node with planned changes is
+`drifted`, and each planned change under it is an attribute: an update gives one per field (`repo[#api].hasWiki`,
+the declared value before and the live value after), a create the declared value with nothing live, a delete the live
+value with nothing declared. Org settings, members, org secrets and variables and token grants count under the org
+node; a team's members and repos under the team; a repo's security settings, dependabot file, environments, secrets
+and variables under the repo. Secrets keep their path and never carry values. A node the plan leaves alone is
+`in-sync`. A change under a node the policy does not declare, such as an owned delete of a repo the policy does not
+list, is a record of its own. Ruleset bypass apps are graph nodes but no cycle reads them, so they get no record.
+
+When a cycle errors for an org, that org's nodes are `not-observed` with reason `read-failed` (or `drifted` with
+`attributesUnobserved` where other cycles found drift), and a cycle the request budget skipped makes every node
+`not-observed` with reason `not-reached`, so an incomplete read never reads as no drift. `--resource <address>` reads one
+declared node and reconciles only its org; `--read` other than `live-read` and `--stack` are refused with
+`read-unsupported`.
 
 ## Guardrails
 
