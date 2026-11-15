@@ -16,6 +16,10 @@
  *      tarball stays self-contained and `npx github-warden audit` works
  *      offline from node_modules-free installs.
  *
+ * `@intentius/tsad-reference`, which folds a `.ts` policy, is external to the
+ * CLI (a runtime dependency, as in the other wardens) and bundled into the
+ * Action, which runs `action/index.mjs` with no node_modules beside it.
+ *
  * If you add a static value import of ./audit/engine.js (or anything else
  * that reaches @intentius/chant's lint machinery) to the CLI's top level,
  * this test fails.
@@ -35,6 +39,9 @@ async function buildMetafile(): Promise<Metafile> {
     splitting: true,
     platform: "node",
     format: "esm",
+    // As the `build` script: the CLI loads the typescript-as-data reference
+    // from node_modules, where it is a runtime dependency.
+    external: ["@intentius/tsad-reference"],
     outdir: path.join(root, "dist"),
     write: false,
     metafile: true,
@@ -94,5 +101,25 @@ describe("CLI bundle shape (issue #57)", () => {
       Object.keys(out.inputs).some(isTypescriptInput),
     );
     expect(anyTsInputs).toBe(true);
+  });
+});
+
+describe("Action bundle (#69)", () => {
+  it("bundles the typescript-as-data reference, since the Action has no node_modules", async () => {
+    const result = await build({
+      entryPoints: [path.join(root, "src/action.ts")],
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      outfile: path.join(root, "action/index.mjs"),
+      write: false,
+      metafile: true,
+      logLevel: "silent",
+      absWorkingDir: root,
+    });
+    const inputs = Object.keys(result.metafile.inputs);
+    expect(inputs.some((p) => /node_modules\/@intentius\/tsad-reference\//.test(p))).toBe(true);
+    const imports = Object.values(result.metafile.outputs).flatMap((o) => o.imports);
+    expect(imports.filter((i) => i.external && i.path.startsWith("@intentius/"))).toEqual([]);
   });
 });

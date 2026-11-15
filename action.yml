@@ -15,8 +15,15 @@ inputs:
     default: reconcile
 
   config:
-    description: "Path to the governance config file (YAML or JSON)."
+    description: "Path to the governance config file (YAML, JSON, or a .ts policy)."
     required: true
+
+  config-mode:
+    description: >
+      How a .ts policy is evaluated: fold (reduce it to its value without
+      running it), run (import it), or check (both, failing when they differ).
+      Default: fold.
+    required: false
 
   mode:
     description: "Reconcile mode: dry-run or apply. Only used when command is reconcile."

@@ -267,6 +267,14 @@ describe("parseAuditArgs", () => {
     expect(args.tokenEnv).toBeUndefined();
   });
 
+  it("parses --config-mode, defaulting to fold", () => {
+    expect(parseAuditArgs(["--token-env", "GH_TOKEN"]).configMode).toBe("fold");
+    expect(parseAuditArgs(["--token-env", "GH_TOKEN", "--config-mode", "check"]).configMode).toBe("check");
+    expect(() => parseAuditArgs(["--token-env", "GH_TOKEN", "--config-mode", "x"])).toThrow(
+      expect.objectContaining({ code: 2 }),
+    );
+  });
+
   it("leaves --config unset when it is omitted, so the default policy file is read", () => {
     expect(parseAuditArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });

@@ -15,7 +15,8 @@ installation token internally from the three App inputs).
 | Input | Required | Default | Meaning |
 |---|---|---|---|
 | `command` | no | `reconcile` | `reconcile` or `audit`. |
-| `config` | yes | — | Path to the governance config (YAML/JSON). |
+| `config` | yes | — | Path to the governance config (YAML, JSON or `.ts`). |
+| `config-mode` | no | `fold` | How a `.ts` policy is evaluated: `fold`, `run` or `check` (see [CLI.md](CLI.md#config-file-parsing)). |
 | `mode` | no | `dry-run` | `dry-run` or `apply` (reconcile only). |
 | `cycles` | no | all | Comma-separated cycle names (reconcile only). |
 | `app-id` | yes | — | GitHub App ID (numeric). |

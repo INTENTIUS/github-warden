@@ -5,6 +5,24 @@ releases before `0.4.1` are not recorded here.
 
 ## Unreleased
 
+- The policy can be a `.ts` file whose default export is the policy, typed with
+  `satisfies GovernanceConfig` (#69). Warden folds it to its value with
+  `@intentius/tsad-reference` without running it, so a file that reads the
+  environment or otherwise is not data exits 2 with its line and column. The
+  new `--config-mode fold|run|check` on `reconcile`, `audit` and `report`, and
+  the Action's `config-mode` input, choose folding (the default), importing
+  the file, or both with a refusal when they differ. A folded policy's plan
+  prints, under each drifted field, where the policy wrote it: `direct`, or the
+  preset argument or body line that set it. Without `--config`, warden reads
+  `governance.ts` when there is no `governance.yml`. `examples/governance.ts`
+  is the example policy in TypeScript.
+- The package has a root export, `dist/index.js` with its type declarations,
+  so a `.ts` policy can import `GovernanceConfig` from
+  `@intentius/github-warden`. It also exports `loadGovernancePolicy`, which
+  reads a policy file of any of the three forms. `runReconcile` takes the
+  folded policy's `provenance` and returns each cycle's drift `origins`.
+  `@intentius/tsad-reference` `^2.3.0` is a runtime dependency; the CLI loads
+  it from node_modules and the Action bundles it.
 - `reconcile` with no programmatic scope (the CLI and the Action) gives each org's
   cycles that org's declared `repos` and `teams`. Before, the repo-level cycles
   read nothing: the branch-protection and repo-settings cycles threw

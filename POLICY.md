@@ -1,12 +1,14 @@
 # Policy
 
-Wardens are policy driven. The governance file is the policy: one YAML or JSON
-file that declares the desired state of your GitHub organization(s), and
+Wardens are policy driven. The governance file is the policy: one YAML, JSON
+or TypeScript file that declares the desired state of your GitHub organization(s), and
 everything else (auth, the CLI, the cycles, the Action, the schedule) serves it.
 It is the one file you must author.
 
 - Loaded from the path given to `--config` on every subcommand
-  (`reconcile`, `audit`, `report`). YAML or JSON, decided by file extension.
+  (`reconcile`, `audit`, `report`), or `governance.yml` (else `governance.ts`)
+  in the working directory without it. YAML, JSON or TypeScript, decided by
+  file extension; see [A policy in TypeScript](#a-policy-in-typescript).
 - Schema (authoritative): `src/config/types.ts`. Validation: `src/config/load.ts`
   (throws a `GovernanceConfigError` with the exact field path on bad shape).
 - Selective-by-omission: an absent field or collection is never read for
@@ -234,6 +236,49 @@ orgs:
 
 The smallest useful policy is one org with one managed slice, for example just
 `settings.defaultRepositoryPermission`; everything else then stays unmanaged.
+
+## A policy in TypeScript
+
+The policy can also be a `.ts` file whose default export is the policy object
+(`export const policy` works too). Warden folds it to its value with the
+typescript-as-data reference evaluator without running it, so it stays data,
+and checks the result with the same validation as YAML. A function written in
+the same file (or imported from a sibling file) can set several fields from
+one argument. `examples/governance.ts` applies a review preset to a repo:
+
+```ts
+import type { GovernanceConfig } from "@intentius/github-warden";
+
+const reviewPreset = (review: { approvals: number; checks: string[] }) => ({
+  deleteBranchOnMerge: true,
+  branchProtection: [
+    { pattern: "main", requiredApprovingReviewCount: review.approvals, /* ... */ },
+  ],
+});
+
+export default {
+  orgs: {
+    "my-org": {
+      repos: {
+        "my-repo": { ...reviewPreset({ approvals: 1, checks: ["ci"] }), hasWiki: false /* ... */ },
+      },
+    },
+  },
+} satisfies GovernanceConfig;
+```
+
+`examples/governance.yml` is the same policy with every field written out.
+`satisfies GovernanceConfig` gives completion and a compile error on a
+misspelt key; the type comes from the package root. A file that is code
+rather than data, such as one reading `process.env`, is refused with its line
+and column (`examples/not-data.ts`). `--config-mode run` imports the file
+instead, and `--config-mode check` does both and refuses a file on which they
+differ. When a field set by the preset drifts, the plan names the preset
+argument and the line it is on; a field written on the repo itself is reported
+as `direct` (see [CLI.md](CLI.md#reconcile)).
+
+The `forge-governance` workspace kind reads `governance.yml` only, so a
+workspace member keeps its policy in YAML.
 
 ## Field reference
 
