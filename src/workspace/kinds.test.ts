@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, test, expect } from "vitest";
@@ -18,6 +19,11 @@ const kind = kinds.kinds[0];
 const schema = readJson(kind.memberFile.schema);
 const validate = new Ajv2020({ allErrors: true, strict: false }).compile(schema);
 
+// chant's own schema for a kinds file: what chant checks this file against
+// before it registers the kind.
+const kindsSchema = createRequire(import.meta.url)("@intentius/chant/workspace/workspace-kinds.schema.json");
+const validateKinds = new Ajv2020({ allErrors: true, strict: false }).compile(kindsSchema);
+
 const sample = parseYaml(readFileSync(join(root, "examples", "governance.yml"), "utf-8"));
 
 describe("forge-governance kinds file", () => {
@@ -29,6 +35,16 @@ describe("forge-governance kinds file", () => {
     expect(kind.precedence).toBeLessThan(500);
     expect(kind.outputs).toEqual(["repos", "teams"]);
     expect(kind.graph.reader).toBe("dist/graph-reader.mjs");
+  });
+
+  test("validates against chant's workspace-kinds.schema.json", () => {
+    expect(validateKinds(kinds), JSON.stringify(validateKinds.errors, null, 2)).toBe(true);
+  });
+
+  test("chant's kinds schema refuses a kind with both a lexicon and a reader", () => {
+    const bad = structuredClone(kinds);
+    bad.kinds[0].graph.lexicon = "github";
+    expect(validateKinds(bad)).toBe(false);
   });
 
   test("probes for the file it checks", () => {
