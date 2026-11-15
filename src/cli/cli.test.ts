@@ -168,6 +168,25 @@ describe("parseReconcileArgs", () => {
     }
   });
 
+  it("parses --drift-issue and --drift-issue-repo, refusing them with --mode apply, --cycles or alone", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    const a = parseReconcileArgs(base);
+    expect(a.driftIssue).toBe(false);
+    expect(a.driftIssueRepo).toBeUndefined();
+    const b = parseReconcileArgs([...base, "--drift-issue", "--drift-issue-repo", "acme/governance", "--member", "gov"]);
+    expect(b.driftIssue).toBe(true);
+    expect(b.driftIssueRepo).toBe("acme/governance");
+    expect(b.member).toBe("gov");
+    expect(b.planJson).toBeUndefined();
+    const bad = (argv: string[]) => expect(() => parseReconcileArgs(argv)).toThrow(expect.objectContaining({ code: 2 }));
+    bad([...base, "--mode", "apply", "--drift-issue"]);
+    bad([...base, "--drift-issue-repo", "acme/governance"]);
+    bad([...base, "--drift-issue", "--drift-issue-repo"]);
+    bad([...base, "--drift-issue", "--drift-issue-repo", "governance"]);
+    bad([...base, "--drift-issue", "--drift-issue-repo", "acme/gov/extra"]);
+    bad([...base, "--drift-issue", "--cycles", "teams"]);
+  });
+
   it("throws code 2 for a --removal-cap-fraction outside (0, 1]", () => {
     const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
     for (const bad of ["0", "-0.5", "1.5", "abc"]) {

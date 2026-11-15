@@ -2818,12 +2818,12 @@ var require_typescript = __commonJS({
       function createSortedArray() {
         return [];
       }
-      function insertSorted(array2, insert, compare2, equalityComparer, allowDuplicates) {
+      function insertSorted(array2, insert, compare3, equalityComparer, allowDuplicates) {
         if (array2.length === 0) {
           array2.push(insert);
           return true;
         }
-        const insertIndex = binarySearch(array2, insert, identity, compare2);
+        const insertIndex = binarySearch(array2, insert, identity, compare3);
         if (insertIndex < 0) {
           if (equalityComparer && !allowDuplicates) {
             const idx = ~insertIndex;
@@ -3483,8 +3483,8 @@ var require_typescript = __commonJS({
         }
         return init;
       }
-      function min(items, compare2) {
-        return reduceLeft(items, (x, y) => compare2(x, y) === -1 ? x : y);
+      function min(items, compare3) {
+        return reduceLeft(items, (x, y) => compare3(x, y) === -1 ? x : y);
       }
       function compareStringsCaseInsensitive(a, b) {
         if (a === b) return 0;
@@ -3609,15 +3609,15 @@ var require_typescript = __commonJS({
         const res = previous[s2.length];
         return res > max ? void 0 : res;
       }
-      function endsWith(str2, suffix, ignoreCase) {
-        const expectedPos = str2.length - suffix.length;
-        return expectedPos >= 0 && (ignoreCase ? equateStringsCaseInsensitive(str2.slice(expectedPos), suffix) : str2.indexOf(suffix, expectedPos) === expectedPos);
+      function endsWith(str3, suffix, ignoreCase) {
+        const expectedPos = str3.length - suffix.length;
+        return expectedPos >= 0 && (ignoreCase ? equateStringsCaseInsensitive(str3.slice(expectedPos), suffix) : str3.indexOf(suffix, expectedPos) === expectedPos);
       }
-      function removeSuffix(str2, suffix) {
-        return endsWith(str2, suffix) ? str2.slice(0, str2.length - suffix.length) : str2;
+      function removeSuffix(str3, suffix) {
+        return endsWith(str3, suffix) ? str3.slice(0, str3.length - suffix.length) : str3;
       }
-      function tryRemoveSuffix(str2, suffix) {
-        return endsWith(str2, suffix) ? str2.slice(0, str2.length - suffix.length) : void 0;
+      function tryRemoveSuffix(str3, suffix) {
+        return endsWith(str3, suffix) ? str3.slice(0, str3.length - suffix.length) : void 0;
       }
       function removeMinAndVersionNumbers(fileName) {
         let end = fileName.length;
@@ -3705,14 +3705,14 @@ var require_typescript = __commonJS({
         }
         return matchedValue;
       }
-      function startsWith(str2, prefix, ignoreCase) {
-        return ignoreCase ? equateStringsCaseInsensitive(str2.slice(0, prefix.length), prefix) : str2.lastIndexOf(prefix, 0) === 0;
+      function startsWith(str3, prefix, ignoreCase) {
+        return ignoreCase ? equateStringsCaseInsensitive(str3.slice(0, prefix.length), prefix) : str3.lastIndexOf(prefix, 0) === 0;
       }
-      function removePrefix(str2, prefix) {
-        return startsWith(str2, prefix) ? str2.substr(prefix.length) : str2;
+      function removePrefix(str3, prefix) {
+        return startsWith(str3, prefix) ? str3.substr(prefix.length) : str3;
       }
-      function tryRemovePrefix(str2, prefix, getCanonicalFileName = identity) {
-        return startsWith(getCanonicalFileName(str2), getCanonicalFileName(prefix)) ? str2.substring(prefix.length) : void 0;
+      function tryRemovePrefix(str3, prefix, getCanonicalFileName = identity) {
+        return startsWith(getCanonicalFileName(str3), getCanonicalFileName(prefix)) ? str3.substring(prefix.length) : void 0;
       }
       function isPatternMatch({ prefix, suffix }, candidate) {
         return candidate.length >= prefix.length + suffix.length && startsWith(candidate, prefix) && endsWith(candidate, suffix);
@@ -9512,8 +9512,8 @@ ${lanes.join("\n")}
       function isNodeModulesDirectory(dirPath) {
         return endsWith(dirPath, "/node_modules");
       }
-      function diag(code, category, key, message, reportsUnnecessary, elidedInCompatabilityPyramid, reportsDeprecated) {
-        return { code, category, key, message, reportsUnnecessary, elidedInCompatabilityPyramid, reportsDeprecated };
+      function diag(code2, category, key, message, reportsUnnecessary, elidedInCompatabilityPyramid, reportsDeprecated) {
+        return { code: code2, category, key, message, reportsUnnecessary, elidedInCompatabilityPyramid, reportsDeprecated };
       }
       var Diagnostics = {
         Unterminated_string_literal: diag(1002, 1, "Unterminated_string_literal_1002", "Unterminated string literal."),
@@ -11985,8 +11985,8 @@ ${lanes.join("\n")}
       var commentDirectiveRegExSingleLine = /^\/\/\/?\s*@(ts-expect-error|ts-ignore)/;
       var commentDirectiveRegExMultiLine = /^(?:\/|\*)*\s*@(ts-expect-error|ts-ignore)/;
       var jsDocSeeOrLink = /@(?:see|link)/i;
-      function lookupInUnicodeMap(code, map22) {
-        if (code < map22[0]) {
+      function lookupInUnicodeMap(code2, map22) {
+        if (code2 < map22[0]) {
           return false;
         }
         let lo = 0;
@@ -11995,10 +11995,10 @@ ${lanes.join("\n")}
         while (lo + 1 < hi) {
           mid = lo + (hi - lo) / 2;
           mid -= mid % 2;
-          if (map22[mid] <= code && code <= map22[mid + 1]) {
+          if (map22[mid] <= code2 && code2 <= map22[mid + 1]) {
             return true;
           }
-          if (code < map22[mid]) {
+          if (code2 < map22[mid]) {
             hi = mid;
           } else {
             lo = mid + 2;
@@ -12006,11 +12006,11 @@ ${lanes.join("\n")}
         }
         return false;
       }
-      function isUnicodeIdentifierStart(code, languageVersion) {
-        return languageVersion >= 2 ? lookupInUnicodeMap(code, unicodeESNextIdentifierStart) : lookupInUnicodeMap(code, unicodeES5IdentifierStart);
+      function isUnicodeIdentifierStart(code2, languageVersion) {
+        return languageVersion >= 2 ? lookupInUnicodeMap(code2, unicodeESNextIdentifierStart) : lookupInUnicodeMap(code2, unicodeES5IdentifierStart);
       }
-      function isUnicodeIdentifierPart(code, languageVersion) {
-        return languageVersion >= 2 ? lookupInUnicodeMap(code, unicodeESNextIdentifierPart) : lookupInUnicodeMap(code, unicodeES5IdentifierPart);
+      function isUnicodeIdentifierPart(code2, languageVersion) {
+        return languageVersion >= 2 ? lookupInUnicodeMap(code2, unicodeESNextIdentifierPart) : lookupInUnicodeMap(code2, unicodeES5IdentifierPart);
       }
       function makeReverseMap(source) {
         const result = [];
@@ -12911,13 +12911,13 @@ ${lanes.join("\n")}
               }
               tokenFlags |= 2048;
               if (flags & 6) {
-                const code = parseInt(text2.substring(start2 + 1, pos), 8);
+                const code2 = parseInt(text2.substring(start2 + 1, pos), 8);
                 if (flags & 4 && !(flags & 32) && ch !== 48) {
-                  error210(Diagnostics.Octal_escape_sequences_and_backreferences_are_not_allowed_in_a_character_class_If_this_was_intended_as_an_escape_sequence_use_the_syntax_0_instead, start2, pos - start2, "\\x" + code.toString(16).padStart(2, "0"));
+                  error210(Diagnostics.Octal_escape_sequences_and_backreferences_are_not_allowed_in_a_character_class_If_this_was_intended_as_an_escape_sequence_use_the_syntax_0_instead, start2, pos - start2, "\\x" + code2.toString(16).padStart(2, "0"));
                 } else {
-                  error210(Diagnostics.Octal_escape_sequences_are_not_allowed_Use_the_syntax_0, start2, pos - start2, "\\x" + code.toString(16).padStart(2, "0"));
+                  error210(Diagnostics.Octal_escape_sequences_are_not_allowed_Use_the_syntax_0, start2, pos - start2, "\\x" + code2.toString(16).padStart(2, "0"));
                 }
-                return String.fromCharCode(code);
+                return String.fromCharCode(code2);
               }
               return text2.substring(start2, pos);
             case 56:
@@ -16749,10 +16749,10 @@ ${lanes.join("\n")}
       }
       var stringWriter = createSingleLineStringWriter();
       function createSingleLineStringWriter() {
-        var str2 = "";
-        const writeText = (text2) => str2 += text2;
+        var str3 = "";
+        const writeText = (text2) => str3 += text2;
         return {
-          getText: () => str2,
+          getText: () => str3,
           write: writeText,
           rawWrite: writeText,
           writeKeyword: writeText,
@@ -16766,19 +16766,19 @@ ${lanes.join("\n")}
           writeSymbol: (s, _) => writeText(s),
           writeTrailingSemicolon: writeText,
           writeComment: writeText,
-          getTextPos: () => str2.length,
+          getTextPos: () => str3.length,
           getLine: () => 0,
           getColumn: () => 0,
           getIndent: () => 0,
           isAtStartOfLine: () => false,
           hasTrailingComment: () => false,
-          hasTrailingWhitespace: () => !!str2.length && isWhiteSpaceLike(str2.charCodeAt(str2.length - 1)),
+          hasTrailingWhitespace: () => !!str3.length && isWhiteSpaceLike(str3.charCodeAt(str3.length - 1)),
           // Completely ignore indentation for string writers.  And map newlines to
           // a single space.
-          writeLine: () => str2 += " ",
+          writeLine: () => str3 += " ",
           increaseIndent: noop,
           decreaseIndent: noop,
-          clear: () => str2 = ""
+          clear: () => str3 = ""
         };
       }
       function changesAffectModuleResolution(oldOptions, newOptions) {
@@ -19096,8 +19096,8 @@ ${lanes.join("\n")}
       function isSingleOrDoubleQuote(charCode) {
         return charCode === 39 || charCode === 34;
       }
-      function isStringDoubleQuoted(str2, sourceFile) {
-        return getSourceTextOfNodeFromSourceFile(sourceFile, str2).charCodeAt(0) === 34;
+      function isStringDoubleQuoted(str3, sourceFile) {
+        return getSourceTextOfNodeFromSourceFile(sourceFile, str3).charCodeAt(0) === 34;
       }
       function isAssignmentDeclaration(decl) {
         return isBinaryExpression6(decl) || isAccessExpression(decl) || isIdentifier34(decl) || isCallExpression19(decl);
@@ -20549,8 +20549,8 @@ ${lanes.join("\n")}
         }
       }
       var templateSubstitutionRegExp = /\$\{/g;
-      function escapeTemplateSubstitution(str2) {
-        return str2.replace(templateSubstitutionRegExp, "\\${");
+      function escapeTemplateSubstitution(str3) {
+        return str3.replace(templateSubstitutionRegExp, "\\${");
       }
       function containsInvalidEscapeFlag(node) {
         return !!((node.templateFlags || 0) & 2048);
@@ -22838,10 +22838,10 @@ ${lanes.join("\n")}
       function getJSXRuntimeImport(base, options) {
         return base ? `${base}/${options.jsx === 5 ? "jsx-dev-runtime" : "jsx-runtime"}` : void 0;
       }
-      function hasZeroOrOneAsteriskCharacter(str2) {
+      function hasZeroOrOneAsteriskCharacter(str3) {
         let seenAsterisk = false;
-        for (let i = 0; i < str2.length; i++) {
-          if (str2.charCodeAt(i) === 42) {
+        for (let i = 0; i < str3.length; i++) {
+          if (str3.charCodeAt(i) === 42) {
             if (!seenAsterisk) {
               seenAsterisk = true;
             } else {
@@ -23359,8 +23359,8 @@ ${lanes.join("\n")}
         }
         return false;
       }
-      function numberOfDirectorySeparators(str2) {
-        const match = str2.match(/\//g);
+      function numberOfDirectorySeparators(str3) {
+        const match = str3.match(/\//g);
         return match ? match.length : 0;
       }
       function compareNumberOfDirectorySeparators(path1, path2) {
@@ -45585,9 +45585,9 @@ ${lanes.join("\n")}
         optionName = optionName.toLowerCase();
         const { optionsNameMap, shortOptionNames } = getOptionNameMap();
         if (allowShort) {
-          const short = shortOptionNames.get(optionName);
-          if (short !== void 0) {
-            optionName = short;
+          const short2 = shortOptionNames.get(optionName);
+          if (short2 !== void 0) {
+            optionName = short2;
           }
         }
         return optionsNameMap.get(optionName);
@@ -47790,13 +47790,13 @@ ${lanes.join("\n")}
         if (isArray(value)) {
           return `[${(_a7 = value.map((e) => compilerOptionValueToString(e))) == null ? void 0 : _a7.join(",")}]`;
         }
-        let str2 = "{";
+        let str3 = "{";
         for (const key in value) {
           if (hasProperty(value, key)) {
-            str2 += `${key}: ${compilerOptionValueToString(value[key])}`;
+            str3 += `${key}: ${compilerOptionValueToString(value[key])}`;
           }
         }
-        return str2 + "}";
+        return str3 + "}";
       }
       function getKeyForCompilerOptions(options, affectingOptionDeclarations) {
         return affectingOptionDeclarations.map((option) => compilerOptionValueToString(getCompilerOptionValue(options, option))).join("|") + `|${options.pathsBasePath}`;
@@ -71495,18 +71495,18 @@ ${lanes.join("\n")}
             )
           );
         }
-        function applyStringMapping(symbol2, str2) {
+        function applyStringMapping(symbol2, str3) {
           switch (intrinsicTypeKinds.get(symbol2.escapedName)) {
             case 0:
-              return str2.toUpperCase();
+              return str3.toUpperCase();
             case 1:
-              return str2.toLowerCase();
+              return str3.toLowerCase();
             case 2:
-              return str2.charAt(0).toUpperCase() + str2.slice(1);
+              return str3.charAt(0).toUpperCase() + str3.slice(1);
             case 3:
-              return str2.charAt(0).toLowerCase() + str2.slice(1);
+              return str3.charAt(0).toLowerCase() + str3.slice(1);
           }
-          return str2;
+          return str3;
         }
         function applyTemplateStringMapping(symbol2, texts, types2) {
           switch (intrinsicTypeKinds.get(symbol2.escapedName)) {
@@ -74448,15 +74448,15 @@ ${lanes.join("\n")}
                   if (path.indexOf("new ") === 0) {
                     path = `(${path})`;
                   }
-                  const str2 = "" + args[0];
+                  const str3 = "" + args[0];
                   if (path.length === 0) {
-                    path = `${str2}`;
-                  } else if (isIdentifierText(str2, getEmitScriptTarget(compilerOptions))) {
-                    path = `${path}.${str2}`;
-                  } else if (str2[0] === "[" && str2[str2.length - 1] === "]") {
-                    path = `${path}${str2}`;
+                    path = `${str3}`;
+                  } else if (isIdentifierText(str3, getEmitScriptTarget(compilerOptions))) {
+                    path = `${path}.${str3}`;
+                  } else if (str3[0] === "[" && str3[str3.length - 1] === "]") {
+                    path = `${path}${str3}`;
                   } else {
-                    path = `${path}[${str2}]`;
+                    path = `${path}[${str3}]`;
                   }
                   break;
                 }
@@ -78731,22 +78731,22 @@ ${lanes.join("\n")}
                     const constraintTypes = constraint.flags & 1048576 ? constraint.types : [constraint];
                     let allTypeFlags = reduceLeft(constraintTypes, (flags, t) => flags | t.flags, 0);
                     if (!(allTypeFlags & 4)) {
-                      const str2 = source2.value;
+                      const str3 = source2.value;
                       if (allTypeFlags & 296 && !isValidNumberString(
-                        str2,
+                        str3,
                         /*roundTripOnly*/
                         true
                       )) {
                         allTypeFlags &= ~296;
                       }
                       if (allTypeFlags & 2112 && !isValidBigIntString(
-                        str2,
+                        str3,
                         /*roundTripOnly*/
                         true
                       )) {
                         allTypeFlags &= ~2112;
                       }
-                      const matchingType = reduceLeft(constraintTypes, (left, right) => !(right.flags & allTypeFlags) ? left : left.flags & 4 ? left : right.flags & 4 ? source2 : left.flags & 134217728 ? left : right.flags & 134217728 && isTypeMatchedByTemplateLiteralType(source2, right) ? source2 : left.flags & 268435456 ? left : right.flags & 268435456 && str2 === applyStringMapping(right.symbol, str2) ? source2 : left.flags & 128 ? left : right.flags & 128 && right.value === str2 ? right : left.flags & 8 ? left : right.flags & 8 ? getNumberLiteralType(+str2) : left.flags & 32 ? left : right.flags & 32 ? getNumberLiteralType(+str2) : left.flags & 256 ? left : right.flags & 256 && right.value === +str2 ? right : left.flags & 64 ? left : right.flags & 64 ? parseBigIntLiteralType(str2) : left.flags & 2048 ? left : right.flags & 2048 && pseudoBigIntToString(right.value) === str2 ? right : left.flags & 16 ? left : right.flags & 16 ? str2 === "true" ? trueType : str2 === "false" ? falseType : booleanType : left.flags & 512 ? left : right.flags & 512 && right.intrinsicName === str2 ? right : left.flags & 32768 ? left : right.flags & 32768 && right.intrinsicName === str2 ? right : left.flags & 65536 ? left : right.flags & 65536 && right.intrinsicName === str2 ? right : left, neverType);
+                      const matchingType = reduceLeft(constraintTypes, (left, right) => !(right.flags & allTypeFlags) ? left : left.flags & 4 ? left : right.flags & 4 ? source2 : left.flags & 134217728 ? left : right.flags & 134217728 && isTypeMatchedByTemplateLiteralType(source2, right) ? source2 : left.flags & 268435456 ? left : right.flags & 268435456 && str3 === applyStringMapping(right.symbol, str3) ? source2 : left.flags & 128 ? left : right.flags & 128 && right.value === str3 ? right : left.flags & 8 ? left : right.flags & 8 ? getNumberLiteralType(+str3) : left.flags & 32 ? left : right.flags & 32 ? getNumberLiteralType(+str3) : left.flags & 256 ? left : right.flags & 256 && right.value === +str3 ? right : left.flags & 64 ? left : right.flags & 64 ? parseBigIntLiteralType(str3) : left.flags & 2048 ? left : right.flags & 2048 && pseudoBigIntToString(right.value) === str3 ? right : left.flags & 16 ? left : right.flags & 16 ? str3 === "true" ? trueType : str3 === "false" ? falseType : booleanType : left.flags & 512 ? left : right.flags & 512 && right.intrinsicName === str3 ? right : left.flags & 32768 ? left : right.flags & 32768 && right.intrinsicName === str3 ? right : left.flags & 65536 ? left : right.flags & 65536 && right.intrinsicName === str3 ? right : left, neverType);
                       if (!(matchingType.flags & 131072)) {
                         inferFromTypes(matchingType, target2);
                         continue;
@@ -122370,7 +122370,7 @@ ${lanes.join("\n")}
             /* Endfinally */
           );
         }
-        function emitWorker(code, args, location) {
+        function emitWorker(code2, args, location) {
           if (operations === void 0) {
             operations = [];
             operationArguments = [];
@@ -122380,7 +122380,7 @@ ${lanes.join("\n")}
             markLabel(defineLabel());
           }
           const operationIndex = operations.length;
-          operations[operationIndex] = code;
+          operations[operationIndex] = code2;
           operationArguments[operationIndex] = args;
           operationLocations[operationIndex] = location;
         }
@@ -128414,7 +128414,7 @@ ${lanes.join("\n")}
           switch (input.kind) {
             case 266: {
               needsDeclare = false;
-              const clean2 = cleanup(factory2.updateTypeAliasDeclaration(
+              const clean22 = cleanup(factory2.updateTypeAliasDeclaration(
                 input,
                 ensureModifiers(input),
                 input.name,
@@ -128422,7 +128422,7 @@ ${lanes.join("\n")}
                 Debug.checkDefined(visitNode(input.type, visitDeclarationSubtree, isTypeNode3))
               ));
               needsDeclare = previousNeedsDeclare;
-              return clean2;
+              return clean22;
             }
             case 265: {
               return cleanup(factory2.updateInterfaceDeclaration(
@@ -128435,7 +128435,7 @@ ${lanes.join("\n")}
               ));
             }
             case 263: {
-              const clean2 = cleanup(factory2.updateFunctionDeclaration(
+              const clean22 = cleanup(factory2.updateFunctionDeclaration(
                 input,
                 ensureModifiers(input),
                 /*asteriskToken*/
@@ -128447,7 +128447,7 @@ ${lanes.join("\n")}
                 /*body*/
                 void 0
               ));
-              if (clean2 && resolver.isExpandoFunctionDeclaration(input) && shouldEmitFunctionProperties(input)) {
+              if (clean22 && resolver.isExpandoFunctionDeclaration(input) && shouldEmitFunctionProperties(input)) {
                 const props = resolver.getPropertiesOfContainerFunction(input);
                 if (isolatedDeclarations) {
                   reportExpandoFunctionErrors(input);
@@ -128455,7 +128455,7 @@ ${lanes.join("\n")}
                 const fakespace = parseNodeFactory.createModuleDeclaration(
                   /*modifiers*/
                   void 0,
-                  clean2.name || factory2.createIdentifier("_default"),
+                  clean22.name || factory2.createIdentifier("_default"),
                   factory2.createModuleBlock([]),
                   32
                   /* Namespace */
@@ -128527,25 +128527,25 @@ ${lanes.join("\n")}
                   /* Namespace */
                 );
                 if (!hasEffectiveModifier(
-                  clean2,
+                  clean22,
                   2048
                   /* Default */
                 )) {
-                  return [clean2, namespaceDecl];
+                  return [clean22, namespaceDecl];
                 }
                 const modifiers = factory2.createModifiersFromModifierFlags(
-                  getEffectiveModifierFlags(clean2) & ~2080 | 128
+                  getEffectiveModifierFlags(clean22) & ~2080 | 128
                   /* Ambient */
                 );
                 const cleanDeclaration = factory2.updateFunctionDeclaration(
-                  clean2,
+                  clean22,
                   modifiers,
                   /*asteriskToken*/
                   void 0,
-                  clean2.name,
-                  clean2.typeParameters,
-                  clean2.parameters,
-                  clean2.type,
+                  clean22.name,
+                  clean22.typeParameters,
+                  clean22.parameters,
+                  clean22.type,
                   /*body*/
                   void 0
                 );
@@ -128568,7 +128568,7 @@ ${lanes.join("\n")}
                 resultHasScopeMarker = true;
                 return [cleanDeclaration, namespaceDeclaration, exportDefaultDeclaration];
               } else {
-                return clean2;
+                return clean22;
               }
             }
             case 268: {
@@ -142721,7 +142721,7 @@ ${lanes.join("\n")}
       function createTabularErrorsDisplay(filesInError, host) {
         const distinctFiles = filesInError.filter((value, index, self) => index === self.findIndex((file2) => (file2 == null ? void 0 : file2.fileName) === (value == null ? void 0 : value.fileName)));
         if (distinctFiles.length === 0) return "";
-        const numberLength = (num) => Math.log(num) * Math.LOG10E + 1;
+        const numberLength = (num2) => Math.log(num2) * Math.LOG10E + 1;
         const fileToErrorCount = distinctFiles.map((file2) => [file2, countWhere(filesInError, (fileInError) => fileInError.fileName === file2.fileName)]);
         const maxErrors = maxBy(fileToErrorCount, 0, (value) => value[1]);
         const headerRow = Diagnostics.Errors_Files.message;
@@ -145289,7 +145289,7 @@ ${lanes.join("\n")}
         startWatching(state, buildOrder);
         return isCircularBuildOrder(buildOrder) ? 4 : !buildOrder.some((p) => state.diagnostics.has(toResolvedConfigFilePath(state, p))) ? 0 : successfulProjects ? 2 : 1;
       }
-      function clean(state, project2, onlyReferences) {
+      function clean2(state, project2, onlyReferences) {
         mark("SolutionBuilder::beforeClean");
         const result = cleanWorker(state, project2, onlyReferences);
         mark("SolutionBuilder::afterClean");
@@ -145578,7 +145578,7 @@ ${lanes.join("\n")}
         const state = createSolutionBuilderState(watch, hostOrHostWithWatch, rootNames, options, baseWatchOptions);
         return {
           build: (project2, cancellationToken, writeFile2, getCustomTransformers) => build4(state, project2, cancellationToken, writeFile2, getCustomTransformers),
-          clean: (project2) => clean(state, project2),
+          clean: (project2) => clean2(state, project2),
           buildReferences: (project2, cancellationToken, writeFile2, getCustomTransformers) => build4(
             state,
             project2,
@@ -145588,7 +145588,7 @@ ${lanes.join("\n")}
             /*onlyReferences*/
             true
           ),
-          cleanReferences: (project2) => clean(
+          cleanReferences: (project2) => clean2(
             state,
             project2,
             /*onlyReferences*/
@@ -145879,34 +145879,34 @@ ${lanes.join("\n")}
         const showColors = defaultIsPretty(sys2);
         if (!showColors) {
           return {
-            bold: (str2) => str2,
-            blue: (str2) => str2,
-            blueBackground: (str2) => str2,
-            brightWhite: (str2) => str2
+            bold: (str3) => str3,
+            blue: (str3) => str3,
+            blueBackground: (str3) => str3,
+            brightWhite: (str3) => str3
           };
         }
-        function bold(str2) {
-          return `\x1B[1m${str2}\x1B[22m`;
+        function bold(str3) {
+          return `\x1B[1m${str3}\x1B[22m`;
         }
         const isWindows = sys2.getEnvironmentVariable("OS") && sys2.getEnvironmentVariable("OS").toLowerCase().includes("windows");
         const isWindowsTerminal = sys2.getEnvironmentVariable("WT_SESSION");
         const isVSCode = sys2.getEnvironmentVariable("TERM_PROGRAM") && sys2.getEnvironmentVariable("TERM_PROGRAM") === "vscode";
-        function blue(str2) {
+        function blue(str3) {
           if (isWindows && !isWindowsTerminal && !isVSCode) {
-            return brightWhite(str2);
+            return brightWhite(str3);
           }
-          return `\x1B[94m${str2}\x1B[39m`;
+          return `\x1B[94m${str3}\x1B[39m`;
         }
         const supportsRicherColors = sys2.getEnvironmentVariable("COLORTERM") === "truecolor" || sys2.getEnvironmentVariable("TERM") === "xterm-256color";
-        function blueBackground(str2) {
+        function blueBackground(str3) {
           if (supportsRicherColors) {
-            return `\x1B[48;5;68m${str2}\x1B[39;49m`;
+            return `\x1B[48;5;68m${str3}\x1B[39;49m`;
           } else {
-            return `\x1B[44m${str2}\x1B[39;49m`;
+            return `\x1B[44m${str3}\x1B[39;49m`;
           }
         }
-        function brightWhite(str2) {
-          return `\x1B[97m${str2}\x1B[39m`;
+        function brightWhite(str3) {
+          return `\x1B[97m${str3}\x1B[39m`;
         }
         return {
           bold,
@@ -148318,8 +148318,8 @@ ${lanes.join("\n")}
         return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}.${d.getMilliseconds().toString().padStart(3, "0")}`;
       }
       var indentStr = "\n    ";
-      function indent2(str2) {
-        return indentStr + str2.replace(/\n/g, indentStr);
+      function indent2(str3) {
+        return indentStr + str3.replace(/\n/g, indentStr);
       }
       function stringifyIndented(json3) {
         return indent2(JSON.stringify(json3, void 0, 2));
@@ -150325,10 +150325,10 @@ ${lanes.join("\n")}
       function getSnapshotText(snap) {
         return snap.getText(0, snap.getLength());
       }
-      function repeatString(str2, count) {
+      function repeatString(str3, count) {
         let result = "";
         for (let i = 0; i < count; i++) {
-          result += str2;
+          result += str3;
         }
         return result;
       }
@@ -150401,8 +150401,8 @@ ${lanes.join("\n")}
         QuotePreference6[QuotePreference6["Double"] = 1] = "Double";
         return QuotePreference6;
       })(QuotePreference || {});
-      function quotePreferenceFromString(str2, sourceFile) {
-        return isStringDoubleQuoted(str2, sourceFile) ? 1 : 0;
+      function quotePreferenceFromString(str3, sourceFile) {
+        return isStringDoubleQuoted(str3, sourceFile) ? 1 : 0;
       }
       function getQuotePreference(sourceFile, preferences) {
         if (preferences.quotePreference && preferences.quotePreference !== "auto") {
@@ -154294,8 +154294,8 @@ ${lanes.join("\n")}
         )) {
           return false;
         }
-        const str2 = String.fromCharCode(ch);
-        return str2 === str2.toUpperCase();
+        const str3 = String.fromCharCode(ch);
+        return str3 === str3.toUpperCase();
       }
       function isLowerCaseLetter(ch) {
         if (ch >= 97 && ch <= 122) {
@@ -154308,13 +154308,13 @@ ${lanes.join("\n")}
         )) {
           return false;
         }
-        const str2 = String.fromCharCode(ch);
-        return str2 === str2.toLowerCase();
+        const str3 = String.fromCharCode(ch);
+        return str3 === str3.toLowerCase();
       }
-      function indexOfIgnoringCase(str2, value) {
-        const n = str2.length - value.length;
+      function indexOfIgnoringCase(str3, value) {
+        const n = str3.length - value.length;
         for (let start = 0; start <= n; start++) {
-          if (every2(value, (valueChar, i) => toLowerCase2(str2.charCodeAt(i + start)) === valueChar)) {
+          if (every2(value, (valueChar, i) => toLowerCase2(str3.charCodeAt(i + start)) === valueChar)) {
             return start;
           }
         }
@@ -157231,8 +157231,8 @@ interface Symbol {
           changes.insertNodeInListAfter(cfg, last(filesProp.initializer.elements), factory.createStringLiteral(newFilePath), filesProp.initializer.elements);
         }
       }
-      function deleteMovedStatements(sourceFile, moved, changes) {
-        for (const { first: first2, afterLast } of moved) {
+      function deleteMovedStatements(sourceFile, moved2, changes) {
+        for (const { first: first2, afterLast } of moved2) {
           changes.deleteNodeRangeExcludingEnd(sourceFile, first2, afterLast);
         }
       }
@@ -164014,8 +164014,8 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
             }
           }
           return result;
-          function escapeRegExp2(str2) {
-            return str2.replace(/[-[\]/{}()*+?.\\^$|]/g, "\\$&");
+          function escapeRegExp2(str3) {
+            return str3.replace(/[-[\]/{}()*+?.\\^$|]/g, "\\$&");
           }
           function getTodoCommentsRegExp() {
             const singleLineCommentStart = /(?:\/{2,}\s*)/.source;
@@ -165563,7 +165563,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
         return decl;
       }
       function getIsMatchingAsyncError(span, errorCode) {
-        return ({ start, length: length2, relatedInformation, code }) => isNumber(start) && isNumber(length2) && textSpansEqual({ start, length: length2 }, span) && code === errorCode && !!relatedInformation && some(relatedInformation, (related) => related.code === Diagnostics.Did_you_mean_to_mark_this_function_as_async.code);
+        return ({ start, length: length2, relatedInformation, code: code2 }) => isNumber(start) && isNumber(length2) && textSpansEqual({ start, length: length2 }, span) && code2 === errorCode && !!relatedInformation && some(relatedInformation, (related) => related.code === Diagnostics.Did_you_mean_to_mark_this_function_as_async.code);
       }
       var fixId3 = "addMissingAwait";
       var propertyAccessCode = Diagnostics.Property_0_does_not_exist_on_type_1.code;
@@ -165648,7 +165648,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
       function isMissingAwaitError(sourceFile, errorCode, span, cancellationToken, program) {
         const checker = program.getTypeChecker();
         const diagnostics = checker.getDiagnostics(sourceFile, cancellationToken);
-        return some(diagnostics, ({ start, length: length2, relatedInformation, code }) => isNumber(start) && isNumber(length2) && textSpansEqual({ start, length: length2 }, span) && code === errorCode && !!relatedInformation && some(relatedInformation, (related) => related.code === Diagnostics.Did_you_forget_to_use_await.code));
+        return some(diagnostics, ({ start, length: length2, relatedInformation, code: code2 }) => isNumber(start) && isNumber(length2) && textSpansEqual({ start, length: length2 }, span) && code2 === errorCode && !!relatedInformation && some(relatedInformation, (related) => related.code === Diagnostics.Did_you_forget_to_use_await.code));
       }
       function findAwaitableInitializers(expression, sourceFile, cancellationToken, program, checker) {
         const identifiers = getIdentifiersFromErrorSpanExpression(expression, checker);
@@ -170326,12 +170326,12 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
         },
         fixIds: [fixName, fixAddOverrideId, fixRemoveOverrideId],
         getAllCodeActions: (context2) => codeFixAll(context2, errorCodes21, (changes, diag2) => {
-          const { code, start } = diag2;
-          const info = errorCodeFixIdMap[code];
+          const { code: code2, start } = diag2;
+          const info = errorCodeFixIdMap[code2];
           if (!info || info.fixId !== context2.fixId) {
             return;
           }
-          dispatchChanges(changes, context2, code, start);
+          dispatchChanges(changes, context2, code2, start);
         })
       });
       function dispatchChanges(changeTracker, context2, errorCode, pos) {
@@ -174226,13 +174226,13 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
           }
         })
       });
-      function doChange32(file2, start, length2, code, context2) {
+      function doChange32(file2, start, length2, code2, context2) {
         let startPosition;
         let endPosition;
-        if (code === Diagnostics._0_is_defined_as_an_accessor_in_class_1_but_is_overridden_here_in_2_as_an_instance_property.code) {
+        if (code2 === Diagnostics._0_is_defined_as_an_accessor_in_class_1_but_is_overridden_here_in_2_as_an_instance_property.code) {
           startPosition = start;
           endPosition = start + length2;
-        } else if (code === Diagnostics._0_is_defined_as_a_property_in_class_1_but_is_overridden_here_in_2_as_an_accessor.code) {
+        } else if (code2 === Diagnostics._0_is_defined_as_a_property_in_class_1_but_is_overridden_here_in_2_as_an_accessor.code) {
           const checker = context2.program.getTypeChecker();
           const node = getTokenAtPosition(file2, start).parent;
           if (isComputedPropertyName3(node)) {
@@ -174253,7 +174253,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
           endPosition = baseProp.valueDeclaration.end;
           file2 = getSourceFileOfNode(baseProp.valueDeclaration);
         } else {
-          Debug.fail("fixPropertyOverrideAccessor codefix got unexpected error code " + code);
+          Debug.fail("fixPropertyOverrideAccessor codefix got unexpected error code " + code2);
         }
         return generateAccessorFromProperty(file2, context2.program, startPosition, endPosition, context2, Diagnostics.Generate_get_and_set_accessors.message);
       }
@@ -177763,7 +177763,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
           return void 0;
         }
       }
-      function getJSDocParamAnnotation(paramName2, initializer3, dotDotDotToken, isJs, isObject2, isSnippet, checker, options, preferences, tabstopCounter) {
+      function getJSDocParamAnnotation(paramName2, initializer3, dotDotDotToken, isJs, isObject3, isSnippet, checker, options, preferences, tabstopCounter) {
         if (isSnippet) {
           Debug.assertIsDefined(tabstopCounter);
         }
@@ -177775,7 +177775,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
         }
         if (isJs) {
           let type2 = "*";
-          if (isObject2) {
+          if (isObject3) {
             Debug.assert(!dotDotDotToken, `Cannot annotate a rest parameter with type 'Object'.`);
             type2 = "Object";
           } else {
@@ -177811,7 +177811,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
               type2 = `\${${tabstopCounter.tabstop++}:${type2}}`;
             }
           }
-          const dotDotDot = !isObject2 && dotDotDotToken ? "..." : "";
+          const dotDotDot = !isObject3 && dotDotDotToken ? "..." : "";
           const description3 = isSnippet ? `\${${tabstopCounter.tabstop++}}` : "";
           return `@param {${dotDotDot}${type2}} ${paramName2} ${description3}`;
         } else {
@@ -184354,8 +184354,8 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
               return node.text.length === searchSymbolName.length;
             case 15:
             case 11: {
-              const str2 = node;
-              return str2.text.length === searchSymbolName.length && (isLiteralNameOfPropertyDeclarationOrIndexAccess(str2) || isNameOfModuleDeclaration(node) || isExpressionOfExternalModuleImportEqualsDeclaration(node) || isCallExpression19(node.parent) && isBindableObjectDefinePropertyCall(node.parent) && node.parent.arguments[1] === node || isImportOrExportSpecifier(node.parent));
+              const str3 = node;
+              return str3.text.length === searchSymbolName.length && (isLiteralNameOfPropertyDeclarationOrIndexAccess(str3) || isNameOfModuleDeclaration(node) || isExpressionOfExternalModuleImportEqualsDeclaration(node) || isCallExpression19(node.parent) && isBindableObjectDefinePropertyCall(node.parent) && node.parent.arguments[1] === node || isImportOrExportSpecifier(node.parent));
             }
             case 9:
               return isLiteralNameOfPropertyDeclarationOrIndexAccess(node) && node.text.length === searchSymbolName.length;
@@ -205923,13 +205923,13 @@ Dynamic files must always be opened with service's current directory or service 
         const start = diag2.file && convertToLocation(getLineAndCharacterOfPosition(diag2.file, diag2.start));
         const end = diag2.file && convertToLocation(getLineAndCharacterOfPosition(diag2.file, diag2.start + diag2.length));
         const text2 = flattenDiagnosticMessageText2(diag2.messageText, "\n");
-        const { code, source } = diag2;
+        const { code: code2, source } = diag2;
         const category = diagnosticCategoryName(diag2);
         const common3 = {
           start,
           end,
           text: text2,
-          code,
+          code: code2,
           category,
           reportsUnnecessary: diag2.reportsUnnecessary,
           reportsDeprecated: diag2.reportsDeprecated,
@@ -212951,7 +212951,7 @@ function generate(namespace, host) {
       needs(name);
       if ("strings" in o) {
         const strings = o.strings, values = o.values;
-        const spans = strings.map((str2, i) => escapeSpan(str2) + (i < values.length ? "${" + expr(values[i], true) + "}" : "")).join("");
+        const spans = strings.map((str3, i) => escapeSpan(str3) + (i < values.length ? "${" + expr(values[i], true) + "}" : "")).join("");
         return name + "`" + spans + "`";
       }
       return `${name}(${o.args.map((a) => expr(a, true)).join(", ")})`;
@@ -213368,6 +213368,1414 @@ var init_app_client = __esm({
       }
       statusCode;
     };
+  }
+});
+
+// node_modules/@intentius/chant/dist/instance-nodes.js
+var KEY, TRAILING_KEY;
+var init_instance_nodes = __esm({
+  "node_modules/@intentius/chant/dist/instance-nodes.js"() {
+    KEY = /\[(?:"(?:[^"\\]|\\.)*"|\d+)\]/;
+    TRAILING_KEY = new RegExp(`(${KEY.source})$`);
+  }
+});
+
+// node_modules/@intentius/chant/dist/pulumi-urn.js
+var init_pulumi_urn = __esm({
+  "node_modules/@intentius/chant/dist/pulumi-urn.js"() {
+  }
+});
+
+// node_modules/@intentius/chant/dist/content-digest.js
+import { createHash } from "node:crypto";
+function contentDigest(input) {
+  return `sha256:${createHash("sha256").update(input, "utf8").digest("hex")}`;
+}
+var init_content_digest = __esm({
+  "node_modules/@intentius/chant/dist/content-digest.js"() {
+  }
+});
+
+// node_modules/@intentius/chant/dist/declarable.js
+var DECLARABLE_MARKER;
+var init_declarable = __esm({
+  "node_modules/@intentius/chant/dist/declarable.js"() {
+    DECLARABLE_MARKER = /* @__PURE__ */ Symbol.for("chant.declarable");
+  }
+});
+
+// node_modules/@intentius/chant/dist/intrinsic.js
+var INTRINSIC_MARKER;
+var init_intrinsic = __esm({
+  "node_modules/@intentius/chant/dist/intrinsic.js"() {
+    INTRINSIC_MARKER = /* @__PURE__ */ Symbol.for("chant.intrinsic");
+  }
+});
+
+// node_modules/@intentius/chant/dist/effect-receipt.js
+function canonicalJson(value) {
+  const out = encodeCanonical(value, "$", /* @__PURE__ */ new Set());
+  if (out === void 0) {
+    throw new Error(`canonicalJson: value at $ is not representable in JSON`);
+  }
+  return out;
+}
+function encodeCanonical(value, path, seen) {
+  if (value !== null && (typeof value === "object" || typeof value === "function")) {
+    const toJSON = value.toJSON;
+    if (typeof toJSON === "function") {
+      value = toJSON.call(value);
+    }
+  }
+  if (value === void 0)
+    return void 0;
+  if (value === null)
+    return "null";
+  switch (typeof value) {
+    case "boolean":
+      return value ? "true" : "false";
+    case "number":
+      if (!Number.isFinite(value)) {
+        throw new Error(`canonicalJson: non-finite number at ${path}`);
+      }
+      return String(value);
+    // ECMAScript ToString — what JCS specifies.
+    case "string":
+      return JSON.stringify(value);
+    case "bigint":
+      throw new Error(`canonicalJson: bigint at ${path} is not representable in JSON`);
+    case "function":
+    case "symbol":
+      throw new Error(`canonicalJson: ${typeof value} at ${path} is not representable in JSON`);
+  }
+  const obj = value;
+  if (seen.has(obj)) {
+    throw new Error(`canonicalJson: circular structure at ${path}`);
+  }
+  seen.add(obj);
+  try {
+    if (Array.isArray(obj)) {
+      const parts2 = obj.map((el, i) => encodeCanonical(el, `${path}[${i}]`, seen) ?? "null");
+      return `[${parts2.join(",")}]`;
+    }
+    const keys = Object.keys(obj).sort();
+    const parts = [];
+    for (const key of keys) {
+      const encoded = encodeCanonical(obj[key], `${path}.${key}`, seen);
+      if (encoded !== void 0)
+        parts.push(`${JSON.stringify(key)}:${encoded}`);
+    }
+    return `{${parts.join(",")}}`;
+  } finally {
+    seen.delete(obj);
+  }
+}
+var init_effect_receipt = __esm({
+  "node_modules/@intentius/chant/dist/effect-receipt.js"() {
+    init_content_digest();
+    init_declarable();
+    init_intrinsic();
+  }
+});
+
+// node_modules/@intentius/chant/dist/lifecycle/plan-digest.js
+function computePlanDigest(kind, subject) {
+  return PLAN_DIGEST_PREFIX + contentDigest(canonicalJson({ kind, subject })).slice(LEGACY_PLAN_DIGEST_PREFIX.length);
+}
+var PLAN_DIGEST_PREFIX, LEGACY_PLAN_DIGEST_PREFIX;
+var init_plan_digest = __esm({
+  "node_modules/@intentius/chant/dist/lifecycle/plan-digest.js"() {
+    init_effect_receipt();
+    init_content_digest();
+    PLAN_DIGEST_PREFIX = "jcs1-sha256:";
+    LEGACY_PLAN_DIGEST_PREFIX = "sha256:";
+  }
+});
+
+// node_modules/@intentius/chant/dist/observation.js
+function isUnobservedReason(value) {
+  return typeof value === "string" && UNOBSERVED_REASONS.includes(value);
+}
+var UNOBSERVED_REASON_WITNESS, UNOBSERVED_REASONS;
+var init_observation = __esm({
+  "node_modules/@intentius/chant/dist/observation.js"() {
+    UNOBSERVED_REASON_WITNESS = {
+      "read-failed": true,
+      "no-credentials": true,
+      "no-binding": true,
+      "unsupported-kind": true,
+      filtered: true,
+      "not-reached": true
+    };
+    UNOBSERVED_REASONS = Object.keys(UNOBSERVED_REASON_WITNESS);
+  }
+});
+
+// node_modules/@intentius/chant/dist/sensitive-key.js
+function isSensitiveKey(key) {
+  return SENSITIVE_KEY_PATTERNS.some((p) => p.test(key));
+}
+var SENSITIVE_KEY_PATTERNS;
+var init_sensitive_key = __esm({
+  "node_modules/@intentius/chant/dist/sensitive-key.js"() {
+    SENSITIVE_KEY_PATTERNS = [
+      /password/i,
+      /secret/i,
+      /token/i,
+      /private.?key/i,
+      /credential/i,
+      /connection.?string/i
+    ];
+  }
+});
+
+// node_modules/@intentius/chant/dist/drift-issue.js
+import { createHash as createHash2 } from "node:crypto";
+function driftIssueMarker(product, environment) {
+  return `<!-- ${clean(product)}:drift ${clean(environment)} -->`;
+}
+function driftFingerprintLine(product, fingerprint) {
+  return `<!-- ${clean(product)}:drift-fingerprint ${fingerprint} -->`;
+}
+function driftIssueRecords(records, statuses = DRIFT_ISSUE_STATUSES) {
+  return records.filter((r) => statuses.includes(r.status)).sort(byPlace);
+}
+function driftIssueFingerprint(records, statuses = DRIFT_ISSUE_STATUSES) {
+  const text2 = driftIssueRecords(records, statuses).map((r) => [r.member, r.address, r.status, ...attributesOf(r).map(attributeKey).sort()].join("	")).join("\n");
+  return createHash2("sha256").update(text2, "utf8").digest("hex").slice(0, 16);
+}
+function driftIssueBody(input, fingerprint = driftIssueFingerprint(input.records, input.statuses)) {
+  const { words } = input;
+  const facts = factsOf(input);
+  const marker = input.marker ?? driftIssueMarker(words.product, input.environment);
+  const members = new Set(facts.drifted.map((r) => r.member));
+  const withMember = members.size > 1;
+  const lines = [marker, words.intro ? words.intro(facts) : defaultIntro(words.product, facts), ""];
+  lines.push(`| ${withMember ? "Member | " : ""}${words.address ?? "Address"} | Status | Attributes |`, `|${withMember ? "---|" : ""}---|---|---|`, ...facts.drifted.map((r) => `| ${withMember ? `${code(r.member)} | ` : ""}${code(r.address)} | ${r.status} | ${attributesOf(r).map((a) => attributeCell(a, words.values)).join(", ")} |`), "");
+  const unread = input.records.filter((r) => r.status === "not-observed").sort(byPlace);
+  if (unread.length > 0) {
+    lines.push(words.unobserved ?? "Could not be read, so their state is unknown:", "");
+    for (const r of unread)
+      lines.push(`- ${code(r.address)}${r.unobserved ? `: ${r.unobserved.reason}${r.unobserved.detail ? ` (${oneLine(r.unobserved.detail)})` : ""}` : ""}`);
+    lines.push("");
+  }
+  if (input.notes?.length)
+    lines.push(...input.notes, "");
+  if (words.advice)
+    lines.push(words.advice(facts), "");
+  if (input.runUrl)
+    lines.push(words.foundBy ? words.foundBy(input.runUrl) : `Found by ${input.runUrl}.`, "");
+  lines.push(driftFingerprintLine(words.product, fingerprint));
+  return lines.join("\n");
+}
+async function keepDriftIssue(forge, input) {
+  const { words } = input;
+  const marker = input.marker ?? driftIssueMarker(words.product, input.environment);
+  const match = input.match ?? {};
+  const drifted = driftIssueRecords(input.records, input.statuses);
+  const kept = (r, extra = {}) => ({
+    action: r.action,
+    ...r.number !== void 0 ? { number: r.number } : {},
+    ...r.url ? { url: r.url } : {},
+    ...r.created ? { created: r.created } : {},
+    marker,
+    ...extra
+  });
+  const unread = input.records.filter((r) => r.status === "not-observed").length;
+  const why = input.unknown ?? (drifted.length === 0 && unread > 0 ? `${unread} resource${unread === 1 ? "" : "s"} could not be read, so whether ${input.environment} drifted is unknown` : void 0);
+  if (why !== void 0)
+    return kept(await forge.trackIssue(marker, null, match), { why });
+  if (drifted.length > 0) {
+    const fingerprint = driftIssueFingerprint(input.records, input.statuses);
+    const body = driftIssueBody({ ...input, marker }, fingerprint);
+    const r = await forge.trackIssue(marker, { title: words.title(factsOf(input)), body }, { ...match, sameWhen: driftFingerprintLine(words.product, fingerprint) });
+    return kept(r, { fingerprint });
+  }
+  const facts = factsOf(input);
+  const clearComment = words.cleared ? words.cleared(facts) : `${words.product}'s drift check at ${facts.observedAt} found ${input.environment} matching, so this issue is closed.`;
+  return kept(await forge.trackIssue(marker, null, { ...match, closeOnClear: true, clearComment }));
+}
+function factsOf(input) {
+  const times = input.records.map((r) => r.observedAt).filter((t) => typeof t === "string").sort();
+  return { environment: input.environment, drifted: driftIssueRecords(input.records, input.statuses), observedAt: times[times.length - 1] ?? input.observedAt ?? (/* @__PURE__ */ new Date()).toISOString() };
+}
+function defaultIntro(product, facts) {
+  const n = facts.drifted.length;
+  return `${product}'s drift check read ${facts.environment} at ${facts.observedAt} and found ${n} resource${n === 1 ? "" : "s"} that differ.`;
+}
+function attributesOf(r) {
+  return [...r.attributes ?? []].sort((a, b) => compare(a.path, b.path));
+}
+function attributeKey(a) {
+  if (a.sensitive)
+    return `${a.path}=sensitive`;
+  return "before" in a || "after" in a ? `${a.path}=${JSON.stringify([a.before ?? null, a.after ?? null])}` : a.path;
+}
+function attributeCell(a, values) {
+  if (!values)
+    return code(a.path);
+  if (a.sensitive)
+    return `${code(a.path)} (sensitive)`;
+  if (!("before" in a) && !("after" in a))
+    return code(a.path);
+  return `${code(a.path)}: ${values.before} ${code(show(a.before))}, ${values.after} ${code(show(a.after))}`;
+}
+function show(v) {
+  return v === void 0 ? "absent" : typeof v === "string" ? v : JSON.stringify(v);
+}
+function code(s) {
+  return `\`${oneLine(s).replace(/`/g, "'").replace(/\|/g, "\\|")}\``;
+}
+function oneLine(s) {
+  return s.replace(/\r?\n/g, " ");
+}
+function clean(s) {
+  return s.replace(/-->/g, "").replace(/\s+/g, "_");
+}
+function byPlace(a, b) {
+  return compare(a.member, b.member) || compare(a.address, b.address);
+}
+function compare(a, b) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+var DRIFT_ISSUE_STATUSES;
+var init_drift_issue = __esm({
+  "node_modules/@intentius/chant/dist/drift-issue.js"() {
+    DRIFT_ISSUE_STATUSES = ["drifted", "missing"];
+  }
+});
+
+// node_modules/@intentius/chant/dist/pr-forge.js
+function statusStateFor(kind, state) {
+  const mapped = STATUS_STATE[kind === "gitlab" ? "gitlab" : "github"][state];
+  if (mapped === void 0)
+    throw new Error(`a commit status state is one of ${FORGE_STATUS_STATES.join(", ")}, not ${JSON.stringify(state)}`);
+  return mapped;
+}
+function ignoredStatus(ignore) {
+  const exact = new Set(ignore);
+  const under = ignore.filter((i) => i.endsWith("/"));
+  const globs = ignore.filter((i) => i.includes("*")).map((i) => new RegExp(`^${i.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*")}$`));
+  return (name) => exact.has(name) || under.some((i) => name.startsWith(i)) || globs.some((g) => g.test(name));
+}
+function refusedMerge(err) {
+  if (err instanceof ForgeApiError && MERGE_REFUSED.has(err.status)) {
+    let reason = err.detail;
+    try {
+      const j = JSON.parse(err.detail);
+      const m = j.message ?? j.error;
+      if (typeof m === "string")
+        reason = m;
+    } catch {
+    }
+    return { merged: false, reason: reason.slice(0, 300) || `the forge refused the merge (${err.status})` };
+  }
+  throw err;
+}
+function newestStatuses(items, name) {
+  const ordered = items.filter(isObject).map((st, i) => ({ st, at: num(st.id) ?? -i }));
+  if (name === "name")
+    ordered.sort((a, b) => b.at - a.at);
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  for (const { st } of ordered) {
+    const context2 = str(st[name]);
+    if (!context2 || seen.has(context2))
+      continue;
+    seen.add(context2);
+    const description = str(st.description);
+    const targetUrl = str(st.target_url);
+    out.push({
+      context: context2,
+      state: str(st.state) ?? str(st.status) ?? "",
+      ...description ? { description } : {},
+      ...targetUrl ? { targetUrl } : {},
+      ...typeof st.allow_failure === "boolean" ? { allowFailure: st.allow_failure } : {}
+    });
+  }
+  return out;
+}
+function excludedWhy(filter, login) {
+  for (const e of filter?.exclude ?? []) {
+    const who = typeof e === "string" ? e : e.login;
+    if (who.toLowerCase() === login.toLowerCase())
+      return typeof e === "string" ? `${login} is excluded` : e.reason;
+  }
+  return void 0;
+}
+async function countApprovers(approved, authors, filter, rule) {
+  const by = [];
+  const not = [];
+  for (const login of approved) {
+    const why = authors.has(login) ? `${login} is one of its authors` : excludedWhy(filter, login) ?? (filter?.forgeRule ? await rule(login) : void 0);
+    if (why)
+      not.push({ login, reason: why });
+    else
+      by.push(login);
+  }
+  return { by, not };
+}
+function approvalVerdict(by, not, passLine, noneLine) {
+  const fields = { approvers: by, excluded: not };
+  if (by.length > 0)
+    return { ...pass(`${passLine} by ${by.join(", ")}`), ...fields };
+  return { ...refuse(not.length > 0 ? `${noneLine}: ${not.map((n) => n.reason).join("; ")}` : noneLine), ...fields };
+}
+function checksVerdict(what, head, failing, waiting, count) {
+  const names = (l) => [...new Set(l)].sort().join(", ");
+  if (failing.length > 0)
+    return refuse(`${names(failing)} failed on ${short(head)}`);
+  if (waiting.length > 0)
+    return refuse(`${names(waiting)} still running on ${short(head)}`, true);
+  if (count === 0)
+    return refuse(`no check has reported on ${what}'s head ${short(head)} yet`, true);
+  return pass(`${count} check${count === 1 ? "" : "s"} passed on ${short(head)}`);
+}
+function newestTime(times) {
+  return times.filter((t) => typeof t === "string" && !Number.isNaN(Date.parse(t))).sort((a, b) => Date.parse(b) - Date.parse(a))[0];
+}
+function closingIssueRefs(body) {
+  const out = /* @__PURE__ */ new Set();
+  for (const m of body.matchAll(/(?:^|[^\w/])(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+#(\d+)\b/gi))
+    out.add(Number(m[1]));
+  return [...out].sort((a, b) => a - b);
+}
+function forgePrincipalOf(kind, host, login) {
+  const h = host.toLowerCase();
+  const l = login.toLowerCase();
+  return h === DEFAULT_HOST[kind] ? `${kind}:${l}` : `${kind}@${h}:${l}`;
+}
+function transport(base, headers, fetchImpl) {
+  const root = base.replace(/\/+$/, "");
+  const call = async (method, path, body) => {
+    const url2 = `${root}${path}`;
+    const res = await fetchImpl(url2, {
+      method,
+      headers: { ...headers, ...body !== void 0 ? { "Content-Type": "application/json" } : {} },
+      ...body !== void 0 ? { body: JSON.stringify(body) } : {}
+    });
+    const text2 = await res.text();
+    if (!res.ok)
+      throw new ForgeApiError(method, url2, res.status, text2);
+    return text2 ? JSON.parse(text2) : null;
+  };
+  return {
+    call,
+    async text(path) {
+      const url2 = `${root}${path}`;
+      const res = await fetchImpl(url2, { method: "GET", headers });
+      const body = await res.text();
+      if (res.status === 404)
+        return void 0;
+      if (!res.ok)
+        throw new ForgeApiError("GET", url2, res.status, body);
+      return body;
+    },
+    async list(path, pageParams, pageSize) {
+      const out = [];
+      for (let page = 1; page <= 50; page++) {
+        const sep6 = path.includes("?") ? "&" : "?";
+        const items = await call("GET", `${path}${sep6}${pageParams(page)}`);
+        if (!Array.isArray(items))
+          break;
+        out.push(...items);
+        if (items.length < pageSize)
+          break;
+      }
+      return out;
+    }
+  };
+}
+function checkMarker(what, marker, body, match) {
+  if (!marker)
+    throw new Error(`the ${what} needs a marker to be found again`);
+  if (!carries(body, marker, match)) {
+    throw new Error(`the ${what} body ${match === "anywhere" ? "does not carry" : "does not start with"} its marker ${JSON.stringify(marker)}, so the next run could not find it`);
+  }
+}
+async function ownComment(t, pr, marker, opts) {
+  if (!marker)
+    throw new Error("the comment needs a marker to be found");
+  return (await t.comments(pr)).filter(ownedBy(marker, opts)).sort((a, b) => a.id - b.id)[0];
+}
+async function upsertCommentWith(t, pr, marker, body, opts, check2) {
+  if (check2)
+    checkMarker("comment", marker, body, opts.match);
+  const mine = await ownComment(t, pr, marker, opts);
+  if (!mine) {
+    const made = await t.addComment(pr, body);
+    return { action: "created", id: made?.id ?? 0, ...made?.url ? { url: made.url } : {} };
+  }
+  if (mine.body === body)
+    return { action: "unchanged", id: mine.id, ...mine.url ? { url: mine.url } : {} };
+  const edited = await t.editComment(pr, mine.id, body);
+  const url2 = edited?.url ?? mine.url;
+  return { action: "updated", id: mine.id, ...url2 ? { url: url2 } : {} };
+}
+async function trackIssueWith(t, marker, finding, opts, check2) {
+  if (finding && check2)
+    checkMarker("issue", marker, finding.body, opts.match);
+  const mine = (await t.openIssues(marker)).filter(ownedBy(marker, opts)).sort((a, b) => a.id - b.id)[0];
+  const at = (i) => i ? { number: i.id, ...i.url ? { url: i.url } : {}, ...i.created ? { created: i.created } : {} } : {};
+  if (finding === null) {
+    if (!mine)
+      return { action: "none" };
+    if (!opts.closeOnClear)
+      return { action: "left", ...at(mine) };
+    await t.closeIssue(mine.id, opts.clearComment);
+    return { action: "closed", ...at(mine) };
+  }
+  if (!mine)
+    return { action: "opened", ...at(await t.openIssue(finding.title, finding.body)) };
+  if (sameIssue({ title: mine.title ?? "", body: mine.body }, finding, opts.sameWhen))
+    return { action: "unchanged", ...at(mine) };
+  const edited = await t.editIssue(mine.id, finding.title, finding.body);
+  return { action: "updated", ...at(mine), ...edited?.url ? { url: edited.url } : {} };
+}
+function sameIssue(open, finding, sameWhen) {
+  if (typeof sameWhen === "function")
+    return sameWhen(open, finding);
+  if (open.title !== finding.title)
+    return false;
+  return typeof sameWhen === "string" && sameWhen !== "" ? open.body.includes(sameWhen) : open.body === finding.body;
+}
+function threadCalls(t) {
+  return {
+    async addComment(pr, body) {
+      const made = await t.addComment(pr, body);
+      return { id: made?.id ?? 0, ...made?.url ? { url: made.url } : {} };
+    },
+    async findIssue(marker, opts = {}) {
+      if (!marker)
+        throw new Error("the issue needs a marker to be found");
+      const i = (await t.openIssues(marker)).filter(ownedBy(marker, opts)).sort((a, b) => a.id - b.id)[0];
+      return i ? { number: i.id, title: i.title ?? "", body: i.body, ...i.created ? { created: i.created } : {}, ...i.url ? { url: i.url } : {} } : void 0;
+    },
+    async findComment(pr, marker, opts = {}) {
+      const c = await ownComment(t, pr, marker, opts);
+      return c ? { id: c.id, body: c.body, ...c.url ? { url: c.url } : {} } : void 0;
+    },
+    upsertComment: (pr, marker, body, opts = {}) => upsertCommentWith(t, pr, marker, body, opts, true),
+    upsertNote: async (pr, marker, body) => (await upsertCommentWith(t, pr, marker, body, {}, false)).url,
+    trackIssue: (marker, finding, opts = {}) => trackIssueWith(t, marker, finding, opts, true),
+    upsertIssue: async (marker, title, body) => (await trackIssueWith(t, marker, { title, body }, {}, false)).url
+  };
+}
+function githubShaped(kind, opts) {
+  const host = (opts.host ?? "github.com").toLowerCase();
+  const headers = kind === "github" ? { ...opts.token ? { Authorization: `Bearer ${opts.token}` } : {}, Accept: "application/vnd.github+json" } : { ...opts.token ? { Authorization: `token ${opts.token}` } : {}, Accept: "application/json" };
+  const fetchImpl = opts.fetch ?? globalThis.fetch;
+  const api = transport(opts.apiBase, headers, fetchImpl);
+  const repo = `/repos/${opts.repo}`;
+  const pageSize = kind === "github" ? 100 : 50;
+  const pageParams = (page) => kind === "github" ? `per_page=100&page=${page}` : `limit=50&page=${page}`;
+  const thread = (v) => {
+    if (!isObject(v))
+      return void 0;
+    const id = num(v.number) ?? num(v.id);
+    if (id === void 0)
+      return void 0;
+    const author = loginOf(v);
+    const url2 = str(v.html_url);
+    const created = str(v.created_at);
+    return { id, body: str(v.body) ?? "", ...created ? { created } : {}, ...str(v.title) !== void 0 ? { title: str(v.title) } : {}, ...author ? { author } : {}, ...url2 ? { url: url2 } : {} };
+  };
+  const threads = (items) => items.map(thread).filter((t2) => t2 !== void 0);
+  const pull = (v) => {
+    if (!isObject(v))
+      return void 0;
+    const number4 = num(v.number);
+    const head = isObject(v.head) ? str(v.head.ref) : void 0;
+    if (number4 === void 0)
+      return void 0;
+    const base = isObject(v.base) ? str(v.base.ref) : void 0;
+    const url2 = str(v.html_url);
+    return { number: number4, title: str(v.title) ?? "", body: str(v.body) ?? "", head: head ?? "", ...base ? { base } : {}, ...url2 ? { url: url2 } : {} };
+  };
+  const openPulls = async (filter) => {
+    try {
+      return await api.list(`${repo}/pulls?state=open${kind === "github" ? filter : ""}`, pageParams, pageSize);
+    } catch (err) {
+      if (kind !== "forgejo" || !notFound(err))
+        throw err;
+      await api.call("GET", repo);
+      return [];
+    }
+  };
+  const fromHere = (v, head) => {
+    if (!isObject(v) || !isObject(v.head) || v.head.ref !== head)
+      return false;
+    const full = isObject(v.head.repo) ? str(v.head.repo.full_name) : void 0;
+    return full === void 0 || full.toLowerCase() === opts.repo.toLowerCase();
+  };
+  const t = {
+    comments: async (pr) => threads(await api.list(`${repo}/issues/${pr}/comments`, pageParams, pageSize)),
+    addComment: async (pr, body) => thread(await api.call("POST", `${repo}/issues/${pr}/comments`, { body })),
+    editComment: async (_pr, id, body) => thread(await api.call("PATCH", `${repo}/issues/comments/${id}`, { body })),
+    async openIssues() {
+      return threads((await api.list(`${repo}/issues?state=open`, pageParams, pageSize)).filter((i) => isObject(i) && !isObject(i.pull_request)));
+    },
+    openIssue: async (title, body) => thread(await api.call("POST", `${repo}/issues`, { title, body })),
+    editIssue: async (n, title, body) => thread(await api.call("PATCH", `${repo}/issues/${n}`, { title, body })),
+    async closeIssue(n, comment) {
+      if (comment)
+        await api.call("POST", `${repo}/issues/${n}/comments`, { body: comment });
+      await api.call("PATCH", `${repo}/issues/${n}`, { state: "closed" });
+    }
+  };
+  const postStatus = async (sha, state, context2, description, url2) => {
+    await api.call("POST", `${repo}/statuses/${sha}`, {
+      state: statusStateFor(kind, state),
+      context: context2,
+      description: description.slice(0, GITHUB_DESCRIPTION),
+      ...url2 ? { target_url: url2 } : {}
+    });
+  };
+  const authorsOf = async (pr) => {
+    const logins = /* @__PURE__ */ new Set();
+    const add = (v) => {
+      if (isObject(v) && typeof v.login === "string" && v.login !== "")
+        logins.add(v.login);
+    };
+    const opened = await api.call("GET", `${repo}/pulls/${pr}`);
+    if (isObject(opened))
+      add(opened.user);
+    for (const c of await api.list(`${repo}/pulls/${pr}/commits`, pageParams, pageSize)) {
+      if (!isObject(c))
+        continue;
+      add(c.author);
+      add(c.committer);
+    }
+    return [...logins].sort();
+  };
+  const branchTip = async (branch) => {
+    let b;
+    try {
+      b = await api.call("GET", `${repo}/branches/${branch.split("/").map(encodeURIComponent).join("/")}`);
+    } catch (err) {
+      if (notFound(err))
+        return void 0;
+      throw err;
+    }
+    const commit = isObject(b) && isObject(b.commit) ? b.commit : void 0;
+    return commit ? str(commit.sha) ?? str(commit.id) : void 0;
+  };
+  const headOf = (v) => isObject(v) && isObject(v.head) ? str(v.head.sha) : void 0;
+  return {
+    kind,
+    host,
+    ...opts.runUrl ? { runUrl: opts.runUrl } : {},
+    principalOf: (login) => forgePrincipalOf(kind, host, login),
+    ...threadCalls(t),
+    async setStatus(sha, status) {
+      await postStatus(sha, status.state, status.context, status.description, status.url);
+    },
+    async setCommitStatus(sha, status) {
+      await postStatus(sha, status.state, status.context, status.description, status.targetUrl);
+    },
+    async approvers(pr) {
+      const reviews = await api.list(`${repo}/pulls/${pr}/reviews`, pageParams, pageSize);
+      const standing = /* @__PURE__ */ new Map();
+      for (const r of reviews) {
+        const login = loginOf(r);
+        if (!login || !isObject(r) || typeof r.state !== "string")
+          continue;
+        const state = r.dismissed === true ? "DISMISSED" : r.state.toUpperCase();
+        if (state === "COMMENTED" || state === "COMMENT" || state === "PENDING")
+          continue;
+        standing.set(login, state);
+      }
+      return [...standing].filter(([, state]) => state === "APPROVED").map(([login]) => login).sort();
+    },
+    authors: authorsOf,
+    async prApproved(pr, head, approvers) {
+      const got = await api.call("GET", `${repo}/pulls/${pr}`);
+      const at = headOf(got);
+      if (at !== head)
+        return notCounted(moved(`pull request ${pr}`, head, at));
+      const standing = /* @__PURE__ */ new Map();
+      for (const r of await api.list(`${repo}/pulls/${pr}/reviews`, pageParams, pageSize)) {
+        const login = loginOf(r);
+        if (!login || !isObject(r) || typeof r.state !== "string")
+          continue;
+        const state = r.dismissed === true ? "DISMISSED" : r.state.toUpperCase();
+        if (state === "COMMENTED" || state === "COMMENT" || state === "PENDING")
+          continue;
+        const commit = str(r.commit_id);
+        standing.set(login, { state, ...commit ? { commit } : {}, ...typeof r.official === "boolean" ? { official: r.official } : {} });
+      }
+      const changes = [...standing].filter(([, r]) => r.state === "CHANGES_REQUESTED" || r.state === "REQUEST_CHANGES").map(([l]) => l).sort();
+      if (changes.length > 0)
+        return notCounted(refuse(`${changes.join(", ")} asked for changes`));
+      const authors = new Set(await authorsOf(pr));
+      const approved = [...standing].filter(([, r]) => r.state === "APPROVED" && r.commit === head).map(([l]) => l).sort();
+      const rule = async (login) => {
+        if (kind === "forgejo")
+          return standing.get(login)?.official === false ? `${login}'s review is not official` : void 0;
+        let got2;
+        try {
+          got2 = await api.call("GET", `${repo}/collaborators/${encodeURIComponent(login)}/permission`);
+        } catch (err) {
+          return `could not read ${login}'s access (${err instanceof Error ? err.message : String(err)})`;
+        }
+        const p = isObject(got2) ? [str(got2.permission), str(got2.role_name)] : [];
+        return p.some((x) => x !== void 0 && GITHUB_WRITERS.has(x)) ? void 0 : `${login} has no write access`;
+      };
+      const { by, not } = await countApprovers(approved, authors, approvers, rule);
+      return approvalVerdict(by, not, `approved at ${short(head)}`, `no reviewer other than its authors approved its head ${short(head)}`);
+    },
+    async prMergeable(pr, head) {
+      const got = await api.call("GET", `${repo}/pulls/${pr}`);
+      const at = headOf(got);
+      if (at !== head)
+        return moved(`pull request ${pr}`, head, at);
+      const m = isObject(got) ? got : {};
+      const into = isObject(m.base) ? str(m.base.ref) : void 0;
+      if (kind === "forgejo" && m.draft === true)
+        return refuse("it is a draft");
+      if (kind === "forgejo" && m.mergeable === false)
+        return refuse(`Forgejo reports conflicts with ${into ?? "its base"}, or is still checking for them`, true);
+      if (m.mergeable === false || m.mergeable_state === "dirty")
+        return refuse(`the forge reports conflicts with ${into ?? "its base"}`);
+      if (m.mergeable !== true)
+        return refuse("the forge has not worked out yet whether it can merge", true);
+      if (kind === "github" && m.mergeable_state === "blocked")
+        return refuse(`branch protection on ${into ?? "its base"} blocks its merge`);
+      return pass(`it merges into ${into ?? "its base"} as it stands`);
+    },
+    async prUndiverged(pr, head) {
+      const got = await api.call("GET", `${repo}/pulls/${pr}`);
+      const at = headOf(got);
+      if (at !== head)
+        return moved(`pull request ${pr}`, head, at);
+      const into = isObject(got) && isObject(got.base) ? str(got.base.ref) : void 0;
+      if (!into)
+        return refuse(`the forge names no branch pull request ${pr} merges into`);
+      if (kind === "github") {
+        const cmp = await api.call("GET", `${repo}/compare/${encodeURIComponent(into)}...${head}`);
+        const behind = isObject(cmp) ? num(cmp.behind_by) : void 0;
+        if (behind === void 0)
+          return refuse(`the forge did not say how far ${short(head)} is behind ${into}`);
+        return behind === 0 ? pass(`${short(head)} contains ${into}`) : refuse(`${short(head)} is ${behind} commit${behind === 1 ? "" : "s"} behind ${into}`);
+      }
+      const tip = await branchTip(into);
+      const base = isObject(got) ? str(got.merge_base) : void 0;
+      if (!tip || !base)
+        return refuse(`the forge did not say where ${into} is or where ${short(head)} left it`);
+      return base === tip ? pass(`${short(head)} contains ${into} at ${short(tip)}`) : refuse(`${short(head)} does not contain ${into} at ${short(tip)}`);
+    },
+    async prChecksPassed(_pr, head, ignore = [], need = []) {
+      const skip = ignoredStatus(ignore);
+      const failing = [];
+      const waiting = [];
+      const seen = /* @__PURE__ */ new Set();
+      let count = 0;
+      const combined = await api.call("GET", `${repo}/commits/${head}/status`);
+      for (const st of isObject(combined) && Array.isArray(combined.statuses) ? combined.statuses : []) {
+        const context2 = isObject(st) ? str(st.context) : void 0;
+        if (!context2)
+          continue;
+        seen.add(context2);
+        const state = str(st.state) ?? str(st.status) ?? "";
+        if (skip(context2)) {
+          if (state === "success")
+            count++;
+          continue;
+        }
+        count++;
+        if (state === "failure" || state === "error" || state === "failed")
+          failing.push(context2);
+        else if (state === "pending" || state === "running" || state === "")
+          waiting.push(context2);
+      }
+      if (kind === "github") {
+        const runs = await api.call("GET", `${repo}/commits/${head}/check-runs?per_page=100`);
+        for (const run4 of isObject(runs) && Array.isArray(runs.check_runs) ? runs.check_runs : []) {
+          const name = (isObject(run4) ? str(run4.name) : void 0) ?? "a check";
+          if (skip(name) || !isObject(run4))
+            continue;
+          count++;
+          if (run4.status !== "completed")
+            waiting.push(name);
+          else if (!["success", "neutral", "skipped"].includes(String(run4.conclusion)))
+            failing.push(name);
+        }
+      }
+      waiting.push(...need.filter((n) => !seen.has(n)));
+      return checksVerdict(`pull request ${_pr}`, head, failing, waiting, count);
+    },
+    async pullRequestOpen(pr) {
+      try {
+        const got = await api.call("GET", `${repo}/pulls/${pr}`);
+        return isObject(got) && got.state === "open" && got.merged !== true;
+      } catch (err) {
+        if (notFound(err))
+          return false;
+        throw err;
+      }
+    },
+    async pullRequestFor(sha) {
+      if (kind === "forgejo") {
+        try {
+          const pr = await api.call("GET", `${repo}/commits/${sha}/pull`);
+          return isObject(pr) && typeof pr.number === "number" ? pr.number : null;
+        } catch (err) {
+          if (notFound(err))
+            return null;
+          throw err;
+        }
+      }
+      const prs = await api.call("GET", `${repo}/commits/${sha}/pulls`);
+      if (!Array.isArray(prs))
+        return null;
+      const merged = prs.filter((p) => isObject(p) && p.merged_at);
+      const exact = merged.find((p) => isObject(p) && p.merge_commit_sha === sha);
+      const pick4 = exact ?? merged[0];
+      return pick4 && typeof pick4.number === "number" ? pick4.number : null;
+    },
+    async openPullRequest(spec) {
+      const base = spec.base ?? await defaultBranchOf(api, repo, "default_branch");
+      const title = spec.draft && kind === "forgejo" ? `WIP: ${spec.title}` : spec.title;
+      const made = await api.call("POST", `${repo}/pulls`, {
+        title,
+        body: spec.body,
+        head: spec.head,
+        base,
+        ...spec.draft && kind === "github" ? { draft: true } : {}
+      });
+      return pull(made) ?? { number: 0, title, body: spec.body, head: spec.head, base };
+    },
+    async findPullRequest(head) {
+      const owner = opts.repo.split("/")[0];
+      const open = (await openPulls(`&head=${encodeURIComponent(`${owner}:${head}`)}`)).filter((p) => fromHere(p, head));
+      return open.map(pull).filter((p) => p !== void 0).sort(byNumber)[0];
+    },
+    async openPullRequests(base) {
+      const listed = await openPulls(`&base=${encodeURIComponent(base)}`);
+      const out = [];
+      for (const v of listed) {
+        if (!isObject(v) || !isObject(v.head) || !isObject(v.base))
+          continue;
+        const number4 = num(v.number);
+        const head = str(v.head.ref);
+        const headSha = str(v.head.sha);
+        const into = str(v.base.ref);
+        if (number4 === void 0 || !head || !headSha || into !== base)
+          continue;
+        const baseSha = str(v.base.sha);
+        const author = isObject(v.user) ? str(v.user.login) : void 0;
+        out.push({ number: number4, head, headSha, base: into, ...baseSha ? { baseSha } : {}, ...author ? { author } : {}, fork: !fromHere(v, head) });
+      }
+      return out.sort(byNumber);
+    },
+    branchHead: branchTip,
+    async pullRequestHead(pr) {
+      let got;
+      try {
+        got = await api.call("GET", `${repo}/pulls/${pr}`);
+      } catch (err) {
+        if (notFound(err))
+          return void 0;
+        throw err;
+      }
+      if (!isObject(got) || !isObject(got.head))
+        return void 0;
+      const sha = str(got.head.sha);
+      const branch = str(got.head.ref);
+      if (!sha || !branch)
+        return void 0;
+      const open = got.state === "open" && got.merged !== true;
+      return { sha, branch, open, sameRepo: fromHere(got, branch) };
+    },
+    async userCanWrite(login) {
+      let got;
+      try {
+        got = await api.call("GET", `${repo}/collaborators/${encodeURIComponent(login)}/permission`);
+      } catch (err) {
+        if (err instanceof ForgeApiError && (err.status === 404 || err.status === 403))
+          return false;
+        throw err;
+      }
+      const level = isObject(got) ? str(got.permission) : void 0;
+      return level === "admin" || level === "maintain" || level === "write" || level === "owner";
+    },
+    async defaultBranch() {
+      const got = await api.call("GET", repo);
+      return (isObject(got) ? str(got.default_branch) : void 0) ?? "main";
+    },
+    async commitStatuses(sha) {
+      return newestStatuses(await api.list(`${repo}/commits/${sha}/statuses`, pageParams, pageSize), "context");
+    },
+    async scheduledRuns(q3) {
+      const file2 = encodeURIComponent(q3.workflow);
+      if (kind === "github") {
+        const workflow = await api.call("GET", `${repo}/actions/workflows/${file2}`);
+        const runs2 = await Promise.all(["schedule", "workflow_dispatch"].map((event) => api.call("GET", `${repo}/actions/workflows/${file2}/runs?event=${event}&per_page=1`)));
+        const last2 = newestTime(runs2.flatMap((r) => isObject(r) && Array.isArray(r.workflow_runs) ? r.workflow_runs.map((w) => isObject(w) ? str(w.created_at) : void 0) : []));
+        const state = (isObject(workflow) ? str(workflow.state) : void 0) ?? "active";
+        return { ...last2 ? { last: last2 } : {}, ...state.startsWith("disabled") ? { disabled: state } : {} };
+      }
+      const listed = await api.call("GET", `${repo}/actions/runs?event=schedule&limit=50`);
+      const runs = Array.isArray(listed) ? listed : isObject(listed) && Array.isArray(listed.workflow_runs) ? listed.workflow_runs : [];
+      const ours = runs.filter((r) => {
+        if (!isObject(r))
+          return false;
+        const event = str(r.event) ?? str(r.trigger_event);
+        const workflow = str(r.workflow_id) ?? str(r.path);
+        return (event === "schedule" || event === "workflow_dispatch") && (workflow === void 0 || workflow.endsWith(q3.workflow));
+      });
+      const last = newestTime(ours.map((r) => str(r.created) ?? str(r.created_at) ?? str(r.started)));
+      return last ? { last } : {};
+    },
+    async editPullRequest(pr, change) {
+      return pull(await api.call("PATCH", `${repo}/pulls/${pr}`, { ...change.title !== void 0 ? { title: change.title } : {}, ...change.body !== void 0 ? { body: change.body } : {} }));
+    },
+    async addLabels(pr, labels) {
+      if (labels.length === 0)
+        return;
+      await api.call("POST", `${repo}/issues/${pr}/labels`, { labels: [...labels] });
+    },
+    async labels(pr) {
+      const listed = await api.list(`${repo}/issues/${pr}/labels`, pageParams, pageSize);
+      return listed.map((l) => isObject(l) ? str(l.name) : void 0).filter((n) => n !== void 0);
+    },
+    async closingIssues(pr) {
+      if (kind === "forgejo") {
+        const p = await api.call("GET", `${repo}/pulls/${pr}`);
+        return closingIssueRefs(isObject(p) ? str(p.body) ?? "" : "");
+      }
+      const root = opts.apiBase.replace(/\/+$/, "");
+      const url2 = /\/api\/v3$/.test(root) ? `${root.slice(0, -"/v3".length)}/graphql` : `${root}/graphql`;
+      const [owner, name] = opts.repo.split("/");
+      const query = "query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){pullRequest(number:$pr){closingIssuesReferences(first:100){nodes{number repository{nameWithOwner}}}}}}";
+      const res = await fetchImpl(url2, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ query, variables: { owner, name, pr } }) });
+      const text2 = await res.text();
+      if (!res.ok)
+        throw new ForgeApiError("POST", url2, res.status, text2);
+      const body = text2 ? JSON.parse(text2) : null;
+      const errors = isObject(body) && Array.isArray(body.errors) ? body.errors : [];
+      if (errors.length > 0)
+        throw new ForgeApiError("POST", url2, res.status, errors.map((e) => isObject(e) ? str(e.message) ?? "" : "").join("; "));
+      const data = isObject(body) && isObject(body.data) && isObject(body.data.repository) ? body.data.repository : void 0;
+      const refs = data && isObject(data.pullRequest) && isObject(data.pullRequest.closingIssuesReferences) ? data.pullRequest.closingIssuesReferences.nodes : void 0;
+      const out = /* @__PURE__ */ new Set();
+      for (const n of Array.isArray(refs) ? refs : []) {
+        if (!isObject(n) || typeof n.number !== "number")
+          continue;
+        const there = isObject(n.repository) ? str(n.repository.nameWithOwner) : void 0;
+        if (there === void 0 || there.toLowerCase() === opts.repo.toLowerCase())
+          out.add(n.number);
+      }
+      return [...out].sort((a, b) => a - b);
+    },
+    async pullRequestState(pr) {
+      const p = await api.call("GET", `${repo}/pulls/${pr}`);
+      if (!isObject(p))
+        return "open";
+      if (p.merged === true || typeof p.merged_at === "string" && p.merged_at !== "")
+        return "merged";
+      return p.state === "closed" ? "closed" : "open";
+    },
+    async mergePullRequest(pr, m) {
+      const method = m.method ?? "merge";
+      let res;
+      try {
+        res = kind === "github" ? await api.call("PUT", `${repo}/pulls/${pr}/merge`, {
+          sha: m.sha,
+          merge_method: method,
+          ...m.title !== void 0 ? { commit_title: m.title } : {},
+          ...m.message !== void 0 ? { commit_message: m.message } : {}
+        }) : await api.call("POST", `${repo}/pulls/${pr}/merge`, {
+          Do: method,
+          head_commit_id: m.sha,
+          ...m.title !== void 0 ? { MergeTitleField: m.title } : {},
+          ...m.message !== void 0 ? { MergeMessageField: m.message } : {},
+          ...m.deleteBranch ? { delete_branch_after_merge: true } : {}
+        });
+      } catch (err) {
+        return refusedMerge(err);
+      }
+      if (isObject(res) && res.merged === false)
+        return { merged: false, reason: str(res.message) ?? "the forge did not merge it" };
+      const after = await api.call("GET", `${repo}/pulls/${pr}`).catch(() => void 0);
+      const sha = (isObject(res) ? str(res.sha) : void 0) ?? (isObject(after) ? str(after.merge_commit_sha) : void 0);
+      if (kind === "github" && m.deleteBranch && isObject(after) && isObject(after.head) && str(after.head.ref) && fromHere(after, str(after.head.ref))) {
+        const ref = str(after.head.ref).split("/").map(encodeURIComponent).join("/");
+        await api.call("DELETE", `${repo}/git/refs/heads/${ref}`).catch(() => void 0);
+      }
+      return { merged: true, ...sha ? { sha } : {} };
+    }
+  };
+}
+async function defaultBranchOf(api, path, field) {
+  const r = await api.call("GET", path);
+  const branch = isObject(r) ? str(r[field]) : void 0;
+  if (!branch)
+    throw new Error(`${path} names no default branch to open the pull request against; pass base`);
+  return branch;
+}
+function githubForge(opts) {
+  return githubShaped("github", opts);
+}
+function forgejoForge(opts) {
+  return githubShaped("forgejo", opts);
+}
+function gitlabForge(opts) {
+  const host = (opts.host ?? "gitlab.com").toLowerCase();
+  const api = transport(opts.apiBase, opts.token ? { [opts.tokenHeader ?? "PRIVATE-TOKEN"]: opts.token } : {}, opts.fetch ?? globalThis.fetch);
+  const project2 = `/projects/${encodeURIComponent(decodeURIComponent(opts.project))}`;
+  const pageParams = (page) => `per_page=100&page=${page}`;
+  const authorOf = (v) => isObject(v.author) ? str(v.author.username) : void 0;
+  const note = (v) => {
+    if (!isObject(v))
+      return void 0;
+    const id = num(v.id);
+    if (id === void 0)
+      return void 0;
+    const author = authorOf(v);
+    return { id, body: str(v.body) ?? "", ...author ? { author } : {} };
+  };
+  const issue2 = (v) => {
+    if (!isObject(v))
+      return void 0;
+    const id = num(v.iid);
+    if (id === void 0)
+      return void 0;
+    const author = authorOf(v);
+    const url2 = str(v.web_url);
+    const created = str(v.created_at);
+    return { id, body: str(v.description) ?? "", ...created ? { created } : {}, ...str(v.title) !== void 0 ? { title: str(v.title) } : {}, ...author ? { author } : {}, ...url2 ? { url: url2 } : {} };
+  };
+  const notes = `${project2}/merge_requests`;
+  const openMrs = (end, branch) => api.list(`${notes}?state=opened&${end}_branch=${encodeURIComponent(branch)}`, pageParams, 100);
+  const mergeRequest = (v) => {
+    if (!isObject(v))
+      return void 0;
+    const number4 = num(v.iid);
+    if (number4 === void 0)
+      return void 0;
+    const base = str(v.target_branch);
+    const url2 = str(v.web_url);
+    return { number: number4, title: str(v.title) ?? "", body: str(v.description) ?? "", head: str(v.source_branch) ?? "", ...base ? { base } : {}, ...url2 ? { url: url2 } : {} };
+  };
+  const t = {
+    comments: async (mr) => (await api.list(`${notes}/${mr}/notes`, pageParams, 100)).filter((n) => !(isObject(n) && n.system === true)).map(note).filter((n) => n !== void 0),
+    addComment: async (mr, body) => note(await api.call("POST", `${notes}/${mr}/notes`, { body })),
+    editComment: async (mr, id, body) => note(await api.call("PUT", `${notes}/${mr}/notes/${id}`, { body })),
+    async openIssues(marker) {
+      return (await api.list(`${project2}/issues?state=opened&search=${encodeURIComponent(marker)}&in=description`, pageParams, 100)).map(issue2).filter((i) => i !== void 0);
+    },
+    openIssue: async (title, body) => issue2(await api.call("POST", `${project2}/issues`, { title, description: body })),
+    editIssue: async (n, title, body) => issue2(await api.call("PUT", `${project2}/issues/${n}`, { title, description: body })),
+    async closeIssue(n, comment) {
+      if (comment)
+        await api.call("POST", `${project2}/issues/${n}/notes`, { body: comment });
+      await api.call("PUT", `${project2}/issues/${n}`, { state_event: "close" });
+    }
+  };
+  const authorsOf = async (mr) => {
+    const logins = /* @__PURE__ */ new Set();
+    const merge3 = await api.call("GET", `${notes}/${mr}`);
+    const author = isObject(merge3) ? authorOf(merge3) : void 0;
+    if (author)
+      logins.add(author);
+    const emails = /* @__PURE__ */ new Set();
+    for (const c of await api.list(`${notes}/${mr}/commits`, pageParams, 100)) {
+      if (!isObject(c))
+        continue;
+      for (const email3 of [str(c.author_email), str(c.committer_email)])
+        if (email3)
+          emails.add(email3.toLowerCase());
+    }
+    for (const email3 of [...emails].sort()) {
+      const users = await api.call("GET", `/users?search=${encodeURIComponent(email3)}`);
+      for (const u of Array.isArray(users) ? users : [])
+        if (isObject(u) && typeof u.username === "string")
+          logins.add(u.username);
+    }
+    return [...logins].sort();
+  };
+  return {
+    kind: "gitlab",
+    host,
+    ...opts.runUrl ? { runUrl: opts.runUrl } : {},
+    principalOf: (login) => forgePrincipalOf("gitlab", host, login),
+    ...threadCalls(t),
+    async setStatus(sha, status) {
+      try {
+        await api.call("POST", `${project2}/statuses/${sha}`, {
+          state: statusStateFor("gitlab", status.state),
+          name: status.context,
+          description: status.description.slice(0, GITLAB_DESCRIPTION),
+          ...status.url ? { target_url: status.url } : {},
+          ...status.pipelineId !== void 0 ? { pipeline_id: status.pipelineId } : {}
+        });
+      } catch (err) {
+        if (err instanceof ForgeApiError && err.status === 400 && /cannot transition status/i.test(err.message))
+          return;
+        throw err;
+      }
+    },
+    async approvers(mr) {
+      const approvals = await api.call("GET", `${project2}/merge_requests/${mr}/approvals`);
+      const by = isObject(approvals) && Array.isArray(approvals.approved_by) ? approvals.approved_by : [];
+      const logins = by.map((a) => isObject(a) && isObject(a.user) && typeof a.user.username === "string" ? a.user.username : void 0).filter((l) => l !== void 0);
+      return [...new Set(logins)].sort();
+    },
+    authors: authorsOf,
+    async prApproved(mr, head, approvers) {
+      const got = await api.call("GET", `${notes}/${mr}`);
+      const at = isObject(got) ? str(got.sha) : void 0;
+      if (at !== head)
+        return notCounted(moved(`merge request !${mr}`, head, at));
+      const me = await api.call("GET", "/user");
+      const self = isObject(me) ? str(me.username) : void 0;
+      if (!self)
+        return notCounted(refuse("GitLab did not say which user the job's token acts as, so no approval counts"));
+      const versions = await api.call("GET", `${notes}/${mr}/versions`);
+      let since = -Infinity;
+      let latest;
+      for (const v of Array.isArray(versions) ? versions : []) {
+        const when2 = Date.parse((isObject(v) ? str(v.created_at) : void 0) ?? "");
+        if (Number.isFinite(when2) && when2 > since)
+          [since, latest] = [when2, isObject(v) ? str(v.head_commit_sha) : void 0];
+      }
+      if (latest !== head)
+        return notCounted(refuse(`merge request !${mr}'s newest diff version is of ${short(latest)}, not ${short(head)}`, true));
+      const said = /* @__PURE__ */ new Map();
+      for (const n of await api.list(`${notes}/${mr}/notes?sort=asc&order_by=created_at`, pageParams, 100)) {
+        if (!isObject(n) || n.system !== true)
+          continue;
+        const who = authorOf(n);
+        const body = (str(n.body) ?? "").trim();
+        const what = /^approved this merge request/.test(body) ? "approved" : /^unapproved this merge request/.test(body) ? "unapproved" : /^requested changes/.test(body) ? "changes" : void 0;
+        const when2 = Date.parse(str(n.created_at) ?? "");
+        if (!who || who === self || !what || !Number.isFinite(when2))
+          continue;
+        const before = said.get(who);
+        const id = isObject(n.author) ? num(n.author.id) : void 0;
+        if (!before || when2 >= before.at)
+          said.set(who, { what, at: when2, ...id !== void 0 ? { id } : {} });
+      }
+      const changes = [...said].filter(([, v]) => v.what === "changes").map(([w]) => w).sort();
+      if (changes.length > 0)
+        return notCounted(refuse(`${changes.join(", ")} requested changes`));
+      const authors = new Set(await authorsOf(mr));
+      const approved = [...said].filter(([, v]) => v.what === "approved" && v.at > since).map(([w]) => w).sort();
+      const least = approvers?.minAccessLevel ?? GITLAB_DEVELOPER;
+      const rule = async (login) => {
+        const id = said.get(login)?.id;
+        if (id === void 0)
+          return `GitLab did not say who ${login} is`;
+        let member;
+        try {
+          member = await api.call("GET", `${project2}/members/all/${id}`);
+        } catch (err) {
+          if (notFound(err))
+            return `${login} is not a member`;
+          return `could not read ${login}'s access (${err instanceof Error ? err.message : String(err)})`;
+        }
+        const level = isObject(member) ? num(member.access_level) ?? 0 : 0;
+        return level >= least ? void 0 : `${login} has access level ${level}, under ${least}`;
+      };
+      const { by, not } = await countApprovers(approved, authors, approvers, rule);
+      return approvalVerdict(by, not, `approved after ${short(head)}`, `no member other than its authors approved it after its latest push, ${short(head)}`);
+    },
+    async prMergeable(mr, head) {
+      const got = await api.call("GET", `${notes}/${mr}`);
+      const m = isObject(got) ? got : {};
+      if (str(m.sha) !== head)
+        return moved(`merge request !${mr}`, head, str(m.sha));
+      const status = str(m.detailed_merge_status) ?? (m.merge_status === "can_be_merged" ? "mergeable" : str(m.merge_status) ?? "");
+      const into = str(m.target_branch) ?? "its target branch";
+      if (status === "conflict" || m.has_conflicts === true)
+        return refuse(`GitLab reports conflicts with ${into}`);
+      if (GITLAB_CHECKING.has(status))
+        return refuse("GitLab has not worked out yet whether it can merge", true);
+      if (status !== "mergeable")
+        return refuse(`GitLab says ${status || "nothing"} about merging it`);
+      return pass(`it merges into ${into} as it stands`);
+    },
+    async prUndiverged(mr, head) {
+      const got = await api.call("GET", `${notes}/${mr}?include_diverged_commits_count=true`);
+      const m = isObject(got) ? got : {};
+      if (str(m.sha) !== head)
+        return moved(`merge request !${mr}`, head, str(m.sha));
+      const into = str(m.target_branch) ?? "its target branch";
+      const behind = num(m.diverged_commits_count);
+      if (behind === void 0)
+        return refuse(`GitLab did not say how far ${short(head)} is behind ${into}`);
+      return behind === 0 ? pass(`${short(head)} contains ${into}`) : refuse(`${short(head)} is ${behind} commit${behind === 1 ? "" : "s"} behind ${into}`);
+    },
+    async prChecksPassed(mr, head, ignore = [], need = []) {
+      const skip = ignoredStatus(ignore);
+      const newest2 = /* @__PURE__ */ new Map();
+      for (const st of await api.list(`${project2}/repository/commits/${head}/statuses?all=true`, pageParams, 100)) {
+        const name = isObject(st) ? str(st.name) : void 0;
+        if (!name || !isObject(st))
+          continue;
+        const had = newest2.get(name);
+        if (!had || (num(st.id) ?? 0) > (num(had.id) ?? 0))
+          newest2.set(name, st);
+      }
+      const failing = [];
+      const waiting = [];
+      let count = 0;
+      for (const [name, st] of newest2) {
+        const state = str(st.status) ?? "";
+        if (skip(name)) {
+          if (state === "success")
+            count++;
+          continue;
+        }
+        count++;
+        if ((state === "failed" || state === "canceled") && st.allow_failure !== true)
+          failing.push(name);
+        else if (GITLAB_RUNNING.has(state))
+          waiting.push(name);
+      }
+      waiting.push(...need.filter((n) => !newest2.has(n)));
+      return checksVerdict(`merge request !${mr}`, head, failing, waiting, count);
+    },
+    async pullRequestOpen(mr) {
+      try {
+        const got = await api.call("GET", `${notes}/${mr}`);
+        return isObject(got) && got.state === "opened";
+      } catch (err) {
+        if (notFound(err))
+          return false;
+        throw err;
+      }
+    },
+    async pullRequestFor(sha) {
+      const mrs = await api.call("GET", `${project2}/repository/commits/${sha}/merge_requests`);
+      if (!Array.isArray(mrs))
+        return null;
+      const merged = mrs.find((m) => isObject(m) && m.state === "merged" && (m.merge_commit_sha === sha || m.squash_commit_sha === sha)) ?? mrs.find((m) => isObject(m) && m.state === "merged");
+      return isObject(merged) && typeof merged.iid === "number" ? merged.iid : null;
+    },
+    async openPullRequest(spec) {
+      const base = spec.base ?? await defaultBranchOf(api, project2, "default_branch");
+      const title = spec.draft ? `Draft: ${spec.title}` : spec.title;
+      const made = await api.call("POST", notes, { source_branch: spec.head, target_branch: base, title, description: spec.body });
+      return mergeRequest(made) ?? { number: 0, title, body: spec.body, head: spec.head, base };
+    },
+    async findPullRequest(head) {
+      const open = await openMrs("source", head);
+      return open.filter((m) => isObject(m) && m.source_branch === head && (m.source_project_id === void 0 || m.source_project_id === m.project_id)).map(mergeRequest).filter((m) => m !== void 0).sort(byNumber)[0];
+    },
+    async scheduledRuns(q3) {
+      const { variable, value, not } = q3.schedule ?? { variable: "CHANT_SCHEDULED_OP", value: q3.op };
+      const selects = (d) => {
+        if (!isObject(d))
+          return false;
+        const got = (Array.isArray(d.variables) ? d.variables : []).find((v) => isObject(v) && v.key === variable)?.value;
+        return (value === void 0 || got === value) && !not?.includes(got);
+      };
+      const schedules = await api.list(`${project2}/pipeline_schedules?scope=active`, pageParams, 100);
+      const details = await Promise.all(schedules.map((s) => api.call("GET", `${project2}/pipeline_schedules/${isObject(s) ? num(s.id) : ""}`)));
+      const ours = details.filter(selects);
+      const ids = ours.map((d) => isObject(d) && isObject(d.last_pipeline) ? num(d.last_pipeline.id) : void 0).filter((n) => n !== void 0 && n > 0);
+      const pipelines = await Promise.all(ids.map((id) => api.call("GET", `${project2}/pipelines/${id}`)));
+      const last = newestTime(pipelines.map((p) => isObject(p) ? str(p.created_at) : void 0));
+      return { ...last ? { last } : {}, ...ours.length === 0 ? { noSchedule: true } : {} };
+    },
+    // #4628: the open merge requests into `base`, for the stale marking a push to it runs.
+    async openPullRequests(base) {
+      const out = [];
+      for (const m of await openMrs("target", base)) {
+        if (!isObject(m))
+          continue;
+        const number4 = num(m.iid);
+        const head = str(m.source_branch);
+        const headSha = str(m.sha);
+        if (number4 === void 0 || !head || !headSha || str(m.target_branch) !== base)
+          continue;
+        const refs = isObject(m.diff_refs) ? m.diff_refs : void 0;
+        const baseSha = refs ? str(refs.base_sha) : void 0;
+        const author = isObject(m.author) ? str(m.author.username) : void 0;
+        const fork2 = num(m.source_project_id) !== void 0 && num(m.source_project_id) !== num(m.target_project_id);
+        out.push({ number: number4, head, headSha, base, ...baseSha ? { baseSha } : {}, ...author ? { author } : {}, fork: fork2 });
+      }
+      return out.sort(byNumber);
+    },
+    async mergeRequestJobs(branch, job) {
+      const out = [];
+      const open = await openMrs("target", branch);
+      for (const m of open) {
+        if (!isObject(m))
+          continue;
+        const iid = num(m.iid);
+        const head = str(m.sha);
+        const own = num(m.project_id);
+        if (iid === void 0 || !head)
+          continue;
+        const pipelines = (await api.list(`${notes}/${iid}/pipelines`, pageParams, 100)).filter((p) => isObject(p) && p.sha === head && (own === void 0 || num(p.project_id) === void 0 || num(p.project_id) === own)).sort((a, b) => (num(b.id) ?? 0) - (num(a.id) ?? 0));
+        const newest2 = pipelines[0];
+        const pid = newest2 ? num(newest2.id) : void 0;
+        if (pid === void 0)
+          continue;
+        const jobs = await api.list(`${project2}/pipelines/${pid}/jobs`, pageParams, 100);
+        const found = jobs.filter((j) => isObject(j) && j.name === job).sort((a, b) => (num(b.id) ?? 0) - (num(a.id) ?? 0))[0];
+        const id = found ? num(found.id) : void 0;
+        if (!found || id === void 0)
+          continue;
+        const url2 = str(found.web_url);
+        out.push({ pr: iid, head, id, status: str(found.status) ?? "unknown", ...url2 ? { url: url2 } : {} });
+      }
+      return out.sort((a, b) => a.pr - b.pr);
+    },
+    async pullRequestHead(mr) {
+      let got;
+      try {
+        got = await api.call("GET", `${notes}/${mr}`);
+      } catch (err) {
+        if (notFound(err))
+          return void 0;
+        throw err;
+      }
+      if (!isObject(got))
+        return void 0;
+      const sha = str(got.sha);
+      const branch = str(got.source_branch);
+      if (!sha || !branch)
+        return void 0;
+      const own = num(got.source_project_id) === void 0 || num(got.source_project_id) === num(got.target_project_id);
+      return { sha, branch, open: got.state === "opened", sameRepo: own };
+    },
+    async jobArtifact(id, path) {
+      return api.text(`${project2}/jobs/${id}/artifacts/${path.split("/").map(encodeURIComponent).join("/")}`);
+    },
+    async defaultBranch() {
+      const got = await api.call("GET", project2);
+      return (isObject(got) ? str(got.default_branch) : void 0) ?? "main";
+    },
+    async commitStatuses(sha, ref) {
+      const only = ref ? `&ref=${encodeURIComponent(ref)}` : "";
+      return newestStatuses(await api.list(`${project2}/repository/commits/${sha}/statuses?all=true${only}`, pageParams, 100), "name");
+    },
+    async statusUrl(sha, context2) {
+      const statuses = await api.list(`${project2}/repository/commits/${sha}/statuses?all=true&name=${encodeURIComponent(context2)}`, pageParams, 100);
+      const newest2 = statuses.filter((st) => isObject(st) && st.name === context2).sort((a, b) => (num(b.id) ?? 0) - (num(a.id) ?? 0))[0];
+      return newest2 ? str(newest2.target_url) ?? void 0 : void 0;
+    },
+    async editPullRequest(mr, change) {
+      return mergeRequest(await api.call("PUT", `${notes}/${mr}`, { ...change.title !== void 0 ? { title: change.title } : {}, ...change.body !== void 0 ? { description: change.body } : {} }));
+    },
+    async addLabels(mr, labels) {
+      if (labels.length === 0)
+        return;
+      await api.call("PUT", `${notes}/${mr}`, { add_labels: labels.join(",") });
+    },
+    async labels(mr) {
+      const m = await api.call("GET", `${notes}/${mr}`);
+      return isObject(m) && Array.isArray(m.labels) ? m.labels.filter((l) => typeof l === "string") : [];
+    },
+    async closingIssues(mr) {
+      const listed = await api.list(`${notes}/${mr}/closes_issues`, pageParams, 100);
+      const own = /^\d+$/.test(opts.project) ? Number(opts.project) : void 0;
+      const out = /* @__PURE__ */ new Set();
+      for (const i of listed) {
+        if (!isObject(i) || typeof i.iid !== "number")
+          continue;
+        if (own === void 0 || i.project_id === void 0 || i.project_id === own)
+          out.add(i.iid);
+      }
+      return [...out].sort((a, b) => a - b);
+    },
+    async pullRequestState(mr) {
+      const m = await api.call("GET", `${notes}/${mr}`);
+      if (!isObject(m))
+        return "open";
+      return m.state === "merged" ? "merged" : m.state === "closed" ? "closed" : "open";
+    },
+    async mergePullRequest(mr, m) {
+      const method = m.method ?? "merge";
+      if (method === "rebase")
+        throw new Error("GitLab has no one-call rebase merge; use method merge or squash");
+      const text2 = m.title !== void 0 ? m.message ? `${m.title}
+
+${m.message}` : m.title : m.message;
+      let res;
+      try {
+        res = await api.call("PUT", `${notes}/${mr}/merge`, {
+          sha: m.sha,
+          ...method === "squash" ? { squash: true, ...text2 !== void 0 ? { squash_commit_message: text2 } : {} } : {},
+          ...text2 !== void 0 ? { merge_commit_message: text2 } : {},
+          ...m.deleteBranch ? { should_remove_source_branch: true } : {}
+        });
+      } catch (err) {
+        return refusedMerge(err);
+      }
+      const sha = isObject(res) ? str(res.merge_commit_sha) ?? str(res.squash_commit_sha) : void 0;
+      if (isObject(res) && res.state !== void 0 && res.state !== "merged")
+        return { merged: false, reason: `the merge request is ${String(res.state)}` };
+      return { merged: true, ...sha ? { sha } : {} };
+    }
+  };
+}
+function forgeClient(target, fetchImpl) {
+  const f = fetchImpl ? { fetch: fetchImpl } : {};
+  const run4 = target.runUrl ? { runUrl: target.runUrl } : {};
+  if (target.kind === "gitlab") {
+    return gitlabForge({
+      apiBase: target.apiBase,
+      project: target.repo,
+      token: target.token,
+      host: target.host,
+      ...target.tokenHeader ? { tokenHeader: target.tokenHeader } : {},
+      ...run4,
+      ...f
+    });
+  }
+  const opts = { apiBase: target.apiBase, repo: target.repo, token: target.token, host: target.host, ...run4, ...f };
+  return target.kind === "forgejo" ? forgejoForge(opts) : githubForge(opts);
+}
+var FORGE_STATUS_STATES, STATUS_STATE, MERGE_REFUSED, notCounted, GITLAB_DEVELOPER, GITHUB_WRITERS, short, pass, refuse, moved, ForgeApiError, notFound, byNumber, DEFAULT_HOST, isObject, loginOf, str, num, carries, authorIn, ownedBy, GITLAB_CHECKING, GITLAB_RUNNING, GITHUB_DESCRIPTION, GITLAB_DESCRIPTION;
+var init_pr_forge = __esm({
+  "node_modules/@intentius/chant/dist/pr-forge.js"() {
+    FORGE_STATUS_STATES = ["pending", "running", "success", "failed", "failure", "canceled", "error"];
+    STATUS_STATE = {
+      github: { pending: "pending", running: "pending", success: "success", failed: "failure", failure: "failure", canceled: "error", error: "error" },
+      gitlab: { pending: "pending", running: "running", success: "success", failed: "failed", failure: "failed", canceled: "canceled", error: "failed" }
+    };
+    MERGE_REFUSED = /* @__PURE__ */ new Set([405, 406, 409, 422]);
+    notCounted = (r) => ({ ...r, approvers: [], excluded: [] });
+    GITLAB_DEVELOPER = 30;
+    GITHUB_WRITERS = /* @__PURE__ */ new Set(["admin", "maintain", "write"]);
+    short = (sha) => (sha ?? "nothing").slice(0, 8);
+    pass = (reason) => ({ passed: true, reason });
+    refuse = (reason, pending2 = false) => ({ passed: false, ...pending2 ? { pending: true } : {}, reason });
+    moved = (what, head, now) => refuse(`${what}'s head is ${short(now)}, not ${short(head)}, the commit this job checked out`);
+    ForgeApiError = class extends Error {
+      constructor(method, url2, status, detail) {
+        super(`${method} ${url2} answered ${status}${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+        this.method = method;
+        this.url = url2;
+        this.status = status;
+        this.detail = detail;
+        this.name = "ForgeApiError";
+      }
+    };
+    notFound = (err) => err instanceof ForgeApiError && err.status === 404;
+    byNumber = (a, b) => a.number - b.number;
+    DEFAULT_HOST = { github: "github.com", gitlab: "gitlab.com", forgejo: null };
+    isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+    loginOf = (v) => isObject(v) && isObject(v.user) && typeof v.user.login === "string" ? v.user.login : void 0;
+    str = (v) => typeof v === "string" ? v : void 0;
+    num = (v) => typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v) ? Number(v) : void 0;
+    carries = (body, marker, match) => match === "anywhere" ? body.includes(marker) : body.startsWith(marker);
+    authorIn = (want, author) => {
+      if (want === void 0 || want === "")
+        return true;
+      const logins = (typeof want === "string" ? [want] : want).map((l) => l.toLowerCase());
+      return author !== void 0 && logins.includes(author.toLowerCase());
+    };
+    ownedBy = (marker, opts) => (t) => carries(t.body, marker, opts.match) && authorIn(opts.author, t.author);
+    GITLAB_CHECKING = /* @__PURE__ */ new Set(["checking", "unchecked", "preparing", "approvals_syncing", "cannot_be_merged_recheck"]);
+    GITLAB_RUNNING = /* @__PURE__ */ new Set(["created", "waiting_for_resource", "preparing", "pending", "running", "scheduled"]);
+    GITHUB_DESCRIPTION = 140;
+    GITLAB_DESCRIPTION = 255;
   }
 });
 
@@ -214555,118 +215963,12 @@ var init_runner = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/content-digest.js
-import { createHash } from "node:crypto";
-function contentDigest(input) {
-  return `sha256:${createHash("sha256").update(input, "utf8").digest("hex")}`;
-}
-var init_content_digest = __esm({
-  "node_modules/@intentius/chant/dist/content-digest.js"() {
-  }
-});
-
-// node_modules/@intentius/chant/dist/declarable.js
-var DECLARABLE_MARKER;
-var init_declarable = __esm({
-  "node_modules/@intentius/chant/dist/declarable.js"() {
-    DECLARABLE_MARKER = /* @__PURE__ */ Symbol.for("chant.declarable");
-  }
-});
-
-// node_modules/@intentius/chant/dist/intrinsic.js
-var INTRINSIC_MARKER;
-var init_intrinsic = __esm({
-  "node_modules/@intentius/chant/dist/intrinsic.js"() {
-    INTRINSIC_MARKER = /* @__PURE__ */ Symbol.for("chant.intrinsic");
-  }
-});
-
-// node_modules/@intentius/chant/dist/effect-receipt.js
-function canonicalJson(value) {
-  const out = encodeCanonical(value, "$", /* @__PURE__ */ new Set());
-  if (out === void 0) {
-    throw new Error(`canonicalJson: value at $ is not representable in JSON`);
-  }
-  return out;
-}
-function encodeCanonical(value, path, seen) {
-  if (value !== null && (typeof value === "object" || typeof value === "function")) {
-    const toJSON = value.toJSON;
-    if (typeof toJSON === "function") {
-      value = toJSON.call(value);
-    }
-  }
-  if (value === void 0)
-    return void 0;
-  if (value === null)
-    return "null";
-  switch (typeof value) {
-    case "boolean":
-      return value ? "true" : "false";
-    case "number":
-      if (!Number.isFinite(value)) {
-        throw new Error(`canonicalJson: non-finite number at ${path}`);
-      }
-      return String(value);
-    // ECMAScript ToString — what JCS specifies.
-    case "string":
-      return JSON.stringify(value);
-    case "bigint":
-      throw new Error(`canonicalJson: bigint at ${path} is not representable in JSON`);
-    case "function":
-    case "symbol":
-      throw new Error(`canonicalJson: ${typeof value} at ${path} is not representable in JSON`);
-  }
-  const obj = value;
-  if (seen.has(obj)) {
-    throw new Error(`canonicalJson: circular structure at ${path}`);
-  }
-  seen.add(obj);
-  try {
-    if (Array.isArray(obj)) {
-      const parts2 = obj.map((el, i) => encodeCanonical(el, `${path}[${i}]`, seen) ?? "null");
-      return `[${parts2.join(",")}]`;
-    }
-    const keys = Object.keys(obj).sort();
-    const parts = [];
-    for (const key of keys) {
-      const encoded = encodeCanonical(obj[key], `${path}.${key}`, seen);
-      if (encoded !== void 0)
-        parts.push(`${JSON.stringify(key)}:${encoded}`);
-    }
-    return `{${parts.join(",")}}`;
-  } finally {
-    seen.delete(obj);
-  }
-}
-var init_effect_receipt = __esm({
-  "node_modules/@intentius/chant/dist/effect-receipt.js"() {
-    init_content_digest();
-    init_declarable();
-    init_intrinsic();
-  }
-});
-
-// node_modules/@intentius/chant/dist/lifecycle/plan-digest.js
-function computePlanDigest(kind, subject) {
-  return PLAN_DIGEST_PREFIX + contentDigest(canonicalJson({ kind, subject })).slice(LEGACY_PLAN_DIGEST_PREFIX.length);
-}
-var PLAN_DIGEST_PREFIX, LEGACY_PLAN_DIGEST_PREFIX;
-var init_plan_digest = __esm({
-  "node_modules/@intentius/chant/dist/lifecycle/plan-digest.js"() {
-    init_effect_receipt();
-    init_content_digest();
-    PLAN_DIGEST_PREFIX = "jcs1-sha256:";
-    LEGACY_PLAN_DIGEST_PREFIX = "sha256:";
-  }
-});
-
 // node_modules/@intentius/chant/dist/change-set.js
 function topLevelKeys(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort() : [];
 }
 function reconcilePlanPart(input) {
-  const sets = (Array.isArray(input.plan) ? input.plan : [input.plan]).map((cs) => ({ org: cs.org, entries: [...cs.entries].sort((a, b) => byString(`${a.resourceType}\0${a.key}`, `${b.resourceType}\0${b.key}`)) })).sort((a, b) => byString(a.org, b.org));
+  const sets = (Array.isArray(input.plan) ? input.plan : [input.plan]).map((cs) => ({ org: cs.org, entries: [...cs.entries].sort((a, b) => byString2(`${a.resourceType}\0${a.key}`, `${b.resourceType}\0${b.key}`)) })).sort((a, b) => byString2(a.org, b.org));
   const lexicon = input.lexicon ?? "github";
   const entries = [];
   for (const cs of sets) {
@@ -214700,11 +216002,11 @@ function reconcilePlanPart(input) {
     entries
   };
 }
-var byString;
+var byString2;
 var init_change_set = __esm({
   "node_modules/@intentius/chant/dist/change-set.js"() {
     init_plan_digest();
-    byString = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+    byString2 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
   }
 });
 
@@ -216475,10 +217777,10 @@ var require_utils = __commonJS({
       REGEX_SPECIAL_CHARS_GLOBAL
     } = require_constants();
     exports.isObject = (val) => val !== null && typeof val === "object" && !Array.isArray(val);
-    exports.hasRegexChars = (str2) => REGEX_SPECIAL_CHARS.test(str2);
-    exports.isRegexChar = (str2) => str2.length === 1 && exports.hasRegexChars(str2);
-    exports.escapeRegex = (str2) => str2.replace(REGEX_SPECIAL_CHARS_GLOBAL, "\\$1");
-    exports.toPosixSlashes = (str2) => str2.replace(REGEX_BACKSLASH, "/");
+    exports.hasRegexChars = (str3) => REGEX_SPECIAL_CHARS.test(str3);
+    exports.isRegexChar = (str3) => str3.length === 1 && exports.hasRegexChars(str3);
+    exports.escapeRegex = (str3) => str3.replace(REGEX_SPECIAL_CHARS_GLOBAL, "\\$1");
+    exports.toPosixSlashes = (str3) => str3.replace(REGEX_BACKSLASH, "/");
     exports.isWindows = () => {
       if (typeof navigator !== "undefined" && navigator.platform) {
         const platform = navigator.platform.toLowerCase();
@@ -216489,8 +217791,8 @@ var require_utils = __commonJS({
       }
       return false;
     };
-    exports.removeBackslashes = (str2) => {
-      return str2.replace(REGEX_REMOVE_BACKSLASH, (match) => {
+    exports.removeBackslashes = (str3) => {
+      return str3.replace(REGEX_REMOVE_BACKSLASH, (match) => {
         return match === "\\" ? "" : match;
       });
     };
@@ -216565,8 +217867,8 @@ var require_scan = __commonJS({
       CHAR_RIGHT_SQUARE_BRACKET
       /* ] */
     } = require_constants();
-    var isPathSeparator = (code) => {
-      return code === CHAR_FORWARD_SLASH || code === CHAR_BACKWARD_SLASH;
+    var isPathSeparator = (code2) => {
+      return code2 === CHAR_FORWARD_SLASH || code2 === CHAR_BACKWARD_SLASH;
     };
     var depth = (token) => {
       if (token.isPrefix !== true) {
@@ -216580,7 +217882,7 @@ var require_scan = __commonJS({
       const slashes = [];
       const tokens = [];
       const parts = [];
-      let str2 = input;
+      let str3 = input;
       let index = -1;
       let start = 0;
       let lastIndex = 0;
@@ -216596,38 +217898,38 @@ var require_scan = __commonJS({
       let finished = false;
       let braces = 0;
       let prev;
-      let code;
+      let code2;
       let token = { value: "", depth: 0, isGlob: false };
       const eos = () => index >= length;
-      const peek = () => str2.charCodeAt(index + 1);
+      const peek = () => str3.charCodeAt(index + 1);
       const advance = () => {
-        prev = code;
-        return str2.charCodeAt(++index);
+        prev = code2;
+        return str3.charCodeAt(++index);
       };
       while (index < length) {
-        code = advance();
+        code2 = advance();
         let next;
-        if (code === CHAR_BACKWARD_SLASH) {
+        if (code2 === CHAR_BACKWARD_SLASH) {
           backslashes = token.backslashes = true;
-          code = advance();
-          if (code === CHAR_LEFT_CURLY_BRACE) {
+          code2 = advance();
+          if (code2 === CHAR_LEFT_CURLY_BRACE) {
             braceEscaped = true;
           }
           continue;
         }
-        if (braceEscaped === true || code === CHAR_LEFT_CURLY_BRACE) {
+        if (braceEscaped === true || code2 === CHAR_LEFT_CURLY_BRACE) {
           braces++;
-          while (eos() !== true && (code = advance())) {
-            if (code === CHAR_BACKWARD_SLASH) {
+          while (eos() !== true && (code2 = advance())) {
+            if (code2 === CHAR_BACKWARD_SLASH) {
               backslashes = token.backslashes = true;
               advance();
               continue;
             }
-            if (code === CHAR_LEFT_CURLY_BRACE) {
+            if (code2 === CHAR_LEFT_CURLY_BRACE) {
               braces++;
               continue;
             }
-            if (braceEscaped !== true && code === CHAR_DOT && (code = advance()) === CHAR_DOT) {
+            if (braceEscaped !== true && code2 === CHAR_DOT && (code2 = advance()) === CHAR_DOT) {
               isBrace = token.isBrace = true;
               isGlob = token.isGlob = true;
               finished = true;
@@ -216636,7 +217938,7 @@ var require_scan = __commonJS({
               }
               break;
             }
-            if (braceEscaped !== true && code === CHAR_COMMA) {
+            if (braceEscaped !== true && code2 === CHAR_COMMA) {
               isBrace = token.isBrace = true;
               isGlob = token.isGlob = true;
               finished = true;
@@ -216645,7 +217947,7 @@ var require_scan = __commonJS({
               }
               break;
             }
-            if (code === CHAR_RIGHT_CURLY_BRACE) {
+            if (code2 === CHAR_RIGHT_CURLY_BRACE) {
               braces--;
               if (braces === 0) {
                 braceEscaped = false;
@@ -216660,7 +217962,7 @@ var require_scan = __commonJS({
           }
           break;
         }
-        if (code === CHAR_FORWARD_SLASH) {
+        if (code2 === CHAR_FORWARD_SLASH) {
           slashes.push(index);
           tokens.push(token);
           token = { value: "", depth: 0, isGlob: false };
@@ -216673,22 +217975,22 @@ var require_scan = __commonJS({
           continue;
         }
         if (opts.noext !== true) {
-          const isExtglobChar = code === CHAR_PLUS || code === CHAR_AT || code === CHAR_ASTERISK || code === CHAR_QUESTION_MARK || code === CHAR_EXCLAMATION_MARK;
+          const isExtglobChar = code2 === CHAR_PLUS || code2 === CHAR_AT || code2 === CHAR_ASTERISK || code2 === CHAR_QUESTION_MARK || code2 === CHAR_EXCLAMATION_MARK;
           if (isExtglobChar === true && peek() === CHAR_LEFT_PARENTHESES) {
             isGlob = token.isGlob = true;
             isExtglob = token.isExtglob = true;
             finished = true;
-            if (code === CHAR_EXCLAMATION_MARK && index === start) {
+            if (code2 === CHAR_EXCLAMATION_MARK && index === start) {
               negatedExtglob = true;
             }
             if (scanToEnd === true) {
-              while (eos() !== true && (code = advance())) {
-                if (code === CHAR_BACKWARD_SLASH) {
+              while (eos() !== true && (code2 = advance())) {
+                if (code2 === CHAR_BACKWARD_SLASH) {
                   backslashes = token.backslashes = true;
-                  code = advance();
+                  code2 = advance();
                   continue;
                 }
-                if (code === CHAR_RIGHT_PARENTHESES) {
+                if (code2 === CHAR_RIGHT_PARENTHESES) {
                   isGlob = token.isGlob = true;
                   finished = true;
                   break;
@@ -216699,7 +218001,7 @@ var require_scan = __commonJS({
             break;
           }
         }
-        if (code === CHAR_ASTERISK) {
+        if (code2 === CHAR_ASTERISK) {
           if (prev === CHAR_ASTERISK) isGlobstar = token.isGlobstar = true;
           isGlob = token.isGlob = true;
           finished = true;
@@ -216708,7 +218010,7 @@ var require_scan = __commonJS({
           }
           break;
         }
-        if (code === CHAR_QUESTION_MARK) {
+        if (code2 === CHAR_QUESTION_MARK) {
           isGlob = token.isGlob = true;
           finished = true;
           if (scanToEnd === true) {
@@ -216716,7 +218018,7 @@ var require_scan = __commonJS({
           }
           break;
         }
-        if (code === CHAR_LEFT_SQUARE_BRACKET) {
+        if (code2 === CHAR_LEFT_SQUARE_BRACKET) {
           while (eos() !== true && (next = advance())) {
             if (next === CHAR_BACKWARD_SLASH) {
               backslashes = token.backslashes = true;
@@ -216735,21 +218037,21 @@ var require_scan = __commonJS({
           }
           break;
         }
-        if (opts.nonegate !== true && code === CHAR_EXCLAMATION_MARK && index === start) {
+        if (opts.nonegate !== true && code2 === CHAR_EXCLAMATION_MARK && index === start) {
           negated = token.negated = true;
           start++;
           continue;
         }
-        if (opts.noparen !== true && code === CHAR_LEFT_PARENTHESES) {
+        if (opts.noparen !== true && code2 === CHAR_LEFT_PARENTHESES) {
           isGlob = token.isGlob = true;
           if (scanToEnd === true) {
-            while (eos() !== true && (code = advance())) {
-              if (code === CHAR_LEFT_PARENTHESES) {
+            while (eos() !== true && (code2 = advance())) {
+              if (code2 === CHAR_LEFT_PARENTHESES) {
                 backslashes = token.backslashes = true;
-                code = advance();
+                code2 = advance();
                 continue;
               }
-              if (code === CHAR_RIGHT_PARENTHESES) {
+              if (code2 === CHAR_RIGHT_PARENTHESES) {
                 finished = true;
                 break;
               }
@@ -216770,24 +218072,24 @@ var require_scan = __commonJS({
         isExtglob = false;
         isGlob = false;
       }
-      let base = str2;
+      let base = str3;
       let prefix = "";
       let glob = "";
       if (start > 0) {
-        prefix = str2.slice(0, start);
-        str2 = str2.slice(start);
+        prefix = str3.slice(0, start);
+        str3 = str3.slice(start);
         lastIndex -= start;
       }
       if (base && isGlob === true && lastIndex > 0) {
-        base = str2.slice(0, lastIndex);
-        glob = str2.slice(lastIndex);
+        base = str3.slice(0, lastIndex);
+        glob = str3.slice(lastIndex);
       } else if (isGlob === true) {
         base = "";
-        glob = str2;
+        glob = str3;
       } else {
-        base = str2;
+        base = str3;
       }
-      if (base && base !== "" && base !== "/" && base !== str2) {
+      if (base && base !== "" && base !== "/" && base !== str3) {
         if (isPathSeparator(base.charCodeAt(base.length - 1))) {
           base = base.slice(0, -1);
         }
@@ -216814,7 +218116,7 @@ var require_scan = __commonJS({
       };
       if (opts.tokens === true) {
         state.maxDepth = 0;
-        if (!isPathSeparator(code)) {
+        if (!isPathSeparator(code2)) {
           tokens.push(token);
         }
         state.tokens = tokens;
@@ -217164,9 +218466,9 @@ var require_parse = __commonJS({
       const peek = state.peek = (n = 1) => input[state.index + n];
       const advance = state.advance = () => input[++state.index] || "";
       const remaining = () => input.slice(state.index + 1);
-      const consume = (value2 = "", num = 0) => {
+      const consume = (value2 = "", num2 = 0) => {
         state.consumed += value2;
-        state.index += num;
+        state.index += num2;
       };
       const append = (token) => {
         state.output += token.output != null ? token.output : token.value;
@@ -217817,8 +219119,8 @@ var require_parse = __commonJS({
         if (opts2.noglobstar === true) return star;
         return `(${capture}(?:(?!${START_ANCHOR}${opts2.dot ? DOTS_SLASH : DOT_LITERAL}).)*?)`;
       };
-      const create = (str2) => {
-        switch (str2) {
+      const create = (str3) => {
+        switch (str3) {
           case "*":
             return `${nodot}${ONE_CHAR}${star}`;
           case ".*":
@@ -217836,7 +219138,7 @@ var require_parse = __commonJS({
           case "**/.*":
             return `(?:${nodot}${globstar(opts)}${SLASH_LITERAL})?${DOT_LITERAL}${ONE_CHAR}${star}`;
           default: {
-            const match = /^(.*?)\.(\w+)$/.exec(str2);
+            const match = /^(.*?)\.(\w+)$/.exec(str3);
             if (!match) return;
             const source2 = create(match[1]);
             if (!source2) return;
@@ -217863,20 +219165,20 @@ var require_picomatch = __commonJS({
     var parse5 = require_parse();
     var utils = require_utils();
     var constants = require_constants();
-    var isObject2 = (val) => val && typeof val === "object" && !Array.isArray(val);
+    var isObject3 = (val) => val && typeof val === "object" && !Array.isArray(val);
     var picomatch4 = (glob, options, returnState = false) => {
       if (Array.isArray(glob)) {
         const fns = glob.map((input) => picomatch4(input, options, returnState));
-        const arrayMatcher = (str2) => {
+        const arrayMatcher = (str3) => {
           for (const isMatch of fns) {
-            const state2 = isMatch(str2);
+            const state2 = isMatch(str3);
             if (state2) return state2;
           }
           return false;
         };
         return arrayMatcher;
       }
-      const isState = isObject2(glob) && glob.tokens && glob.input;
+      const isState = isObject3(glob) && glob.tokens && glob.input;
       if (glob === "" || typeof glob !== "string" && !isState) {
         throw new TypeError("Expected pattern to be a non-empty string");
       }
@@ -217945,7 +219247,7 @@ var require_picomatch = __commonJS({
       const regex = glob instanceof RegExp ? glob : picomatch4.makeRe(glob, options);
       return regex.test(utils.basename(input));
     };
-    picomatch4.isMatch = (str2, patterns, options) => picomatch4(patterns, options)(str2);
+    picomatch4.isMatch = (str3, patterns, options) => picomatch4(patterns, options)(str3);
     picomatch4.parse = (pattern2, options) => {
       if (Array.isArray(pattern2)) return pattern2.map((p) => picomatch4.parse(p, options));
       return parse5(pattern2, { ...options, fastpaths: false });
@@ -218184,7 +219486,7 @@ __export(util_exports, {
   getParsedType: () => getParsedType,
   getSizableOrigin: () => getSizableOrigin,
   hexToUint8Array: () => hexToUint8Array,
-  isObject: () => isObject,
+  isObject: () => isObject2,
   isPlainObject: () => isPlainObject,
   issue: () => issue,
   joinValues: () => joinValues,
@@ -218199,7 +219501,7 @@ __export(util_exports, {
   optionalKeys: () => optionalKeys,
   parsedType: () => parsedType,
   partial: () => partial,
-  pick: () => pick,
+  pick: () => pick2,
   prefixIssues: () => prefixIssues,
   primitiveTypes: () => primitiveTypes,
   promiseAllObject: () => promiseAllObject,
@@ -218332,23 +219634,23 @@ function promiseAllObject(promisesObj) {
 }
 function randomString(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str2 = "";
+  let str3 = "";
   for (let i = 0; i < length; i++) {
-    str2 += chars[Math.floor(Math.random() * chars.length)];
+    str3 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str2;
+  return str3;
 }
-function esc(str2) {
-  return JSON.stringify(str2);
+function esc(str3) {
+  return JSON.stringify(str3);
 }
 function slugify(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
 }
-function isObject(data) {
+function isObject2(data) {
   return typeof data === "object" && data !== null && !Array.isArray(data);
 }
 function isPlainObject(o) {
-  if (isObject(o) === false)
+  if (isObject2(o) === false)
     return false;
   const ctor = o.constructor;
   if (ctor === void 0)
@@ -218356,7 +219658,7 @@ function isPlainObject(o) {
   if (typeof ctor !== "function")
     return true;
   const prot = ctor.prototype;
-  if (isObject(prot) === false)
+  if (isObject2(prot) === false)
     return false;
   if (Object.prototype.hasOwnProperty.call(prot, "isPrototypeOf") === false) {
     return false;
@@ -218383,8 +219685,8 @@ function numKeys(data) {
   }
   return keyCount;
 }
-function escapeRegex(str2) {
-  return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(str3) {
+  return str3.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone(inst, def, params2) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -218453,7 +219755,7 @@ function optionalKeys(shape) {
     return shape[k]._zod.optin === "optional" && shape[k]._zod.optout === "optional";
   });
 }
-function pick(schema2, mask) {
+function pick2(schema2, mask) {
   const currDef = schema2._zod.def;
   const checks = currDef.checks;
   const hasChecks = checks && checks.length > 0;
@@ -220919,13 +222221,13 @@ var init_schemas = __esm({
         }
         return propValues;
       });
-      const isObject2 = isObject;
+      const isObject3 = isObject2;
       const catchall = def.catchall;
       let value;
       inst._zod.parse = (payload, ctx) => {
         value ?? (value = _normalized.value);
         const input = payload.value;
-        if (!isObject2(input)) {
+        if (!isObject3(input)) {
           payload.issues.push({
             expected: "object",
             code: "invalid_type",
@@ -221052,7 +222354,7 @@ var init_schemas = __esm({
         return (payload, ctx) => fn(shape, payload, ctx);
       };
       let fastpass;
-      const isObject2 = isObject;
+      const isObject3 = isObject2;
       const jit = !globalConfig.jitless;
       const allowsEval2 = allowsEval;
       const fastEnabled = jit && allowsEval2.value;
@@ -221061,7 +222363,7 @@ var init_schemas = __esm({
       inst._zod.parse = (payload, ctx) => {
         value ?? (value = _normalized.value);
         const input = payload.value;
-        if (!isObject2(input)) {
+        if (!isObject3(input)) {
           payload.issues.push({
             expected: "object",
             code: "invalid_type",
@@ -221193,7 +222495,7 @@ var init_schemas = __esm({
       });
       inst._zod.parse = (payload, ctx) => {
         const input = payload.value;
-        if (!isObject(input)) {
+        if (!isObject2(input)) {
           payload.issues.push({
             code: "invalid_type",
             expected: "object",
@@ -234010,16 +235312,16 @@ is not a problem with esbuild. You need to fix your environment instead.
                     break;
                   // Unicode escape sequence
                   case 117: {
-                    let code = 0;
+                    let code2 = 0;
                     for (let j = 0; j < 4; j++) {
                       c = bytes[i++];
-                      code <<= 4;
-                      if (c >= 48 && c <= 57) code |= c - 48;
-                      else if (c >= 97 && c <= 102) code |= c + (10 - 97);
-                      else if (c >= 65 && c <= 70) code |= c + (10 - 65);
+                      code2 <<= 4;
+                      if (c >= 48 && c <= 57) code2 |= c - 48;
+                      else if (c >= 97 && c <= 102) code2 |= c + (10 - 97);
+                      else if (c >= 65 && c <= 70) code2 |= c + (10 - 65);
                       else throwSyntaxError(bytes, --i);
                     }
-                    value += fromCharCode(code);
+                    value += fromCharCode(code2);
                     break;
                   }
                   // Invalid escape sequence
@@ -236425,21 +237727,21 @@ function lineBuffered(emit) {
     }
   };
 }
-function describeSilentExit(label, code, signal, stderrBuf, unrecognised) {
+function describeSilentExit(label, code2, signal, stderrBuf, unrecognised) {
   const stderr = stderrBuf.trim();
-  const head = `${label}: child exited before reporting results (code ${code}, signal ${signal})`;
+  const head = `${label}: child exited before reporting results (code ${code2}, signal ${signal})`;
   if (unrecognised.length > 0) {
     const shapes = unrecognised.map((m) => m && typeof m === "object" ? `{${Object.keys(m).join(", ")}}` : typeof m).join(", ");
     return `${head}. It sent ${unrecognised.length} message(s) the parent did not recognise (${shapes}), so the payload shape and the parent's check disagree` + (stderr ? `: ${stderr}` : "");
   }
   if (stderr)
     return `${head}: ${stderr}`;
-  if (code !== 0 || signal !== null)
+  if (code2 !== 0 || signal !== null)
     return head;
   return `${head}. It exited cleanly with nothing on stderr, and no message arrived even after its IPC channel closed, so it never sent one: something it awaited never settled. On the run path the usual cause is a project file with a top-level \`await\` that does not settle. Module scope is arbitrary project source, an import of such a file never completes, and a promise that never settles is not a rejection, so the driver's own \`main().catch\` does not see it either. The config driver has nothing to await that can hang, and a failed send exits non-zero with a reason on stderr, so on the config path this has no known cause: please report it with the command that produced it (chant#2461).`;
 }
 function settleOnExitAfterChannelDrains(child, onExit, graceMs = EXIT_DRAIN_GRACE_MS) {
-  child.on("exit", (code, signal) => {
+  child.on("exit", (code2, signal) => {
     let done = false;
     let grace;
     const finish = () => {
@@ -236448,7 +237750,7 @@ function settleOnExitAfterChannelDrains(child, onExit, graceMs = EXIT_DRAIN_GRAC
       done = true;
       if (grace !== void 0)
         clearTimeout(grace);
-      onExit(code, signal);
+      onExit(code2, signal);
     };
     if (!child.connected) {
       finish();
@@ -236521,12 +237823,12 @@ function forkSandboxed(options, isResponse) {
       clearTimeout(timeout);
       reject2(err);
     });
-    settleOnExitAfterChannelDrains(child, (code, signal) => {
+    settleOnExitAfterChannelDrains(child, (code2, signal) => {
       if (settled)
         return;
       settled = true;
       clearTimeout(timeout);
-      reject2(new Error(describeSilentExit(label, code, signal, stderrBuf, unrecognised)));
+      reject2(new Error(describeSilentExit(label, code2, signal, stderrBuf, unrecognised)));
     });
   });
 }
@@ -236718,8 +238020,8 @@ function packageNameOf(spec) {
   return spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
 }
 function isPackageNotFound(err, pkg) {
-  const code = err?.code;
-  if (code !== "ERR_MODULE_NOT_FOUND" && code !== "MODULE_NOT_FOUND")
+  const code2 = err?.code;
+  if (code2 !== "ERR_MODULE_NOT_FOUND" && code2 !== "MODULE_NOT_FOUND")
     return false;
   const message = err instanceof Error ? err.message : String(err);
   return [`'${pkg}'`, `"${pkg}"`, `'${pkg}/`, `"${pkg}/`].some((quoted) => message.includes(quoted));
@@ -240296,7 +241598,7 @@ function requireCommon() {
   function isNothing(subject) {
     return typeof subject === "undefined" || subject === null;
   }
-  function isObject2(subject) {
+  function isObject3(subject) {
     return typeof subject === "object" && subject !== null;
   }
   function toArray(sequence) {
@@ -240325,7 +241627,7 @@ function requireCommon() {
     return number4 === 0 && Number.NEGATIVE_INFINITY === 1 / number4;
   }
   common2.isNothing = isNothing;
-  common2.isObject = isObject2;
+  common2.isObject = isObject3;
   common2.toArray = toArray;
   common2.repeat = repeat;
   common2.isNegativeZero = isNegativeZero;
@@ -240596,16 +241898,16 @@ function requireSchema() {
   return schema;
 }
 function requireStr() {
-  if (hasRequiredStr) return str;
+  if (hasRequiredStr) return str2;
   hasRequiredStr = 1;
   const Type2 = requireType();
-  str = new Type2("tag:yaml.org,2002:str", {
+  str2 = new Type2("tag:yaml.org,2002:str", {
     kind: "scalar",
     construct: function(data) {
       return data !== null ? data : "";
     }
   });
-  return str;
+  return str2;
 }
 function requireSeq() {
   if (hasRequiredSeq) return seq;
@@ -241020,9 +242322,9 @@ function requireBinary() {
     const max = data.length;
     const map22 = BASE64_MAP;
     for (let idx = 0; idx < max; idx++) {
-      const code = map22.indexOf(data.charAt(idx));
-      if (code > 64) continue;
-      if (code < 0) return false;
+      const code2 = map22.indexOf(data.charAt(idx));
+      if (code2 > 64) continue;
+      if (code2 < 0) return false;
       bitlen += 6;
     }
     return bitlen % 8 === 0;
@@ -242743,10 +244045,10 @@ function requireDumper() {
   function generateNextLine(state, level) {
     return "\n" + common22.repeat(" ", state.indent * level);
   }
-  function testImplicitResolving(state, str2) {
+  function testImplicitResolving(state, str22) {
     for (let index = 0, length = state.implicitTypes.length; index < length; index += 1) {
       const type2 = state.implicitTypes[index];
-      if (type2.resolve(str2)) {
+      if (type2.resolve(str22)) {
         return true;
       }
     }
@@ -243283,7 +244585,7 @@ function requireJsYaml() {
   jsYaml.safeDump = renamed("safeDump", "dump");
   return jsYaml;
 }
-var jsYaml, loader, common2, hasRequiredCommon, exception, hasRequiredException, snippet, hasRequiredSnippet, type, hasRequiredType, schema, hasRequiredSchema, str, hasRequiredStr, seq, hasRequiredSeq, map2, hasRequiredMap, failsafe, hasRequiredFailsafe, _null4, hasRequired_null, bool, hasRequiredBool, int2, hasRequiredInt, float, hasRequiredFloat, json2, hasRequiredJson, core, hasRequiredCore, timestamp, hasRequiredTimestamp, merge2, hasRequiredMerge, binary, hasRequiredBinary, omap, hasRequiredOmap, pairs, hasRequiredPairs, set2, hasRequiredSet, _default3, hasRequired_default, hasRequiredLoader, dumper, hasRequiredDumper, hasRequiredJsYaml, jsYamlExports, yaml, Type, Schema, FAILSAFE_SCHEMA, JSON_SCHEMA, CORE_SCHEMA, DEFAULT_SCHEMA, load2, loadAll, dump, YAMLException2, types, safeLoad, safeLoadAll, safeDump;
+var jsYaml, loader, common2, hasRequiredCommon, exception, hasRequiredException, snippet, hasRequiredSnippet, type, hasRequiredType, schema, hasRequiredSchema, str2, hasRequiredStr, seq, hasRequiredSeq, map2, hasRequiredMap, failsafe, hasRequiredFailsafe, _null4, hasRequired_null, bool, hasRequiredBool, int2, hasRequiredInt, float, hasRequiredFloat, json2, hasRequiredJson, core, hasRequiredCore, timestamp, hasRequiredTimestamp, merge2, hasRequiredMerge, binary, hasRequiredBinary, omap, hasRequiredOmap, pairs, hasRequiredPairs, set2, hasRequiredSet, _default3, hasRequired_default, hasRequiredLoader, dumper, hasRequiredDumper, hasRequiredJsYaml, jsYamlExports, yaml, Type, Schema, FAILSAFE_SCHEMA, JSON_SCHEMA, CORE_SCHEMA, DEFAULT_SCHEMA, load2, loadAll, dump, YAMLException2, types, safeLoad, safeLoadAll, safeDump;
 var init_js_yaml = __esm({
   "node_modules/js-yaml/dist/js-yaml.mjs"() {
     jsYaml = {};
@@ -243890,12 +245192,12 @@ var init_gate_plan_context = __esm({
 });
 
 // node_modules/@intentius/chant/dist/op/gate-approval-base.js
-import { createHash as createHash2 } from "node:crypto";
+import { createHash as createHash3 } from "node:crypto";
 function isStepOutputRef(value) {
   return typeof value === "object" && value !== null && value[STEP_OUTPUT_REF_BRAND] === true;
 }
 function gatePolicyVersion(text2) {
-  return `sha256:${createHash2("sha256").update(text2).digest("hex")}`;
+  return `sha256:${createHash3("sha256").update(text2).digest("hex")}`;
 }
 function isGatePolicyRef(value) {
   if (typeof value !== "object" || value === null)
@@ -245034,9 +246336,9 @@ var init_declaration = __esm({
       "revision-unknown"
     ];
     WorkspaceReadError2 = class extends Error {
-      constructor(code, message, location) {
+      constructor(code2, message, location) {
         super(message);
-        this.code = code;
+        this.code = code2;
         this.location = location;
         this.name = "WorkspaceReadError";
       }
@@ -246939,15 +248241,6 @@ var init_graph_sub_template = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/instance-nodes.js
-var KEY, TRAILING_KEY;
-var init_instance_nodes = __esm({
-  "node_modules/@intentius/chant/dist/instance-nodes.js"() {
-    KEY = /\[(?:"(?:[^"\\]|\\.)*"|\d+)\]/;
-    TRAILING_KEY = new RegExp(`(${KEY.source})$`);
-  }
-});
-
 // node_modules/@intentius/chant/dist/graph-ir.js
 var init_graph_ir = __esm({
   "node_modules/@intentius/chant/dist/graph-ir.js"() {
@@ -248063,7 +249356,7 @@ var init_process_runner = __esm({
 
 // node_modules/@intentius/chant/dist/components/verbs/build.js
 import { readFileSync as readFileSync10 } from "node:fs";
-import { createHash as createHash3 } from "node:crypto";
+import { createHash as createHash4 } from "node:crypto";
 function createDockerBuildCapability(executor = defaultCloudExecutor()) {
   return {
     kind: "docker-build",
@@ -248095,7 +249388,7 @@ function createZipPackageCapability(processRunner = defaultProcessRunner()) {
     async run(_ctx, input) {
       const excludes = (input.exclude ?? []).map((p) => `-x ${q2(p)}`).join(" ");
       await processRunner.run(`rm -f ${q2(input.into)} && zip -r -X ${q2(input.into)} ${q2(input.source)}${excludes ? ` ${excludes}` : ""}`);
-      const digest = `sha256:${createHash3("sha256").update(readFileSync10(input.into)).digest("hex")}`;
+      const digest = `sha256:${createHash4("sha256").update(readFileSync10(input.into)).digest("hex")}`;
       return { archivePath: input.into, digest };
     }
   };
@@ -248113,7 +249406,7 @@ function createJvmBuildCapability(processRunner = defaultProcessRunner()) {
         await processRunner.run(`mvn -q -B -f ${q2(`${input.path}/pom.xml`)} ${goals}`);
         await processRunner.run(`cp "$(ls ${q2(`${input.path}/target`)}/*.jar | grep -Ev '(-sources|-javadoc)\\.jar$' | head -1)" ${q2(input.into)}`);
       }
-      const digest = `sha256:${createHash3("sha256").update(readFileSync10(input.into)).digest("hex")}`;
+      const digest = `sha256:${createHash4("sha256").update(readFileSync10(input.into)).digest("hex")}`;
       return { archivePath: input.into, digest };
     }
   };
@@ -248224,7 +249517,7 @@ var init_publish_image = __esm({
 });
 
 // node_modules/@intentius/chant/dist/components/verbs/publish-artifact.js
-import { createHash as createHash4 } from "node:crypto";
+import { createHash as createHash5 } from "node:crypto";
 import { readFileSync as readFileSync11 } from "node:fs";
 function selectStorageBackend(backends, uri, named) {
   const names = backends.map((b) => b.name).sort().join(", ") || "none";
@@ -248254,7 +249547,7 @@ function createPublishArtifactCapability(options = {}) {
     },
     async run(ctx, input) {
       const localPath = archiveRelativePath(input.from);
-      const digest = `sha256:${createHash4("sha256").update(readFileSync11(localPath)).digest("hex")}`;
+      const digest = `sha256:${createHash5("sha256").update(readFileSync11(localPath)).digest("hex")}`;
       const basename5 = localPath.split("/").pop() ?? localPath;
       const uri = input.to.endsWith("/") ? `${input.to}${basename5}` : input.to;
       const envBackend = ctx.vars?.publish?.backend;
@@ -249007,7 +250300,7 @@ async function handToRootChant(cwd, at, argv = process.argv.slice(2)) {
 `);
       done(1);
     });
-    child.on("close", (code) => done(code ?? 1));
+    child.on("close", (code2) => done(code2 ?? 1));
   });
 }
 var posix3, HANDED_TO_ROOT_ENV;
@@ -249135,7 +250428,7 @@ var init_release_image = __esm({
 import { readFileSync as readFileSync13, writeFileSync as writeFileSync3 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
 import { join as join19 } from "node:path";
-import { createHash as createHash5 } from "node:crypto";
+import { createHash as createHash6 } from "node:crypto";
 function normalizeSeverity(raw) {
   const s = (raw ?? "").toLowerCase();
   if (s === "critical" || s === "high" || s === "medium" || s === "low" || s === "negligible")
@@ -249189,7 +250482,7 @@ function createToolVulnScanner(tool = "grype", processRunner = defaultProcessRun
   return {
     async scan(input) {
       await requireTool(processRunner, tool, `scan the SBOM for known vulnerabilities`);
-      const hash2 = createHash5("sha256").update(input.sbom.bytes).digest("hex").slice(0, 16);
+      const hash2 = createHash6("sha256").update(input.sbom.bytes).digest("hex").slice(0, 16);
       const ext = input.sbom.format === "cyclonedx" ? "cdx.json" : "spdx.json";
       const path = join19(tmpdir2(), `chant-scan-${hash2}.${ext}`);
       writeFileSync3(path, input.sbom.bytes);
@@ -249810,22 +251103,6 @@ var init_generator = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/observation.js
-var UNOBSERVED_REASON_WITNESS, UNOBSERVED_REASONS;
-var init_observation = __esm({
-  "node_modules/@intentius/chant/dist/observation.js"() {
-    UNOBSERVED_REASON_WITNESS = {
-      "read-failed": true,
-      "no-credentials": true,
-      "no-binding": true,
-      "unsupported-kind": true,
-      filtered: true,
-      "not-reached": true
-    };
-    UNOBSERVED_REASONS = Object.keys(UNOBSERVED_REASON_WITNESS);
-  }
-});
-
 // node_modules/@intentius/chant/dist/identity.js
 var CREDENTIAL_ENV_NAME;
 var init_identity = __esm({
@@ -249837,12 +251114,6 @@ var init_identity = __esm({
 // node_modules/@intentius/chant/dist/apply.js
 var init_apply = __esm({
   "node_modules/@intentius/chant/dist/apply.js"() {
-  }
-});
-
-// node_modules/@intentius/chant/dist/sensitive-key.js
-var init_sensitive_key = __esm({
-  "node_modules/@intentius/chant/dist/sensitive-key.js"() {
   }
 });
 
@@ -252045,12 +253316,6 @@ var init_group_digest = __esm({
   }
 });
 
-// node_modules/@intentius/chant/dist/pulumi-urn.js
-var init_pulumi_urn = __esm({
-  "node_modules/@intentius/chant/dist/pulumi-urn.js"() {
-  }
-});
-
 // node_modules/@intentius/chant/dist/lifecycle/lock-rows.js
 var init_lock_rows = __esm({
   "node_modules/@intentius/chant/dist/lifecycle/lock-rows.js"() {
@@ -252105,12 +253370,6 @@ var init_op_waves_run = __esm({
     init_gate_quorum();
     init_op_waves();
     init_stage_hooks();
-  }
-});
-
-// node_modules/@intentius/chant/dist/drift-issue.js
-var init_drift_issue = __esm({
-  "node_modules/@intentius/chant/dist/drift-issue.js"() {
   }
 });
 
@@ -252956,7 +254215,7 @@ var init_conflict_check = __esm({
 });
 
 // node_modules/@intentius/chant/dist/project-codegen.js
-import { createHash as createHash6 } from "node:crypto";
+import { createHash as createHash7 } from "node:crypto";
 import { existsSync as existsSync12, mkdirSync as mkdirSync2, readFileSync as readFileSync14, readdirSync as readdirSync4, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname18, isAbsolute as isAbsolute5, join as join20, relative as relative6, resolve as resolve12, sep as sep5 } from "node:path";
 function resolveCodegenRoot(projectRoot, config2) {
@@ -252968,7 +254227,7 @@ function projectCodegenContext(lexicon, projectRoot, config2) {
   return { projectRoot, config: config2, outDir: join20(resolveCodegenRoot(projectRoot, config2), lexicon) };
 }
 function digestInputs(inputs) {
-  return `sha256:${createHash6("sha256").update(canonicalJson(inputs)).digest("hex")}`;
+  return `sha256:${createHash7("sha256").update(canonicalJson(inputs)).digest("hex")}`;
 }
 function readStamp(outDir) {
   const path = join20(outDir, STAMP_FILE);
@@ -258611,6 +259870,352 @@ var NO_POLICY_MESSAGE = `no --config given and no ${POLICY_FILE} or ${TS_POLICY_
 // src/cli.ts
 init_app_client();
 
+// node_modules/@intentius/chant/dist/change-set-graph.js
+init_instance_nodes();
+init_pulumi_urn();
+
+// node_modules/@intentius/chant/dist/drift-record.js
+init_instance_nodes();
+init_plan_digest();
+init_observation();
+init_sensitive_key();
+var DRIFT_VERSION = "v1";
+var DRIFT_ENGINE_WITNESS = {
+  terraform: true,
+  tofu: true,
+  choudoufu: true,
+  chant: true,
+  warden: true,
+  sql: true,
+  pulumi: true,
+  plunge: true
+};
+var DRIFT_ENGINES = Object.keys(DRIFT_ENGINE_WITNESS);
+var DRIFT_READ_WITNESS = { state: true, plan: true, refresh: true, "live-read": true, ownership: true };
+var DRIFT_READS = Object.keys(DRIFT_READ_WITNESS);
+var DRIFT_STATUS_WITNESS = {
+  "in-sync": true,
+  drifted: true,
+  pending: true,
+  missing: true,
+  unclaimed: true,
+  undeclared: true,
+  runtime: true,
+  recorded: true,
+  "not-observed": true
+};
+var DRIFT_STATUSES = Object.keys(DRIFT_STATUS_WITNESS);
+var STATE_READ_STATUSES = ["recorded", "pending", "not-observed"];
+var OWNERSHIP_VERDICT_WITNESS = { owned: true, foreign: true, adoptable: true, unknown: true };
+var DRIFT_OWNERSHIP_VERDICTS = Object.keys(OWNERSHIP_VERDICT_WITNESS);
+var OWNERSHIP_BY_WITNESS = { marker: true, derived: true, record: true, cache: true, state: true, label: true };
+var DRIFT_OWNERSHIP_BY = Object.keys(OWNERSHIP_BY_WITNESS);
+var DriftRecordError = class extends Error {
+  constructor(rule, message) {
+    super(message);
+    this.name = "DriftRecordError";
+    this.rule = rule;
+  }
+};
+var byString = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+var isRecordObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+var nonEmpty = (v) => typeof v === "string" && v.length > 0;
+var RFC3339 = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
+function attributePathKeys(path) {
+  const keys = [];
+  let current = "";
+  for (let i = 0; i < path.length; i++) {
+    const c = path[i];
+    if (c === ".") {
+      if (current)
+        keys.push(current);
+      current = "";
+    } else if (c === "[") {
+      if (current)
+        keys.push(current);
+      current = "";
+      if (path[i + 1] === '"') {
+        let key = "";
+        let j = i + 2;
+        for (; j < path.length && path[j] !== '"'; j++) {
+          if (path[j] === "\\" && j + 1 < path.length)
+            j++;
+          key += path[j];
+        }
+        keys.push(key);
+        i = path.indexOf("]", j);
+        if (i < 0)
+          break;
+      } else if (path[i + 1] === "#") {
+        const close = path.indexOf("]", i);
+        if (close < 0)
+          break;
+        keys.push(path.slice(i + 2, close));
+        i = close;
+      } else {
+        const close = path.indexOf("]", i);
+        if (close < 0)
+          break;
+        i = close;
+      }
+    } else
+      current += c;
+  }
+  if (current)
+    keys.push(current);
+  return keys;
+}
+function redactDriftAttribute(attribute) {
+  if (attribute.sensitive === true || attributePathKeys(attribute.path).some(isSensitiveKey)) {
+    return { path: attribute.path, sensitive: true };
+  }
+  return {
+    path: attribute.path,
+    ...attribute.before !== void 0 ? { before: attribute.before } : {},
+    ...attribute.after !== void 0 ? { after: attribute.after } : {}
+  };
+}
+function checkUnobserved(value, where, field) {
+  if (!isRecordObject(value))
+    throw new DriftRecordError("unobserved-reason", `${where}: ${field} needs a reason`);
+  if (!isUnobservedReason(value.reason)) {
+    throw new DriftRecordError("unobserved-reason", `${where}: ${field}.reason ${JSON.stringify(value.reason)} is not an unobserved reason`);
+  }
+  return {
+    reason: value.reason,
+    ...nonEmpty(value.detail) ? { detail: value.detail } : {},
+    ...nonEmpty(value.queried) ? { queried: value.queried } : {}
+  };
+}
+function checkOwnership(value, where) {
+  if (!isRecordObject(value) || !DRIFT_OWNERSHIP_VERDICTS.includes(value.verdict)) {
+    throw new DriftRecordError("shape", `${where}: ownership.verdict must be one of ${DRIFT_OWNERSHIP_VERDICTS.join(", ")}`);
+  }
+  if (value.by !== void 0 && !DRIFT_OWNERSHIP_BY.includes(value.by)) {
+    throw new DriftRecordError("shape", `${where}: ownership.by ${JSON.stringify(value.by)} is not one of ${DRIFT_OWNERSHIP_BY.join(", ")}`);
+  }
+  if (value.markerOnObject !== void 0 && typeof value.markerOnObject !== "boolean") {
+    throw new DriftRecordError("shape", `${where}: ownership.markerOnObject must be a boolean`);
+  }
+  return {
+    verdict: value.verdict,
+    ...value.by !== void 0 ? { by: value.by } : {},
+    ...typeof value.markerOnObject === "boolean" ? { markerOnObject: value.markerOnObject } : {},
+    ...nonEmpty(value.ownedBy) ? { ownedBy: value.ownedBy } : {},
+    ...nonEmpty(value.adopt) ? { adopt: value.adopt } : {}
+  };
+}
+function driftRecord(input) {
+  const raw = input;
+  if (!isRecordObject(raw))
+    throw new DriftRecordError("shape", "a drift record must be an object");
+  const where = `drift record ${JSON.stringify(raw.address)} in member ${JSON.stringify(raw.member)} (${String(raw.read)} read, ${String(raw.status)})`;
+  if (!nonEmpty(raw.member))
+    throw new DriftRecordError("shape", `${where}: member must be a non-empty string`);
+  if (!nonEmpty(raw.address))
+    throw new DriftRecordError("shape", `${where}: address must be a non-empty string`);
+  if (!DRIFT_ENGINES.includes(raw.engine)) {
+    throw new DriftRecordError("shape", `${where}: engine ${JSON.stringify(raw.engine)} is not one of ${DRIFT_ENGINES.join(", ")}`);
+  }
+  if (!DRIFT_READS.includes(raw.read)) {
+    throw new DriftRecordError("shape", `${where}: read ${JSON.stringify(raw.read)} is not one of ${DRIFT_READS.join(", ")}`);
+  }
+  if (!DRIFT_STATUSES.includes(raw.status)) {
+    throw new DriftRecordError("shape", `${where}: status ${JSON.stringify(raw.status)} is not one of ${DRIFT_STATUSES.join(", ")}`);
+  }
+  if (raw.node !== null && !nonEmpty(raw.node))
+    throw new DriftRecordError("shape", `${where}: node must be a graph id or null`);
+  if (typeof raw.observedAt !== "string" || !RFC3339.test(raw.observedAt)) {
+    throw new DriftRecordError("shape", `${where}: observedAt ${JSON.stringify(raw.observedAt)} is not an RFC 3339 date-time`);
+  }
+  if (raw.instanceOf !== void 0 && (!nonEmpty(raw.instanceOf) || raw.node === null)) {
+    throw new DriftRecordError("shape", `${where}: instanceOf must be a block node id, beside a node`);
+  }
+  if (raw.fellBackFrom !== void 0 && !nonEmpty(raw.fellBackFrom))
+    throw new DriftRecordError("shape", `${where}: fellBackFrom must be a non-empty string`);
+  if (raw.resourceType !== void 0 && !nonEmpty(raw.resourceType))
+    throw new DriftRecordError("shape", `${where}: resourceType must be a non-empty string`);
+  if (!isRecordObject(raw.evidence) || !nonEmpty(raw.evidence.tool))
+    throw new DriftRecordError("shape", `${where}: evidence.tool must be a non-empty string`);
+  const read = raw.read;
+  const status = raw.status;
+  if (read === "state" && !STATE_READ_STATUSES.includes(status)) {
+    throw new DriftRecordError("state-read-status", `${where}: a state read says what the last apply recorded, so it can only be ${STATE_READ_STATUSES.join(", ")}, never ${status}`);
+  }
+  let unobserved;
+  if (status === "not-observed") {
+    if (raw.unobserved === void 0)
+      throw new DriftRecordError("unobserved-reason", `${where}: not-observed needs unobserved.reason`);
+    unobserved = checkUnobserved(raw.unobserved, where, "unobserved");
+  } else if (raw.unobserved !== void 0) {
+    throw new DriftRecordError("unobserved-on-observed", `${where}: only not-observed carries unobserved`);
+  }
+  let attributes;
+  if (raw.attributes !== void 0) {
+    if (status !== "drifted")
+      throw new DriftRecordError("attributes-status", `${where}: only drifted carries attributes`);
+    if (!Array.isArray(raw.attributes))
+      throw new DriftRecordError("shape", `${where}: attributes must be an array`);
+    const byPath = /* @__PURE__ */ new Map();
+    for (const [i, a] of raw.attributes.entries()) {
+      if (!isRecordObject(a) || !nonEmpty(a.path))
+        throw new DriftRecordError("shape", `${where}: attributes[${i}] needs a path`);
+      if (a.sensitive !== void 0 && a.sensitive !== true)
+        throw new DriftRecordError("shape", `${where}: attributes[${i}].sensitive must be true when set`);
+      const redacted = redactDriftAttribute(a);
+      const earlier = byPath.get(redacted.path);
+      byPath.set(redacted.path, earlier?.sensitive === true ? earlier : redacted);
+    }
+    attributes = [...byPath.values()].sort((a, b) => byString(a.path, b.path));
+  }
+  let attributesUnobserved;
+  if (raw.attributesUnobserved !== void 0) {
+    if (status !== "in-sync" && status !== "drifted") {
+      throw new DriftRecordError("attributes-unobserved-status", `${where}: only in-sync or drifted carries attributesUnobserved`);
+    }
+    attributesUnobserved = checkUnobserved(raw.attributesUnobserved, where, "attributesUnobserved");
+  }
+  const ev = raw.evidence;
+  return {
+    member: raw.member,
+    engine: raw.engine,
+    address: raw.address,
+    ...raw.resourceType !== void 0 ? { resourceType: raw.resourceType } : {},
+    node: raw.node,
+    ...raw.instanceOf !== void 0 ? { instanceOf: raw.instanceOf } : {},
+    observedAt: raw.observedAt,
+    read,
+    ...raw.fellBackFrom !== void 0 ? { fellBackFrom: raw.fellBackFrom } : {},
+    status,
+    ...unobserved ? { unobserved } : {},
+    ...attributes ? { attributes } : {},
+    ...attributesUnobserved ? { attributesUnobserved } : {},
+    ...raw.ownership !== void 0 ? { ownership: checkOwnership(raw.ownership, where) } : {},
+    evidence: {
+      tool: ev.tool,
+      ...nonEmpty(ev.version) ? { version: ev.version } : {},
+      ...nonEmpty(ev.command) ? { command: ev.command } : {},
+      ...nonEmpty(ev.engineCode) ? { engineCode: ev.engineCode } : {}
+    }
+  };
+}
+function driftStart(input) {
+  const seen = /* @__PURE__ */ new Set();
+  const expected = input.expected.filter((e) => {
+    const address = typeof e === "string" ? e : e.address;
+    return !seen.has(address) && seen.add(address);
+  });
+  return { type: "drift-start", drift: DRIFT_VERSION, ...input, expected };
+}
+
+// src/drift/reader.ts
+var DRIFT_ENGINE = "warden";
+var DRIFT_READ = "live-read";
+function driftEvidence() {
+  return { tool: "github-warden", version: package_default.version, command: "reconcile --mode dry-run" };
+}
+var parentOf = (key) => key.split("/")[0];
+function driftAddress(org, entry) {
+  switch (entry.resourceType) {
+    case "org-settings":
+    case "member":
+    case "org-secret":
+    case "org-variable":
+    case "token-grant":
+    case "token-request":
+      return `org/${org}`;
+    case "team":
+      return `team/${org}/${entry.key}`;
+    case "team-member":
+    case "team-repo":
+      return `team/${org}/${parentOf(entry.key)}`;
+    case "repo":
+    case "repo-baseline":
+    case "repo-security":
+    case "dependabot":
+      return `repo/${org}/${entry.key}`;
+    case "environment":
+    case "repo-secret":
+    case "repo-variable":
+      return `repo/${org}/${parentOf(entry.key)}`;
+    case "org-ruleset":
+    case "repo-ruleset":
+      return `ruleset/${org}/${entry.key}`;
+    case "branch-protection":
+      return `protection/${org}/${entry.key}`;
+    default:
+      return `${entry.resourceType}/${org}/${entry.key}`;
+  }
+}
+var SENSITIVE_TYPES = /* @__PURE__ */ new Set(["org-secret", "repo-secret"]);
+var SINGLE_TYPES = /* @__PURE__ */ new Set(["org-settings"]);
+function driftAttributes(entry) {
+  const base = SINGLE_TYPES.has(entry.resourceType) ? entry.resourceType : `${entry.resourceType}[#${entry.key}]`;
+  const sensitive = SENSITIVE_TYPES.has(entry.resourceType);
+  const attr = (path, before, after) => sensitive ? { path, sensitive: true } : { path, ...before !== void 0 ? { before } : {}, ...after !== void 0 ? { after } : {} };
+  if (entry.kind === "update" && entry.fields?.length) return entry.fields.map((f) => attr(`${base}.${f.field}`, f.after, f.before));
+  if (entry.kind === "delete") return [attr(base, void 0, entry.before)];
+  return [attr(base, entry.after, void 0)];
+}
+function declaredNodes(policy) {
+  const out = {};
+  for (const [org, oc] of Object.entries(policy.orgs ?? {})) {
+    const ids = /* @__PURE__ */ new Set([`org/${org}`]);
+    const repos = oc?.repos ?? {};
+    for (const name of Object.keys(repos)) ids.add(`repo/${org}/${name}`);
+    for (const slug2 of Object.keys(oc?.teams ?? {})) ids.add(`team/${org}/${slug2}`);
+    for (const [name, repo] of Object.entries(repos)) {
+      for (const rs of repo?.rulesets ?? []) if (typeof rs?.name === "string") ids.add(`ruleset/${org}/${name}/${rs.name}`);
+      for (const bp of repo?.branchProtection ?? []) if (typeof bp?.pattern === "string") ids.add(`protection/${org}/${name}/${bp.pattern}`);
+    }
+    for (const rs of oc?.rulesets ?? []) if (typeof rs?.name === "string") ids.add(`ruleset/${org}/${rs.name}`);
+    out[org] = [...ids];
+  }
+  return out;
+}
+function governanceDrift(input) {
+  const evidence = driftEvidence();
+  const base = { member: input.member, engine: DRIFT_ENGINE, node: null, observedAt: input.observedAt, read: DRIFT_READ, evidence };
+  const byOrg = declaredNodes(input.policy);
+  const declared = Object.values(byOrg).flat();
+  const orgOf = new Map(Object.entries(byOrg).flatMap(([org, ids]) => ids.map((id) => [id, org])));
+  const attributes = /* @__PURE__ */ new Map();
+  for (const cs of input.changeSets) {
+    for (const entry of cs.entries) {
+      const address = driftAddress(cs.org, entry);
+      if (!orgOf.has(address)) orgOf.set(address, cs.org);
+      attributes.set(address, [...attributes.get(address) ?? [], ...driftAttributes(entry)]);
+    }
+  }
+  const failedIn = /* @__PURE__ */ new Map();
+  for (const e of input.errored ?? []) failedIn.set(e.org, [...failedIn.get(e.org) ?? [], `${e.name} errored in ${e.stage}: ${e.error}`]);
+  const deferred = input.deferred?.skippedCycles ?? [];
+  const deferredWhy = deferred.length ? { reason: "not-reached", detail: `deferred by the request budget: ${deferred.join(", ")}` } : void 0;
+  const addresses = [.../* @__PURE__ */ new Set([...declared, ...attributes.keys()])].filter((a) => input.resource === void 0 || a === input.resource);
+  const records = addresses.map((address) => {
+    const attrs = attributes.get(address);
+    const failed = failedIn.get(orgOf.get(address) ?? "");
+    const unobserved = deferredWhy ?? (failed ? { reason: "read-failed", detail: failed.join("; ") } : void 0);
+    if (unobserved && (deferredWhy || !attrs)) return driftRecord({ ...base, address, status: "not-observed", unobserved });
+    if (attrs) return driftRecord({ ...base, address, status: "drifted", attributes: attrs, ...unobserved ? { attributesUnobserved: unobserved } : {} });
+    return driftRecord({ ...base, address, status: "in-sync" });
+  });
+  const start = driftStart({
+    member: input.member,
+    engine: DRIFT_ENGINE,
+    read: DRIFT_READ,
+    ...input.resource !== void 0 ? { resource: input.resource } : {},
+    at: input.observedAt,
+    expected: input.resource !== void 0 ? [input.resource] : declared,
+    evidence
+  });
+  return { start, records };
+}
+
+// src/drift/issue.ts
+init_drift_issue();
+init_pr_forge();
+
 // src/auth/token-client.ts
 var GITHUB_API_URL = "https://api.github.com";
 function createTokenClient(opts) {
@@ -258646,6 +260251,56 @@ function createTokenClient(opts) {
   };
 }
 
+// src/drift/issue.ts
+var DRIFT_ISSUE_PRODUCT = "github-warden";
+var GITHUB_HOST = "github.com";
+var pick = (env2, ...names) => names.map((n) => env2[n]?.trim()).find((v) => v !== void 0 && v !== "");
+var isRepoName = (v) => /^[^/\s]+\/[^/\s]+$/.test(v);
+function driftIssueRepo(flag, env2 = process.env) {
+  return flag ?? pick(env2, "GITHUB_REPOSITORY");
+}
+function driftIssueRunUrl(env2 = process.env) {
+  const server2 = pick(env2, "GITHUB_SERVER_URL")?.replace(/\/+$/, "");
+  const repo = pick(env2, "GITHUB_REPOSITORY");
+  const run4 = pick(env2, "GITHUB_RUN_ID");
+  return server2 && repo && run4 ? `${server2}/${repo}/actions/runs/${run4}` : void 0;
+}
+function driftIssueEnvironment(orgs, host = GITHUB_HOST) {
+  return `${host.toLowerCase()}/${[...orgs].sort().join(",")}`;
+}
+var DRIFT_ISSUE_WORDS = {
+  product: DRIFT_ISSUE_PRODUCT,
+  title: (facts) => `Governance drift on ${facts.environment}`,
+  values: { before: "declared", after: "live" },
+  advice: () => "Run `github-warden reconcile --mode apply` to bring the forge back to the policy, or change the policy to match. This issue closes on the first dry run that finds no drift."
+};
+function driftIssueForge(opts) {
+  return forgeClient(
+    {
+      kind: "github",
+      apiBase: GITHUB_API_URL,
+      repo: opts.repo,
+      host: GITHUB_HOST,
+      token: opts.token,
+      tokenSource: opts.tokenSource,
+      ...opts.runUrl ? { runUrl: opts.runUrl } : {}
+    },
+    opts.fetch
+  );
+}
+function keepGovernanceDriftIssue(forge, input) {
+  return keepDriftIssue(forge, {
+    words: DRIFT_ISSUE_WORDS,
+    environment: input.environment,
+    records: input.records,
+    ...input.runUrl ? { runUrl: input.runUrl } : {},
+    ...input.observedAt ? { observedAt: input.observedAt } : {}
+  });
+}
+function describeDriftIssue(r) {
+  return [`Drift issue: ${r.action}`, r.number !== void 0 ? `#${r.number}` : "", r.url ?? "", r.why ? `(${r.why})` : ""].filter(Boolean).join(" ");
+}
+
 // src/cli.ts
 init_runner();
 
@@ -258678,11 +260333,11 @@ function isStatus(err, codes) {
   const msg = err instanceof Error ? err.message : String(err);
   return codes.some((c) => msg.includes(`returned ${c}`));
 }
-async function allPages(client, path, pick3) {
+async function allPages(client, path, pick4) {
   const out = [];
   const sep6 = path.includes("?") ? "&" : "?";
   for (let page = 1; ; page++) {
-    const chunk = pick3(await client.request("GET", `${path}${sep6}per_page=${PER_PAGE}&page=${page}`));
+    const chunk = pick4(await client.request("GET", `${path}${sep6}per_page=${PER_PAGE}&page=${page}`));
     if (!Array.isArray(chunk)) throw new Error(`GET ${path} did not return a list`);
     out.push(...chunk);
     if (chunk.length < PER_PAGE) return out;
@@ -260513,7 +262168,7 @@ function buildComplianceReport(results, audit, identity) {
       mergeWorthy: auditMergeWorthy
     };
   }
-  const clean = drift === 0 && guardrailTrips === 0 && failed === 0 && errored.length === 0 && deferred.length === 0 && auditMergeWorthy === 0 && (identity?.summary.flaggedMachineUsers ?? 0) === 0;
+  const clean2 = drift === 0 && guardrailTrips === 0 && failed === 0 && errored.length === 0 && deferred.length === 0 && auditMergeWorthy === 0 && (identity?.summary.flaggedMachineUsers ?? 0) === 0;
   return {
     modes: [...modeSet],
     cycles,
@@ -260530,7 +262185,7 @@ function buildComplianceReport(results, audit, identity) {
     },
     errored,
     deferred,
-    clean
+    clean: clean2
   };
 }
 function renderComplianceReport(report2) {
@@ -260606,8 +262261,8 @@ var defaultRunner = (cmd, args, cwd) => new Promise((resolve15, reject2) => {
       reject2(err);
       return;
     }
-    const code = err ? err.code : 0;
-    resolve15({ stdout, stderr, code: typeof code === "number" ? code : 1 });
+    const code2 = err ? err.code : 0;
+    resolve15({ stdout, stderr, code: typeof code2 === "number" ? code2 : 1 });
   });
 });
 function parseGenerated(raw) {
@@ -260881,9 +262536,9 @@ function buildCodeowners(ws, owners) {
 
 // src/cli.ts
 var CliError = class extends Error {
-  constructor(code, message) {
+  constructor(code2, message) {
     super(message);
-    this.code = code;
+    this.code = code2;
     this.name = "CliError";
   }
   code;
@@ -260900,7 +262555,9 @@ function parseReconcileArgs(argv) {
     allowGuardrailOverride: false,
     removalCapFraction: void 0,
     planJson: void 0,
-    member: void 0
+    member: void 0,
+    driftIssue: false,
+    driftIssueRepo: void 0
   };
   const knownFlags = /* @__PURE__ */ new Set([
     "--config",
@@ -260913,7 +262570,9 @@ function parseReconcileArgs(argv) {
     "--allow-guardrail-override",
     "--removal-cap-fraction",
     "--plan-json",
-    "--member"
+    "--member",
+    "--drift-issue",
+    "--drift-issue-repo"
   ]);
   let i = 0;
   while (i < argv.length) {
@@ -261009,14 +262668,35 @@ function parseReconcileArgs(argv) {
         args.member = val;
         break;
       }
+      case "--drift-issue": {
+        args.driftIssue = true;
+        break;
+      }
+      case "--drift-issue-repo": {
+        const val = argv[++i];
+        if (val === void 0 || val.startsWith("--"))
+          throw new CliError(2, "--drift-issue-repo requires a value");
+        if (!isRepoName(val)) throw new CliError(2, `--drift-issue-repo must be owner/name, got: ${val}`);
+        args.driftIssueRepo = val;
+        break;
+      }
     }
     i++;
   }
   if (args.planJson !== void 0 && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
   }
-  if (args.member !== void 0 && args.planJson === void 0) {
-    throw new CliError(2, "--member names the member of the --plan-json part; give it with --plan-json");
+  if (args.member !== void 0 && args.planJson === void 0 && !args.driftIssue) {
+    throw new CliError(2, "--member names the member of the --plan-json part or the drift records; give it with --plan-json or --drift-issue");
+  }
+  if (args.driftIssue && args.mode === "apply") {
+    throw new CliError(2, "--drift-issue tracks the drift a dry run finds; it cannot be combined with --mode apply");
+  }
+  if (args.driftIssue && args.cycles.length > 0) {
+    throw new CliError(2, "--drift-issue tracks the whole policy's drift; it cannot be combined with --cycles, whose run would read the other cycles' nodes as matching");
+  }
+  if (args.driftIssueRepo !== void 0 && !args.driftIssue) {
+    throw new CliError(2, "--drift-issue-repo names the repository of the drift issue; give it with --drift-issue");
   }
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
@@ -261304,6 +262984,12 @@ function buildClient(args) {
   );
   return createAppClient({ appId, privateKeyPem, installationId });
 }
+async function issueCredential(args) {
+  if (args.tokenEnv) return { token: env(args.tokenEnv), tokenSource: args.tokenEnv };
+  const privateKeyPem = process.env["GOVERNANCE_APP_PRIVATE_KEY"] ?? process.env["GITHUB_APP_PRIVATE_KEY"] ?? "";
+  const { token } = await mintInstallationToken({ appId: env(args.appIdEnv), installationId: env(args.installationIdEnv), privateKeyPem });
+  return { token, tokenSource: `the GitHub App installation in ${args.installationIdEnv}` };
+}
 async function main(argv = process.argv.slice(2)) {
   const subcommand = argv[0];
   if (!subcommand || argv.includes("--help") || argv.includes("-h")) {
@@ -261351,9 +263037,17 @@ async function main(argv = process.argv.slice(2)) {
   }
   const { config: config2, provenance, path: configPath2 } = await readPolicy(args.config, args.configMode);
   let member;
-  if (args.planJson !== void 0) {
+  if (args.planJson !== void 0 || args.driftIssue) {
     member = args.member ?? defaultMemberName(configPath2);
-    if (!member) die(2, `cannot name the --plan-json member from "${configPath2}"'s directory; give --member <name>`);
+    if (!member) die(2, `cannot name the member from "${configPath2}"'s directory; give --member <name>`);
+  }
+  let issueRepo;
+  if (args.driftIssue) {
+    issueRepo = driftIssueRepo(args.driftIssueRepo);
+    if (!issueRepo) {
+      die(2, "--drift-issue needs the repository to keep the issue in: give --drift-issue-repo <owner/name>, or run where GITHUB_REPOSITORY is set");
+    }
+    if (!isRepoName(issueRepo)) die(2, `the drift issue repository must be owner/name, got: ${issueRepo}`);
   }
   let client;
   try {
@@ -261433,6 +263127,24 @@ GUARDRAIL BLOCK: ${diags.map((d) => d.message).join("; ")}
 `
     );
   }
+  if (args.driftIssue) {
+    const observedAt = (/* @__PURE__ */ new Date()).toISOString();
+    const runUrl = driftIssueRunUrl();
+    try {
+      const { token, tokenSource } = await issueCredential(args);
+      const kept = await keepGovernanceDriftIssue(driftIssueForge({ repo: issueRepo, token, tokenSource, runUrl }), {
+        environment: driftIssueEnvironment(Object.keys(config2.orgs)),
+        records: governanceDrift({ member, observedAt, policy: config2, changeSets: result.changeSets, errored: result.errored, deferred: result.deferred }).records,
+        observedAt,
+        runUrl
+      });
+      process.stdout.write(`
+${describeDriftIssue(kept)}
+`);
+    } catch (err) {
+      die(3, `keeping the drift issue failed: ${errMsg2(err)}`);
+    }
+  }
   const anyGuardrailBlock = result.cycles.some((cr) => cr.guardrailBlocked);
   if (anyGuardrailBlock) {
     process.exit(1);
@@ -261448,10 +263160,10 @@ function env(name) {
   if (!val) die(2, `env var ${name} is not set or is empty`);
   return val;
 }
-function die(code, message) {
+function die(code2, message) {
   process.stderr.write(`github-warden: error: ${message}
 `);
-  process.exit(code);
+  process.exit(code2);
 }
 function errMsg2(err) {
   return err instanceof Error ? err.message : String(err);
@@ -261887,7 +263599,9 @@ function printUsage() {
       "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
       "                                delete per resource type, in (0,1]. Default: 0.25.",
       "  --plan-json <file>            Write the plan as a chant change-set part (dry-run only).",
-      "  --member <name>               Member the part names (default: the policy file's directory name).",
+      "  --member <name>               Member the part and drift records name (default: the policy file's directory name).",
+      "  --drift-issue                 Keep one forge issue tracking the drift this dry run finds (dry-run only).",
+      "  --drift-issue-repo <owner/name>  Repository the issue lives in (default: GITHUB_REPOSITORY).",
       "",
       "Flags (audit):",
       "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",
@@ -262019,6 +263733,8 @@ async function main2() {
   const cycles = optionalInput("cycles");
   const failOn = optionalInput("fail-on");
   const allowGuardrailOverride = optionalInput("allow-guardrail-override");
+  const driftIssue = optionalInput("drift-issue");
+  const driftIssueRepo2 = optionalInput("drift-issue-repo");
   if (command !== "reconcile" && command !== "audit") {
     process.stderr.write(
       `github-warden action: input 'command' must be 'reconcile' or 'audit', got: ${command}
@@ -262038,6 +263754,8 @@ async function main2() {
     argv.push("--mode", mode);
     if (cycles) argv.push("--cycles", cycles);
     if (allowGuardrailOverride === "true") argv.push("--allow-guardrail-override");
+    if (driftIssue === "true") argv.push("--drift-issue");
+    if (driftIssueRepo2) argv.push("--drift-issue-repo", driftIssueRepo2);
   }
   if (command === "audit") {
     if (failOn) argv.push("--fail-on", failOn);

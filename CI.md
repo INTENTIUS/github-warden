@@ -24,6 +24,8 @@ installation token internally from the three App inputs).
 | `private-key` | yes | — | App private key PEM. Pass as a secret, never a var. |
 | `fail-on` | no | `none` | `none`, `merge-worthy`, or `any` (audit only). |
 | `allow-guardrail-override` | no | `false` | `'true'` applies even when guardrails trip (reconcile only). |
+| `drift-issue` | no | `false` | `'true'` on a dry run keeps one issue tracking the drift it finds (see [below](#a-scheduled-drift-issue)). |
+| `drift-issue-repo` | no | the workflow's repository | `owner/name` of the repository that holds the drift issue (with `drift-issue`). |
 
 ## Dry-run on PR, apply on main
 
@@ -99,6 +101,55 @@ An audit gate is one more step:
 If you prefer a token over App inputs (e.g. for repo-level cycles only), skip
 the action and run the CLI directly with `--token-env`, minting the token with
 `actions/create-github-app-token` first.
+
+## A scheduled drift issue
+
+To be told about drift rather than have the schedule correct it, run the
+scheduled job as a dry run with `--drift-issue` (the Action's `drift-issue:
+'true'`): one issue in the policy repository tracks the drift, is updated
+when it changes, and closes on the first run that finds GitHub matching the
+policy again ([CLI.md](CLI.md#drift-issue)). The App (or token) needs Issues
+read and write on the policy repository as well as read access to the
+managed orgs. Drop the `schedule` trigger from the apply workflow above when
+this job replaces it.
+
+```yaml
+# .github/workflows/governance-drift.yml
+name: governance drift
+
+on:
+  schedule:
+    - cron: "17 4 * * *"   # nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - name: Dry-run and keep the drift issue
+        env:
+          GOVERNANCE_APP_ID: ${{ vars.GOVERNANCE_APP_ID }}
+          GOVERNANCE_INSTALLATION_ID: ${{ vars.GOVERNANCE_INSTALLATION_ID }}
+          GOVERNANCE_APP_PRIVATE_KEY: ${{ secrets.GOVERNANCE_APP_PRIVATE_KEY }}
+        run: |
+          npx @intentius/github-warden reconcile \
+            --config .github/governance.yml \
+            --app-id-env GOVERNANCE_APP_ID \
+            --installation-id-env GOVERNANCE_INSTALLATION_ID \
+            --mode dry-run \
+            --drift-issue
+```
+
+The issue goes to the workflow's own repository (`GITHUB_REPOSITORY`) and
+links the run. `--drift-issue-repo <owner/name>` names another repository.
 
 ## Generating the workflow: the emit pipeline
 

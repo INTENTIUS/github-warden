@@ -320,6 +320,10 @@ When a cycle errors for an org, that org's nodes are `not-observed` with reason 
 declared node and reconciles only its org; `--read` other than `live-read` and `--stack` are refused with
 `read-unsupported`.
 
+`reconcile --drift-issue` keeps one GitHub issue over the same records, opened while GitHub drifts from the policy and
+closed when it matches again ([CLI.md](CLI.md#drift-issue), and the scheduled job in
+[CI.md](CI.md#a-scheduled-drift-issue)).
+
 ## Guardrails
 
 Before any apply, warden runs safety checks and refuses dangerous changes

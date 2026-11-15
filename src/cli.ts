@@ -30,8 +30,13 @@
  *                                 Default: 0.25.
  *   --plan-json <file>            Write the plan as a chant change-set part
  *                                 (lexicon "github"). Dry-run only.
- *   --member <name>               Member the part names. Default: the policy
- *                                 file's directory name. Needs --plan-json.
+ *   --member <name>               Member the part and the drift records name.
+ *                                 Default: the policy file's directory name.
+ *                                 Needs --plan-json or --drift-issue.
+ *   --drift-issue                 Keep one GitHub issue tracking the drift this
+ *                                 dry run finds. Dry-run only, all cycles.
+ *   --drift-issue-repo <o/n>      Repository of the drift issue. Default:
+ *                                 GITHUB_REPOSITORY. Needs --drift-issue.
  *
  * Auth modes (mutually exclusive, precedence: token-env > app-id-env):
  *   1. --token-env GH_TOKEN
@@ -59,7 +64,17 @@ import { CONFIG_MODES, loadGovernancePolicy, type ConfigMode } from "./config/po
 import type { PolicyProvenance } from "./reconcile/origin.js";
 import { NO_POLICY_MESSAGE, resolvePolicyPath } from "./config/policy-path.js";
 import type { GovernanceConfig } from "./config/types.js";
-import { createAppClient } from "./auth/app-client.js";
+import { createAppClient, mintInstallationToken } from "./auth/app-client.js";
+import { governanceDrift } from "./drift/reader.js";
+import {
+  describeDriftIssue,
+  driftIssueEnvironment,
+  driftIssueForge,
+  driftIssueRepo,
+  driftIssueRunUrl,
+  isRepoName,
+  keepGovernanceDriftIssue,
+} from "./drift/issue.js";
 import { createTokenClient } from "./auth/token-client.js";
 import { runReconcile } from "./reconcile/runner.js";
 import { defaultMemberName, planPart } from "./reconcile/plan-part.js";
@@ -99,8 +114,12 @@ export interface ReconcileArgs {
   removalCapFraction: number | undefined;
   /** File to write the plan to, as a chant change-set part. */
   planJson: string | undefined;
-  /** The workspace member the part names; undefined defaults to the policy directory's name. */
+  /** The workspace member the part and the drift records name; undefined defaults to the policy directory's name. */
   member: string | undefined;
+  /** Keep one GitHub issue tracking the drift this dry run finds. */
+  driftIssue: boolean;
+  /** `owner/name` of the repository the drift issue lives in; undefined reads GITHUB_REPOSITORY. */
+  driftIssueRepo: string | undefined;
 }
 
 /**
@@ -140,6 +159,8 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     removalCapFraction: undefined,
     planJson: undefined,
     member: undefined,
+    driftIssue: false,
+    driftIssueRepo: undefined,
   };
 
   const knownFlags = new Set([
@@ -154,6 +175,8 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     "--removal-cap-fraction",
     "--plan-json",
     "--member",
+    "--drift-issue",
+    "--drift-issue-repo",
   ]);
 
   let i = 0;
@@ -259,6 +282,18 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
         args.member = val;
         break;
       }
+      case "--drift-issue": {
+        args.driftIssue = true;
+        break;
+      }
+      case "--drift-issue-repo": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--drift-issue-repo requires a value");
+        if (!isRepoName(val)) throw new CliError(2, `--drift-issue-repo must be owner/name, got: ${val}`);
+        args.driftIssueRepo = val;
+        break;
+      }
     }
     i++;
   }
@@ -267,8 +302,17 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
   if (args.planJson !== undefined && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
   }
-  if (args.member !== undefined && args.planJson === undefined) {
-    throw new CliError(2, "--member names the member of the --plan-json part; give it with --plan-json");
+  if (args.member !== undefined && args.planJson === undefined && !args.driftIssue) {
+    throw new CliError(2, "--member names the member of the --plan-json part or the drift records; give it with --plan-json or --drift-issue");
+  }
+  if (args.driftIssue && args.mode === "apply") {
+    throw new CliError(2, "--drift-issue tracks the drift a dry run finds; it cannot be combined with --mode apply");
+  }
+  if (args.driftIssue && args.cycles.length > 0) {
+    throw new CliError(2, "--drift-issue tracks the whole policy's drift; it cannot be combined with --cycles, whose run would read the other cycles' nodes as matching");
+  }
+  if (args.driftIssueRepo !== undefined && !args.driftIssue) {
+    throw new CliError(2, "--drift-issue-repo names the repository of the drift issue; give it with --drift-issue");
   }
 
   const hasTokenAuth = !!args.tokenEnv;
@@ -698,6 +742,18 @@ function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs | ReposArgs) {
   return createAppClient({ appId, privateKeyPem, installationId });
 }
 
+/**
+ * The token the drift issue is kept with: the `--token-env` token, or, under
+ * App auth, an installation token minted for it. Either way the warden's own
+ * credential, which therefore needs issue access to the issue repository.
+ */
+async function issueCredential(args: ReconcileArgs): Promise<{ token: string; tokenSource: string }> {
+  if (args.tokenEnv) return { token: env(args.tokenEnv), tokenSource: args.tokenEnv };
+  const privateKeyPem = process.env["GOVERNANCE_APP_PRIVATE_KEY"] ?? process.env["GITHUB_APP_PRIVATE_KEY"] ?? "";
+  const { token } = await mintInstallationToken({ appId: env(args.appIdEnv!), installationId: env(args.installationIdEnv!), privateKeyPem });
+  return { token, tokenSource: `the GitHub App installation in ${args.installationIdEnv}` };
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -764,9 +820,18 @@ async function main(argv: string[] = process.argv.slice(2)) {
   const { config, provenance, path: configPath } = await readPolicy(args.config, args.configMode);
 
   let member: string | undefined;
-  if (args.planJson !== undefined) {
+  if (args.planJson !== undefined || args.driftIssue) {
     member = args.member ?? defaultMemberName(configPath);
-    if (!member) die(2, `cannot name the --plan-json member from "${configPath}"'s directory; give --member <name>`);
+    if (!member) die(2, `cannot name the member from "${configPath}"'s directory; give --member <name>`);
+  }
+
+  let issueRepo: string | undefined;
+  if (args.driftIssue) {
+    issueRepo = driftIssueRepo(args.driftIssueRepo);
+    if (!issueRepo) {
+      die(2, "--drift-issue needs the repository to keep the issue in: give --drift-issue-repo <owner/name>, or run where GITHUB_REPOSITORY is set");
+    }
+    if (!isRepoName(issueRepo)) die(2, `the drift issue repository must be owner/name, got: ${issueRepo}`);
   }
 
   // ── Build client ──────────────────────────────────────────────────────────
@@ -860,6 +925,26 @@ async function main(argv: string[] = process.argv.slice(2)) {
     process.stderr.write(
       `DEFERRED cycles (budget exhausted): ${result.deferred.skippedCycles.join(", ")}\n`,
     );
+  }
+
+  // The drift issue: kept after the plans print and before the exit code is
+  // decided, also on a run whose cycles errored (their nodes read as
+  // not-observed, which leaves an open issue alone).
+  if (args.driftIssue) {
+    const observedAt = new Date().toISOString();
+    const runUrl = driftIssueRunUrl();
+    try {
+      const { token, tokenSource } = await issueCredential(args);
+      const kept = await keepGovernanceDriftIssue(driftIssueForge({ repo: issueRepo!, token, tokenSource, runUrl }), {
+        environment: driftIssueEnvironment(Object.keys(config.orgs)),
+        records: governanceDrift({ member: member!, observedAt, policy: config, changeSets: result.changeSets, errored: result.errored, deferred: result.deferred }).records,
+        observedAt,
+        runUrl,
+      });
+      process.stdout.write(`\n${describeDriftIssue(kept)}\n`);
+    } catch (err) {
+      die(3, `keeping the drift issue failed: ${errMsg(err)}`);
+    }
   }
 
   // Determine exit code.
@@ -1437,7 +1522,9 @@ function printUsage() {
       "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
       "                                delete per resource type, in (0,1]. Default: 0.25.",
       "  --plan-json <file>            Write the plan as a chant change-set part (dry-run only).",
-      "  --member <name>               Member the part names (default: the policy file's directory name).",
+      "  --member <name>               Member the part and drift records name (default: the policy file's directory name).",
+      "  --drift-issue                 Keep one forge issue tracking the drift this dry run finds (dry-run only).",
+      "  --drift-issue-repo <owner/name>  Repository the issue lives in (default: GITHUB_REPOSITORY).",
       "",
       "Flags (audit):",
       "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",

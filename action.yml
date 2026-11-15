@@ -63,6 +63,21 @@ inputs:
     required: false
     default: "false"
 
+  drift-issue:
+    description: >
+      Set to 'true' on a dry-run reconcile to keep one issue tracking the drift
+      it finds: opened or updated while GitHub differs from the policy, closed
+      on the first run that matches. The App needs Issues read and write on the
+      issue repository. Cannot be combined with mode apply or cycles.
+    required: false
+    default: "false"
+
+  drift-issue-repo:
+    description: >
+      owner/name of the repository the drift issue lives in. Default: the
+      workflow's repository. Only used with drift-issue.
+    required: false
+
 runs:
   using: node24
   main: action/index.mjs
