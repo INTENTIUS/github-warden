@@ -1,10 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./codeowners.js";
 import { readWorkspace, type Workspace } from "./members.js";
+
+/** Temp dirs made by this file's tests, removed after each test. */
+const tempDirs: string[] = [];
+afterEach(() => {
+  for (const d of tempDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+function tempDir(prefix: string): string {
+  const d = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(d);
+  return d;
+}
 
 const ws = (root = "."): Workspace => ({
   name: "demo",
@@ -68,7 +79,7 @@ describe("buildCodeowners", () => {
 
 describe("against a real chant workspace", () => {
   it("reads members through `chant workspace ls --json`", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "warden-ws-"));
+    const dir = tempDir("warden-ws-");
     execFileSync("git", ["init", "-q"], { cwd: dir });
     mkdirSync(join(dir, "packages/api"), { recursive: true });
     mkdirSync(join(dir, "docs"));
