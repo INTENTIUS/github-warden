@@ -13,6 +13,7 @@
  *
  * Flag contract (must stay in sync with emit/pipeline.ts):
  *   --config <path>               Path to the governance config file (YAML/JSON).
+ *                                 Default: governance.yml in the working directory.
  *   --mode dry-run|apply          Reconcile mode. Default: dry-run.
  *   --cycles <name[,name...]>     Comma-separated cycle names. Default: all.
  *   --app-id-env <VAR>            Env var holding the GitHub App ID.
@@ -48,6 +49,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import pkg from "../package.json" with { type: "json" };
 import { loadGovernanceConfig } from "./config/load.js";
+import { NO_POLICY_MESSAGE, resolvePolicyPath } from "./config/policy-path.js";
+import type { GovernanceConfig } from "./config/types.js";
 import { createAppClient } from "./auth/app-client.js";
 import { runReconcile } from "./reconcile/runner.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
@@ -71,7 +74,8 @@ import { buildCodeowners, parseOwnersConfig, OwnersConfigError } from "./workspa
 // ---------------------------------------------------------------------------
 
 export interface ReconcileArgs {
-  config: string;
+  /** `--config`; undefined reads governance.yml in the working directory. */
+  config: string | undefined;
   mode: "dry-run" | "apply";
   cycles: string[];
   appIdEnv: string | undefined;
@@ -110,7 +114,7 @@ export class CliError extends Error {
  */
 export function parseReconcileArgs(argv: string[]): ReconcileArgs {
   const args: ReconcileArgs = {
-    config: "",
+    config: undefined,
     mode: "dry-run",
     cycles: [],
     appIdEnv: undefined,
@@ -224,8 +228,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     i++;
   }
 
-  // Validate required flags.
-  if (!args.config) throw new CliError(2, "--config is required");
+  // Validate flag combinations.
   if (args.planJson !== undefined && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
   }
@@ -247,7 +250,8 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
 // ---------------------------------------------------------------------------
 
 export interface AuditArgs {
-  config: string;
+  /** `--config`; undefined reads governance.yml in the working directory. */
+  config: string | undefined;
   appIdEnv: string | undefined;
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
@@ -258,7 +262,8 @@ export interface AuditArgs {
  * Parse audit argv (everything after the `audit` subcommand) into `AuditArgs`.
  *
  * Accepted flags:
- *   --config <path>               Path to governance config file (YAML/JSON). Required.
+ *   --config <path>               Path to governance config file (YAML/JSON).
+ *                                 Default: governance.yml in the working directory.
  *   --token-env <VAR>             Env var holding a pre-minted installation token.
  *   --app-id-env <VAR>            Env var holding the GitHub App ID.
  *   --installation-id-env <VAR>   Env var holding the installation ID.
@@ -268,7 +273,7 @@ export interface AuditArgs {
  */
 export function parseAuditArgs(argv: string[]): AuditArgs {
   const args: AuditArgs = {
-    config: "",
+    config: undefined,
     appIdEnv: undefined,
     installationIdEnv: undefined,
     tokenEnv: undefined,
@@ -347,8 +352,6 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
     i++;
   }
 
-  if (!args.config) throw new CliError(2, "--config is required");
-
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
   if (!hasTokenAuth && !hasAppAuth) {
@@ -366,7 +369,8 @@ export function parseAuditArgs(argv: string[]): AuditArgs {
 // ---------------------------------------------------------------------------
 
 export interface ReportArgs {
-  config: string;
+  /** `--config`; undefined reads governance.yml in the working directory. */
+  config: string | undefined;
   appIdEnv: string | undefined;
   installationIdEnv: string | undefined;
   tokenEnv: string | undefined;
@@ -386,7 +390,8 @@ export interface ReportArgs {
  * parse error instead of touching `process`.
  *
  * Accepted flags:
- *   --config <path>               Governance config file (YAML/JSON). Required.
+ *   --config <path>               Governance config file (YAML/JSON).
+ *                                 Default: governance.yml in the working directory.
  *   --token-env / --app-id-env / --installation-id-env   Auth (same as reconcile).
  *   --cycles <name[,name...]>     Cycles to include (default: all).
  *   --out <path>                  Write the JSON compliance artifact to this path.
@@ -395,7 +400,7 @@ export interface ReportArgs {
  */
 export function parseReportArgs(argv: string[]): ReportArgs {
   const args: ReportArgs = {
-    config: "",
+    config: undefined,
     appIdEnv: undefined,
     installationIdEnv: undefined,
     tokenEnv: undefined,
@@ -481,8 +486,6 @@ export function parseReportArgs(argv: string[]): ReportArgs {
     }
     i++;
   }
-
-  if (!args.config) throw new CliError(2, "--config is required");
 
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
@@ -621,20 +624,7 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // ── Load config ───────────────────────────────────────────────────────────
 
-  let rawConfig: unknown;
-  try {
-    const text = readFileSync(args.config, "utf-8");
-    rawConfig = parseConfigFile(args.config, text);
-  } catch (err) {
-    die(3, `failed to read config file "${args.config}": ${errMsg(err)}`);
-  }
-
-  let config;
-  try {
-    config = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
-  }
+  const config = readPolicy(args.config);
 
   // ── Build client ──────────────────────────────────────────────────────────
 
@@ -765,6 +755,28 @@ function die(code: number, message: string): never {
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Read and validate the governance policy named by `--config`, or
+ * governance.yml in the working directory when `--config` is absent. Exits 2
+ * when there is no policy to read or it is invalid, 3 when the file cannot be
+ * read.
+ */
+function readPolicy(given: string | undefined): GovernanceConfig {
+  const path = resolvePolicyPath(given);
+  if (path === undefined) die(2, NO_POLICY_MESSAGE);
+  let rawConfig: unknown;
+  try {
+    rawConfig = parseConfigFile(path, readFileSync(path, "utf-8"));
+  } catch (err) {
+    die(3, `failed to read config file "${path}": ${errMsg(err)}`);
+  }
+  try {
+    return loadGovernanceConfig(rawConfig);
+  } catch (err) {
+    die(2, `invalid governance config: ${errMsg(err)}`);
+  }
 }
 
 /**
@@ -997,20 +1009,7 @@ async function runAudit(argv: string[]): Promise<void> {
   }
 
   // ── Load config ────────────────────────────────────────────────────────────
-  let rawConfig: unknown;
-  try {
-    const text = readFileSync(auditArgs.config, "utf-8");
-    rawConfig = parseConfigFile(auditArgs.config, text);
-  } catch (err) {
-    die(3, `failed to read config file "${auditArgs.config}": ${errMsg(err)}`);
-  }
-
-  let config;
-  try {
-    config = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
-  }
+  const config = readPolicy(auditArgs.config);
 
   // ── Resolve managed repos from config ──────────────────────────────────────
   const repoUrls: string[] = [];
@@ -1101,20 +1100,7 @@ async function runReport(argv: string[]): Promise<void> {
   }
 
   // ── Load config ────────────────────────────────────────────────────────────
-  let rawConfig: unknown;
-  try {
-    const text = readFileSync(reportArgs.config, "utf-8");
-    rawConfig = parseConfigFile(reportArgs.config, text);
-  } catch (err) {
-    die(3, `failed to read config file "${reportArgs.config}": ${errMsg(err)}`);
-  }
-
-  let config;
-  try {
-    config = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg(err)}`);
-  }
+  const config = readPolicy(reportArgs.config);
 
   // ── Build client ───────────────────────────────────────────────────────────
   let client;
@@ -1458,7 +1444,7 @@ function printUsage() {
       "  checks      Print the ruleset requiring each member pipeline's job names.",
       "",
       "Flags (reconcile):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --mode dry-run|apply          Reconcile mode (default: dry-run).",
       "  --cycles <name[,name...]>     Cycle names to run (default: all).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
@@ -1469,7 +1455,7 @@ function printUsage() {
       "                                delete per resource type, in (0,1]. Default: 0.25.",
       "",
       "Flags (audit):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
@@ -1477,7 +1463,7 @@ function printUsage() {
       "                                Exit 4 when findings exceed threshold (default: none).",
       "",
       "Flags (report):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "  --cycles <name[,name...]>     Cycles to include (default: all).",
       "  --out <path>                  Write the JSON compliance artifact to this path.",
@@ -1525,7 +1511,7 @@ function printAuditUsage() {
       "using the warden App installation token.",
       "",
       "Flags:",
-      "  --config <path>               Path to governance config file (YAML or JSON). Required.",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",

@@ -89,11 +89,8 @@ describe("parseReconcileArgs", () => {
     expect(args.tokenEnv).toBeUndefined();
   });
 
-  it("throws a CliError with code 2 when --config is missing", () => {
-    expect(() => parseReconcileArgs(["--token-env", "GH_TOKEN"])).toThrow(CliError);
-    expect(() =>
-      parseReconcileArgs(["--token-env", "GH_TOKEN"]),
-    ).toThrow(expect.objectContaining({ code: 2 }));
+  it("leaves --config unset when it is omitted, so the default policy file is read", () => {
+    expect(parseReconcileArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });
 
   it("throws code 2 when no auth flag is supplied", () => {
@@ -192,6 +189,10 @@ describe("parseReportArgs", () => {
   it("parses --identity", () => {
     const args = parseReportArgs(["--config", "g.yml", "--token-env", "GH_TOKEN", "--identity"]);
     expect(args.identity).toBe(true);
+  });
+
+  it("leaves --config unset when it is omitted", () => {
+    expect(parseReportArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });
 
   it("throws code 2 when auth is missing", () => {
