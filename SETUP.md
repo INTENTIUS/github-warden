@@ -21,7 +21,7 @@ npm install -g @intentius/github-warden     # or add it to a project
 
 In CI you can skip both and use the [GitHub Action](CI.md).
 
-Node 22+.
+Node 24+.
 
 ## Choose your auth
 

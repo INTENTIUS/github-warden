@@ -255385,6 +255385,9 @@ var package_default = {
   bugs: {
     url: "https://github.com/INTENTIUS/github-warden/issues"
   },
+  engines: {
+    node: ">=24"
+  },
   publishConfig: {
     access: "public"
   },
