@@ -3,7 +3,7 @@
 Notable changes to `@intentius/github-warden`. Versions follow semver, and
 releases before `0.4.1` are not recorded here.
 
-## Unreleased
+## 0.8.0 (2026-11-15)
 
 - `reconcile --plan-json` gives each entry its graph node id as its address
   (INTENTIUS/chant#5089): the bare id for a change of the node itself
