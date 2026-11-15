@@ -7,7 +7,7 @@ hand-written workflow, and the emit pipeline that generates one for you.
 
 ## The GitHub Action
 
-The repo ships a native Node 20 action (`action.yml`, entry
+The repo ships a native Node 24 action (`action.yml`, entry
 `action/index.mjs`). It exposes the `reconcile` and `audit` subcommands;
 `report` is CLI-only. Auth is GitHub App only (the action mints the
 installation token internally from the three App inputs).

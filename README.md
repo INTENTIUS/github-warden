@@ -57,7 +57,7 @@ stay off entirely until you mark an org `owned` in the policy.
   (App ID plus installation ID plus private key); repo-level reconcile and
   `audit` can run with a pre-minted installation **token** instead. See
   [Auth](#auth) and the [App setup checklist](docs/github-app-setup.md).
-- Node 22+.
+- Node 24+.
 
 About ten minutes gets you to a first dry-run plan. The quickest probe needs
 no clone at all:
