@@ -3,6 +3,16 @@
 Notable changes to `@intentius/github-warden`. Versions follow semver, and
 releases before `0.4.1` are not recorded here.
 
+## Unreleased
+
+- `emit` pins the generated workflow's action at `v0.7.0` (#79). The 0.7.0
+  package still pinned `v0.6.1`, whose action runs on Node 20.
+- The drift reader takes App auth from `GOVERNANCE_APP_ID`,
+  `GOVERNANCE_INSTALLATION_ID` and `GOVERNANCE_APP_PRIVATE_KEY` when
+  `GH_TOKEN` is not set. Before, App auth needed `drift.config.appIdEnv` and
+  `installationIdEnv`, which a chant workspace has no way to set, so
+  `chant workspace drift` could only read with a token.
+
 ## 0.7.0 (2026-11-14)
 
 - `reconcile --drift-issue` keeps one issue tracking the drift a dry run
@@ -96,6 +106,15 @@ releases before `0.4.1` are not recorded here.
 - `--config` is optional for `reconcile`, `audit` and `report`. Without it the
   policy is `governance.yml` in the working directory, and a run with neither
   exits 2.
+
+## 0.6.1 (2026-09-12)
+
+- Moves to chant 0.72.1 (#60) and rebuilds `action/index.mjs` so the Action
+  carries the new version.
+
+## 0.6.0 (2026-09-12)
+
+- Dependency bump from chant 0.56 to 0.71.1 (#59). No behaviour change.
 
 ## 0.5.0 (2026-09-02)
 

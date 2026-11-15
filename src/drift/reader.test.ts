@@ -328,4 +328,9 @@ describe("driftAuth", () => {
     expect(driftAuth(cfg, { APP_ID: "1", INSTALL_ID: "2", GOVERNANCE_APP_PRIVATE_KEY: "pem" })).toEqual({ appId: "1", installationId: "2", privateKeyPem: "pem", baseUrl: "https://api.github.com" });
     expect(driftAuth(cfg, { APP_ID: "1" })).toEqual({ missing: expect.stringContaining("INSTALL_ID, GOVERNANCE_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY are not set") });
   });
+
+  it("reads App auth from the GOVERNANCE_* variables by default, since a workspace cannot set drift.config", () => {
+    expect(driftAuth({}, { GOVERNANCE_APP_ID: "1", GOVERNANCE_INSTALLATION_ID: "2", GITHUB_APP_PRIVATE_KEY: "pem" })).toEqual({ appId: "1", installationId: "2", privateKeyPem: "pem", baseUrl: "https://api.github.com" });
+    expect(driftAuth({}, {})).toEqual({ missing: "GH_TOKEN is not set, and for App auth GOVERNANCE_APP_ID, GOVERNANCE_INSTALLATION_ID, GOVERNANCE_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY are not set" });
+  });
 });
