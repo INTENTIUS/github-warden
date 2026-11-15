@@ -159,6 +159,31 @@ export function buildRulesetBody(desired: RulesetConfig): Record<string, unknown
   return body;
 }
 
+/**
+ * Check that a create or update answered with the ruleset it wrote. GitHub
+ * returns the ruleset (with its id) from both the POST and the PUT; a 2xx
+ * without one is not a confirmed write, so it is reported as a failure rather
+ * than counted as applied.
+ */
+function confirmWritten(
+  res: unknown,
+  method: string,
+  path: string,
+  name: string,
+): void {
+  const r = res as Partial<GhRulesetDetail> | null | undefined;
+  if (!r || typeof r.id !== "number") {
+    throw new Error(
+      `rulesets: ${method} ${path} returned no ruleset for "${name}"; the write is not confirmed`,
+    );
+  }
+  if (r.name !== undefined && r.name !== name) {
+    throw new Error(
+      `rulesets: ${method} ${path} returned ruleset "${r.name}", not "${name}"; the write is not confirmed`,
+    );
+  }
+}
+
 /** Apply one ruleset change against a base path. */
 async function applyRuleset(
   client: AppClient,
@@ -181,7 +206,8 @@ async function applyRuleset(
 
   if (entry.kind === "create") {
     budget.use(1);
-    await client.request("POST", basePath, body);
+    const res = await client.request("POST", basePath, body);
+    confirmWritten(res, "POST", basePath, desired.name);
     return;
   }
 
@@ -191,7 +217,8 @@ async function applyRuleset(
     throw new Error(`rulesets: update entry "${entry.key}" is missing the live ruleset id`);
   }
   budget.use(1);
-  await client.request("PUT", `${basePath}/${id}`, body);
+  const res = await client.request("PUT", `${basePath}/${id}`, body);
+  confirmWritten(res, "PUT", `${basePath}/${id}`, desired.name);
 }
 
 // ---------------------------------------------------------------------------

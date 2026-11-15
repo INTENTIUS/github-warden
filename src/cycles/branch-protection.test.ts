@@ -797,3 +797,60 @@ describe("branchProtectionCycle via runReconcile", () => {
     expect(cr.counts.delete).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A user-owned repo with no shared scope (github-warden#61)
+// ---------------------------------------------------------------------------
+
+describe("branchProtectionCycle on a user-owned repo (github-warden#61)", () => {
+  // A personal account under `orgs:`, run the way the CLI runs it: no scope.
+  const config: GovernanceConfig = {
+    orgs: {
+      alice: {
+        repos: {
+          app: { branchProtection: [{ pattern: "main", requireStatusChecks: true, requiredStatusCheckContexts: ["test"] }] },
+        },
+      },
+    },
+  };
+
+  function userRepoClient(): MockClient {
+    const calls: MockCall[] = [];
+    return {
+      calls,
+      responses: new Map(),
+      async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+        calls.push({ method, path, body });
+        if (path.startsWith("/orgs/")) throw new Error(`${method} ${path} returned 404: {"message":"Not Found"}`);
+        if (method === "GET") throw new Error(`${method} ${path} returned 404: {"message":"Branch not protected"}`);
+        throw new Error(`${method} ${path} returned 403: {"message":"Must have admin rights to Repository."}`);
+      },
+    };
+  }
+
+  it("runs without a scope instead of throwing", async () => {
+    const client = userRepoClient();
+    const result = await runReconcile({ config, client, cycles: [branchProtectionCycle], mode: "dry-run" });
+    expect(result.errored).toEqual([]);
+    expect(client.calls[0]).toMatchObject({
+      method: "GET",
+      path: "/repos/alice/app/branches/main/protection",
+    });
+    expect(result.cycles[0]!.counts.create).toBe(1);
+  });
+
+  it("reports a refused write as failed with the API's message", async () => {
+    const client = userRepoClient();
+    const result = await runReconcile({
+      config,
+      client,
+      cycles: [branchProtectionCycle],
+      mode: "apply",
+      allowGuardrailOverride: true,
+    });
+    expect(result.errored).toEqual([]);
+    const cr = result.cycles[0]!;
+    expect(cr.applied).toHaveLength(0);
+    expect(cr.failed[0]!.error).toContain("Must have admin rights");
+  });
+});

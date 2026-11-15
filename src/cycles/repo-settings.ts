@@ -17,11 +17,12 @@
  * This cycle reconciles settings of EXISTING repos; it never creates a repo —
  * repository provisioning/templating is the remit of #10. As with
  * branch-protection, live state is fetched only for repos passed in
- * `scope.repos`; with no scope (e.g. the current CLI wiring) `fetchLive`
- * returns empty and every declared repo is emitted as a create, which `apply`
- * services with a PATCH (idempotent against an existing repo). A PATCH against
- * a genuinely non-existent repo 404s and is recorded as a failed entry rather
- * than silently creating anything.
+ * `scope.repos`. When the caller passes no scope (the CLI), the runner hands
+ * each org its own declared repos (`orgScope` in reconcile/runner.ts). With an
+ * empty `scope.repos`, `fetchLive` returns empty and every declared repo is
+ * emitted as a create, which `apply` services with a PATCH (idempotent against
+ * an existing repo). A PATCH against a genuinely non-existent repo 404s and is
+ * recorded as a failed entry rather than silently creating anything.
  *
  * ## Why PATCH needs no RMW merge
  *

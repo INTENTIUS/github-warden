@@ -248,6 +248,43 @@ consumes the field.
 | `orgs` | map of org login → org config | **required** | all | Organizations to manage. Each cycle runs once per org. |
 | `orgs.<org>.owned` | bool or list of resource type strings | absent → nothing owned, no deletes planned | all (diff layer) | `true` = every reconciled collection in this org is owned and live resources missing from the policy are planned for deletion; a list (e.g. `[team, repo]`) owns only those change-set resource types. A programmatic `diffOptions.isOwned` overrides it. Guardrails still gate the apply. |
 
+### Repos owned by a personal account
+
+A repo that belongs to a user account rather than an organization goes under
+`orgs:` too, keyed by the account login. The repo-level cycles address it as
+`/repos/<login>/<repo>`, the same path an org repo uses:
+
+```yaml
+orgs:
+  alice:
+    repos:
+      app:
+        rulesets:
+          - name: main-requires-test
+            target: branch
+            enforcement: active
+            conditions: { ref_name: { include: [refs/heads/main] } }
+            rules:
+              - type: required_status_checks
+                parameters:
+                  strict_required_status_checks_policy: false
+                  required_status_checks: [{ context: test }]
+```
+
+An account has none of the org-level fields in the tables below, so declare
+only `repos` under it and run the repo-level cycles by name, for example
+`--cycles repo-settings,branch-protection,rulesets`. repo-baseline lists and
+creates repos through the org endpoints and does not work on an account.
+
+Writes need admin rights on the repo. A collaborator with push access can read
+some settings but GitHub refuses the write with a 403 or 404. Rulesets and
+classic branch protection on a private repo also need a paid plan (GitHub Pro
+for a personal account), and on GitHub Free the API answers the
+write with a 403 asking to upgrade or make the repo public. Warden reports a
+refused write as `FAILED [<resource type>] <key>: <the API's message>` and
+exits 3. `Applied:` counts only writes GitHub accepted, and a ruleset create or
+update counts only when GitHub answers with the ruleset it wrote.
+
 ### `orgs.<org>.settings` (org settings)
 
 | Field | Type | Required / default | Cycle | Meaning |
