@@ -43,7 +43,7 @@ both and exits 2 when they differ. The flag does nothing for YAML or JSON.
 ```
 github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
-                        [--removal-cap-fraction <value>] [--plan-json <file>]
+                        [--removal-cap-fraction <value>] [--plan-json <file> [--member <name>]]
 ```
 
 | Flag | Default | Meaning |
@@ -57,7 +57,8 @@ github-warden reconcile [--config <path>] [--config-mode fold|run|check] [auth f
 | `--installation-id-env <VAR>` | — | Env var holding the installation ID. |
 | `--allow-guardrail-override` | off | Apply even when guardrails trip. |
 | `--removal-cap-fraction <value>` | `0.25` | `removalDeltaCap` threshold: the max fraction of any one resource type's live managed entries the plan may delete. Must be in (0,1]; anything else exits 2. See [the canonical cap description in POLICY.md](POLICY.md#what-the-policy-does-not-declare). |
-| `--plan-json <file>` | — | Write the change sets the run planned (one per cycle and org, a JSON array of chant's reconcile `ChangeSet`) to the file, for chant's change-set document (`readChangeSetPart` with `planner: "warden"`). Nothing is applied: combining it with `--mode apply` exits 2. |
+| `--plan-json <file>` | — | Write the plan as a part of a chant change-set document (see below). Nothing is applied: combining it with `--mode apply` exits 2. |
+| `--member <name>` | the policy file's directory name | The workspace member the `--plan-json` part names. Given without `--plan-json`, or empty, it exits 2. |
 
 Deletes come from the policy, not from a flag: a live resource missing from
 the policy is planned for deletion only in an org whose policy declares
@@ -77,6 +78,34 @@ plan; a `GUARDRAIL BLOCK:` line when a guardrail refused an apply;
 `ERROR in <cycle>` lines on stderr for errored cycles; and a `DEFERRED cycles`
 line when the API request budget (1000 requests per run) ran out before every
 cycle finished.
+
+### The `--plan-json` part
+
+`--plan-json <file>` writes the run's plan as one part of a chant change-set
+document: the object chant's `reconcilePlanPart` returns (from
+`@intentius/chant/change-set`), with planner `warden` and lexicon `github`.
+chant reads the file with `readChangeSetPartFile(part, "warden", member,
+"github")` and composes it with the other members' parts. Each planned change
+is an entry with its action (`create`, `update`, `delete`), its address (the
+change set's resource type and key, as in `member.bob`) and its scope (the
+org or account login). The file holds only the part, written as indented JSON
+with a trailing newline.
+
+The member is `--member`, or else the name of the directory that holds the
+policy file, which is the member's directory in a chant workspace. Without
+`--config` that is the working directory's name. A policy at the filesystem
+root has no such name, and the run exits 2 asking for `--member`.
+
+When every cycle planned, the part's member has `status: "planned"` and a
+`planDigest` over the change sets. When a cycle errored or the request budget
+deferred it, the plan is incomplete: the member has `status: "failed"`,
+`planDigest: null`, and an `error` naming each missing cycle
+(`<cycle> @ <org> errored in <stage>: <message>`, or
+`<cycle> was deferred by the request budget`, joined by `; `). The entries the
+other cycles planned stay in the part. The file is written once the cycles
+have run and before the exit code is decided, so a run that exits 3 still
+leaves its failed part; a failure before the cycles run (bad policy, auth
+setup) writes nothing. A write that fails exits 3.
 
 When the policy is a `.ts` file loaded in `fold` or `check` mode, each drifted
 field in the plan is followed by a line saying where the policy wrote it:

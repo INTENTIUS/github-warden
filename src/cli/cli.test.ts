@@ -154,6 +154,20 @@ describe("parseReconcileArgs", () => {
     );
   });
 
+  it("parses --member with --plan-json, and refuses it alone or empty", () => {
+    const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
+    expect(parseReconcileArgs([...base, "--plan-json", "p.json"]).member).toBeUndefined();
+    expect(parseReconcileArgs([...base, "--plan-json", "p.json", "--member", "gov"]).member).toBe("gov");
+    for (const bad of [
+      [...base, "--member", "gov"],
+      [...base, "--plan-json", "p.json", "--member"],
+      [...base, "--plan-json", "p.json", "--member", ""],
+      [...base, "--plan-json", "p.json", "--member", "  "],
+    ]) {
+      expect(() => parseReconcileArgs(bad)).toThrow(expect.objectContaining({ code: 2 }));
+    }
+  });
+
   it("throws code 2 for a --removal-cap-fraction outside (0, 1]", () => {
     const base = ["--config", "g.yml", "--token-env", "GH_TOKEN"];
     for (const bad of ["0", "-0.5", "1.5", "abc"]) {

@@ -26,9 +26,10 @@
  *   --removal-cap-fraction <v>    Max fraction of live managed entries the plan
  *                                 may delete per resource type, in (0,1].
  *                                 Default: 0.25.
- *   --plan-json <file>            Write the reconcile ChangeSets this run planned
- *                                 (one per cycle and org) as a JSON array, for
- *                                 chant's change-set document. Dry-run only.
+ *   --plan-json <file>            Write the plan as a chant change-set part
+ *                                 (lexicon "github"). Dry-run only.
+ *   --member <name>               Member the part names. Default: the policy
+ *                                 file's directory name. Needs --plan-json.
  *
  * Auth modes (mutually exclusive, precedence: token-env > app-id-env):
  *   1. --token-env GH_TOKEN
@@ -58,6 +59,7 @@ import { NO_POLICY_MESSAGE, resolvePolicyPath } from "./config/policy-path.js";
 import type { GovernanceConfig } from "./config/types.js";
 import { createAppClient } from "./auth/app-client.js";
 import { runReconcile } from "./reconcile/runner.js";
+import { defaultMemberName, planPart } from "./reconcile/plan-part.js";
 import { CYCLE_REGISTRY } from "./cli/registry.js";
 // NOTE: ./audit/engine.js is deliberately NOT imported statically. Its import
 // graph reaches chant's audit pipeline and the lexicon's lint rules, which pull
@@ -91,8 +93,10 @@ export interface ReconcileArgs {
   allowGuardrailOverride: boolean;
   /** removalDeltaCap threshold in (0,1]; undefined keeps chant's default. */
   removalCapFraction: number | undefined;
-  /** File to write the planned reconcile ChangeSets to, as JSON. */
+  /** File to write the plan to, as a chant change-set part. */
   planJson: string | undefined;
+  /** The workspace member the part names; undefined defaults to the policy directory's name. */
+  member: string | undefined;
 }
 
 /**
@@ -131,6 +135,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     allowGuardrailOverride: false,
     removalCapFraction: undefined,
     planJson: undefined,
+    member: undefined,
   };
 
   const knownFlags = new Set([
@@ -144,6 +149,7 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
     "--allow-guardrail-override",
     "--removal-cap-fraction",
     "--plan-json",
+    "--member",
   ]);
 
   let i = 0;
@@ -241,6 +247,14 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
         args.planJson = val;
         break;
       }
+      case "--member": {
+        const val = argv[++i];
+        if (val === undefined || val.startsWith("--"))
+          throw new CliError(2, "--member requires a value");
+        if (val.trim() === "") throw new CliError(2, "--member requires a non-empty name");
+        args.member = val;
+        break;
+      }
     }
     i++;
   }
@@ -248,6 +262,9 @@ export function parseReconcileArgs(argv: string[]): ReconcileArgs {
   // Validate flag combinations.
   if (args.planJson !== undefined && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
+  }
+  if (args.member !== undefined && args.planJson === undefined) {
+    throw new CliError(2, "--member names the member of the --plan-json part; give it with --plan-json");
   }
 
   const hasTokenAuth = !!args.tokenEnv;
@@ -669,7 +686,13 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // ── Load config ───────────────────────────────────────────────────────────
 
-  const { config, provenance } = await readPolicy(args.config, args.configMode);
+  const { config, provenance, path: configPath } = await readPolicy(args.config, args.configMode);
+
+  let member: string | undefined;
+  if (args.planJson !== undefined) {
+    member = args.member ?? defaultMemberName(configPath);
+    if (!member) die(2, `cannot name the --plan-json member from "${configPath}"'s directory; give --member <name>`);
+  }
 
   // ── Build client ──────────────────────────────────────────────────────────
 
@@ -719,9 +742,12 @@ async function main(argv: string[] = process.argv.slice(2)) {
 
   // ── Output ────────────────────────────────────────────────────────────────
 
+  // Written before the exit code is decided, so a run that exits 3 still
+  // leaves its (failed) part.
   if (args.planJson !== undefined) {
+    const part = planPart({ member: member!, changeSets: result.changeSets, errored: result.errored, deferred: result.deferred });
     try {
-      writeFileSync(args.planJson, `${JSON.stringify(result.changeSets, null, 2)}\n`, "utf-8");
+      writeFileSync(args.planJson, `${JSON.stringify(part, null, 2)}\n`, "utf-8");
     } catch (err) {
       die(3, `failed to write plan to "${args.planJson}": ${errMsg(err)}`);
     }
@@ -812,11 +838,11 @@ function errMsg(err: unknown): string {
 async function readPolicy(
   given: string | undefined,
   mode: ConfigMode,
-): Promise<{ config: GovernanceConfig; provenance?: PolicyProvenance }> {
+): Promise<{ config: GovernanceConfig; provenance?: PolicyProvenance; path: string }> {
   const path = resolvePolicyPath(given);
   if (path === undefined) die(2, NO_POLICY_MESSAGE);
   try {
-    return await loadGovernancePolicy(path, mode);
+    return { ...(await loadGovernancePolicy(path, mode)), path };
   } catch (err) {
     if (err instanceof GovernanceConfigError) die(2, `invalid governance config: ${errMsg(err)}`);
     die(3, `failed to read config file "${path}": ${errMsg(err)}`);
@@ -1285,6 +1311,8 @@ function printUsage() {
       "  --allow-guardrail-override    Apply even when guardrails trip.",
       "  --removal-cap-fraction <v>    Max fraction of live managed entries the plan may",
       "                                delete per resource type, in (0,1]. Default: 0.25.",
+      "  --plan-json <file>            Write the plan as a chant change-set part (dry-run only).",
+      "  --member <name>               Member the part names (default: the policy file's directory name).",
       "",
       "Flags (audit):",
       "  --config <path>               Governance policy, YAML, JSON or .ts (default: governance.yml,",

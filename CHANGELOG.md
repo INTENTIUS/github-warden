@@ -31,11 +31,17 @@ releases before `0.4.1` are not recorded here.
   `Applied` (#61). A ruleset create or update now counts as applied only when
   GitHub answers with the ruleset. POLICY.md covers repos owned by a personal
   account.
-- New `reconcile --plan-json <file>` writes the change sets a run planned, one per
-  cycle and org, as a JSON array of chant's reconcile `ChangeSet`. chant's
-  change-set document reads it (`readChangeSetPart` with `planner: "warden"`).
-  It cannot be combined with `--mode apply`. `runReconcile` also returns them
-  as `changeSets`.
+- `reconcile --plan-json <file>` writes the plan as a chant change-set part:
+  the object `reconcilePlanPart` from `@intentius/chant/change-set` returns,
+  with planner `warden` and lexicon `github`, which chant's
+  `readChangeSetPartFile` reads (#74). This changes the file's shape: up to
+  0.6.x it was a bare JSON array of chant's reconcile `ChangeSet`, and a
+  reader of that array now reads the part (or takes `runReconcile`'s
+  `changeSets` as a library). The new `--member <name>` names the member,
+  defaulting to the policy file's directory name. A run where a cycle errored
+  or was deferred writes the part with `status: "failed"`, no plan digest and
+  an `error` naming the missing cycles. `--plan-json` still cannot be combined
+  with `--mode apply`. `runReconcile` returns the change sets as `changeSets`.
 - New `checks` subcommand reads each member's generated pipeline job names from
   `chant workspace ls --json` and prints the ruleset that requires them as
   status checks. It needs chant 0.101 or newer, which publishes the names.
