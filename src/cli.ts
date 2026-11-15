@@ -60,6 +60,7 @@ import type { PolicyProvenance } from "./reconcile/origin.js";
 import { NO_POLICY_MESSAGE, resolvePolicyPath } from "./config/policy-path.js";
 import type { GovernanceConfig } from "./config/types.js";
 import { createAppClient } from "./auth/app-client.js";
+import { createTokenClient } from "./auth/token-client.js";
 import { runReconcile } from "./reconcile/runner.js";
 import { defaultMemberName, planPart } from "./reconcile/plan-part.js";
 import { forgeRepoList, pickOrg } from "./repos.js";
@@ -679,40 +680,7 @@ export function parseReposArgs(argv: string[]): ReposArgs {
  * Accepts both ReconcileArgs and AuditArgs (both carry the same auth fields).
  */
 function buildClient(args: ReconcileArgs | AuditArgs | ReportArgs | ReposArgs) {
-  if (args.tokenEnv) {
-    const token = env(args.tokenEnv);
-    // Wrap the pre-minted token in a minimal AppClient.
-    return {
-      async request<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-        const API_BASE = "https://api.github.com";
-        const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
-        const res = await fetch(url, {
-          method,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "User-Agent": "github-warden (+https://github.com/INTENTIUS/github-warden)",
-            "X-GitHub-Api-Version": "2022-11-28",
-            ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-          },
-          redirect: "manual",
-          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        });
-        if (res.status === 204) return {} as T;
-        if (!res.ok) {
-          let detail = "";
-          try {
-            const text = await res.text();
-            if (text) detail = `: ${text.slice(0, 500)}`;
-          } catch {
-            // best-effort
-          }
-          throw new Error(`${method} ${path} returned ${res.status}${detail}`);
-        }
-        return (await res.json()) as T;
-      },
-    };
-  }
+  if (args.tokenEnv) return createTokenClient({ token: env(args.tokenEnv) });
 
   // App-client path: read app-id, installation-id, private key from env.
   const appId = env(args.appIdEnv!);

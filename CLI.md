@@ -248,6 +248,19 @@ token APIs: the token cycles (`token-governance`, `token-approval`) and
 several org administration endpoints are callable only by a GitHub App. See
 [SETUP.md](SETUP.md) and the [App setup checklist](docs/github-app-setup.md).
 
+## The drift reader
+
+`chant workspace drift --member <name>` runs no CLI subcommand. It imports
+`dist/drift-reader.mjs`, the drift reader the `forge-governance` kind names
+(chant 0.124.96 or later), which reads the member's `governance.yml` (or
+`governance.ts`) and runs the same plan `reconcile --mode dry-run` prints,
+with every cycle. It never applies. Its credentials come from the
+environment: the token from `GH_TOKEN` and the API base from
+`GITHUB_API_URL` (default `https://api.github.com`), or App auth when the
+kind's `drift.config` names `appIdEnv` and `installationIdEnv`. Each record is
+one graph node; [README.md](README.md#drift-in-a-chant-workspace) lists the
+addresses and statuses.
+
 ## Exit codes
 
 | Code | Meaning |

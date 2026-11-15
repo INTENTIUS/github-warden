@@ -257996,10 +257996,11 @@ var package_default = {
     "lint:prose": "bash mkdocs-stage.sh && node scripts/lint-prose.mjs $(find _docs -name '*.md')",
     test: "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    build: 'rm -rf dist && esbuild src/cli.ts --bundle --splitting --platform=node --format=esm --external:@intentius/tsad-reference --outdir=dist --chunk-names=chunk-[hash] --banner:js="$npm_package_config_esm_require_banner" && chmod +x dist/cli.js && npm run build:lib && npm run build:types && npm run build:graph',
+    build: 'rm -rf dist && esbuild src/cli.ts --bundle --splitting --platform=node --format=esm --external:@intentius/tsad-reference --outdir=dist --chunk-names=chunk-[hash] --banner:js="$npm_package_config_esm_require_banner" && chmod +x dist/cli.js && npm run build:lib && npm run build:types && npm run build:graph && npm run build:drift',
     "build:lib": 'esbuild src/index.ts --bundle --platform=node --format=esm --external:@intentius/chant --external:@intentius/chant-lexicon-github --external:@intentius/tsad-reference --banner:js="$npm_package_config_esm_require_banner" --outfile=dist/index.js',
     "build:types": "tsc -p tsconfig.types.json",
     "build:graph": 'esbuild src/graph/entry.ts --bundle --platform=node --format=esm --banner:js="$npm_package_config_esm_require_banner" --outfile=dist/graph-reader.mjs',
+    "build:drift": 'esbuild src/drift/entry.ts --bundle --platform=node --format=esm --external:@intentius/tsad-reference --banner:js="$npm_package_config_esm_require_banner" --outfile=dist/drift-reader.mjs',
     "build:action": `esbuild src/action.ts --bundle --platform=node --format=esm --define:process.env.GITHUB_WARDEN_IS_ACTION='"1"' --banner:js="$npm_package_config_esm_require_banner" --outfile=action/index.mjs`,
     prepublishOnly: "npm run build"
   },
@@ -258609,6 +258610,43 @@ var NO_POLICY_MESSAGE = `no --config given and no ${POLICY_FILE} or ${TS_POLICY_
 
 // src/cli.ts
 init_app_client();
+
+// src/auth/token-client.ts
+var GITHUB_API_URL = "https://api.github.com";
+function createTokenClient(opts) {
+  const apiBase = (opts.baseUrl ?? GITHUB_API_URL).replace(/\/+$/, "");
+  return {
+    async request(method, path, body) {
+      const doFetch = opts.fetchImpl ?? fetch;
+      const url2 = path.startsWith("http") ? path : `${apiBase}${path}`;
+      const res = await doFetch(url2, {
+        method,
+        headers: {
+          Authorization: `Bearer ${opts.token}`,
+          Accept: "application/vnd.github+json",
+          "User-Agent": "github-warden (+https://github.com/INTENTIUS/github-warden)",
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...body !== void 0 ? { "Content-Type": "application/json" } : {}
+        },
+        redirect: "manual",
+        ...body !== void 0 ? { body: JSON.stringify(body) } : {}
+      });
+      if (res.status === 204) return {};
+      if (!res.ok) {
+        let detail = "";
+        try {
+          const text2 = await res.text();
+          if (text2) detail = `: ${text2.slice(0, 500)}`;
+        } catch {
+        }
+        throw new Error(`${method} ${path} returned ${res.status}${detail}`);
+      }
+      return await res.json();
+    }
+  };
+}
+
+// src/cli.ts
 init_runner();
 
 // src/reconcile/plan-part.ts
@@ -261257,38 +261295,7 @@ function parseReposArgs(argv) {
   return args;
 }
 function buildClient(args) {
-  if (args.tokenEnv) {
-    const token = env(args.tokenEnv);
-    return {
-      async request(method, path, body) {
-        const API_BASE2 = "https://api.github.com";
-        const url2 = path.startsWith("http") ? path : `${API_BASE2}${path}`;
-        const res = await fetch(url2, {
-          method,
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-            "User-Agent": "github-warden (+https://github.com/INTENTIUS/github-warden)",
-            "X-GitHub-Api-Version": "2022-11-28",
-            ...body !== void 0 ? { "Content-Type": "application/json" } : {}
-          },
-          redirect: "manual",
-          ...body !== void 0 ? { body: JSON.stringify(body) } : {}
-        });
-        if (res.status === 204) return {};
-        if (!res.ok) {
-          let detail = "";
-          try {
-            const text2 = await res.text();
-            if (text2) detail = `: ${text2.slice(0, 500)}`;
-          } catch {
-          }
-          throw new Error(`${method} ${path} returned ${res.status}${detail}`);
-        }
-        return await res.json();
-      }
-    };
-  }
+  if (args.tokenEnv) return createTokenClient({ token: env(args.tokenEnv) });
   const appId = env(args.appIdEnv);
   const installationId = env(args.installationIdEnv);
   const privateKeyPem = process.env["GOVERNANCE_APP_PRIVATE_KEY"] ?? process.env["GITHUB_APP_PRIVATE_KEY"] ?? die(
