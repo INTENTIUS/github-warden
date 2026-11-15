@@ -72,7 +72,9 @@ describe("auditRepos", () => {
     expect(r.scanned).toBeGreaterThan(0);
     // The fixture has at least one finding (GHA013: write-all).
     expect(r.model.counts.total).toBeGreaterThan(0);
-  });
+    // The first audit loads chant's audit pipeline and the TypeScript compiler,
+    // which can pass 5s on a loaded machine.
+  }, 30_000);
 
   it("aggregates totals across multiple repos", async () => {
     // Two calls to the same fixture URL — two repo results.
@@ -265,10 +267,8 @@ describe("parseAuditArgs", () => {
     expect(args.tokenEnv).toBeUndefined();
   });
 
-  it("throws code 2 when --config is missing", () => {
-    expect(() => parseAuditArgs(["--token-env", "GH_TOKEN"])).toThrow(
-      expect.objectContaining({ code: 2 }),
-    );
+  it("leaves --config unset when it is omitted, so the default policy file is read", () => {
+    expect(parseAuditArgs(["--token-env", "GH_TOKEN"]).config).toBeUndefined();
   });
 
   it("throws code 2 when no auth is supplied", () => {

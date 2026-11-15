@@ -26,17 +26,20 @@ mappings/sequences, string/bool/number scalars, comments; no flow style, no
 multi-line scalars, no anchors). For complex YAML, use JSON. Invalid config
 shape exits 2 with the offending field path.
 
+Without `--config`, the policy is `governance.yml` in the working directory. A
+run with no `--config` and no `governance.yml` there exits 2.
+
 ## `reconcile`
 
 ```
-github-warden reconcile --config <path> [auth flags] [--mode dry-run|apply]
+github-warden reconcile [--config <path>] [auth flags] [--mode dry-run|apply]
                         [--cycles a,b,c] [--allow-guardrail-override]
                         [--removal-cap-fraction <value>] [--plan-json <file>]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | **required** | Governance config (YAML or JSON). |
+| `--config <path>` | `governance.yml` | Governance config (YAML or JSON). |
 | `--mode dry-run\|apply` | `dry-run` | `dry-run` prints the plan and changes nothing; `apply` executes it after guardrails pass. |
 | `--cycles <name[,name...]>` | all | Subset of cycles to run. Unknown names exit 2 and print the known list. |
 | `--token-env <VAR>` | — | Env var holding a pre-minted installation token (auth mode 1). |
@@ -68,12 +71,12 @@ cycle finished.
 ## `audit`
 
 ```
-github-warden audit --config <path> [auth flags] [--fail-on none|merge-worthy|any]
+github-warden audit [--config <path>] [auth flags] [--fail-on none|merge-worthy|any]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | **required** | Governance config. The audit targets every repo declared under `repos`. |
+| `--config <path>` | `governance.yml` | Governance config. The audit targets every repo declared under `repos`. |
 | `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
 | `--fail-on none\|merge-worthy\|any` | `none` | Exit 4 when findings exceed this threshold. |
 | `--help`, `-h` | — | Print audit usage and exit 0. |
@@ -85,13 +88,13 @@ declared it prints "nothing to audit" and exits 0.
 ## `report`
 
 ```
-github-warden report --config <path> [auth flags] [--cycles a,b] [--audit]
+github-warden report [--config <path>] [auth flags] [--cycles a,b] [--audit]
                      [--identity] [--out compliance.json] [--fail-on none|attention]
 ```
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--config <path>` | **required** | Governance config. |
+| `--config <path>` | `governance.yml` | Governance config. |
 | `--token-env` / `--app-id-env` / `--installation-id-env` | — | Auth, same as reconcile. |
 | `--cycles <name[,name...]>` | all | Cycles to include (always run in dry-run). |
 | `--out <path>` | — | Write the committable JSON compliance artifact here. |

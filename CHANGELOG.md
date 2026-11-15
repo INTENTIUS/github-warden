@@ -20,7 +20,7 @@ releases before `0.4.1` are not recorded here.
   as `changeSets`.
 - New `checks` subcommand reads each member's generated pipeline job names from
   `chant workspace ls --json` and prints the ruleset that requires them as
-  status checks. The chant range moves to `^0.101.0`, which publishes the names.
+  status checks. It needs chant 0.101 or newer, which publishes the names.
 - New `lifecycle` subcommand reads the `chant/lifecycle` branch name and each member's
   ledger paths from `chant workspace status --json`, and prints the ruleset that
   protects the branch (no deletion, no force push) for the `rulesets` cycle.
@@ -29,7 +29,23 @@ releases before `0.4.1` are not recorded here.
   (`chant workspace ls --json`), and owners are declared by member name in an
   owners file. See [CLI.md](CLI.md#codeowners).
 - The `@intentius/chant` and `@intentius/chant-lexicon-github` range moves from
-  `^0.72.1` to `^0.100.0`, since the read contract starts at chant 0.81.
+  `^0.72.1` to `^0.124.95` (#70). On 0.x a caret admits one minor, so each
+  bump is explicit. The workspace read contract starts at chant 0.81.
+- The governance pipeline the emitter writes pins `actions/checkout` from
+  chant's action pin table (`@intentius/chant/action-pins`) instead of its own
+  SHA, and every `uses:` line carries its release as a YAML comment. The
+  emitted pipeline's own pin moves from v0.3.1 to the v0.6.1 commit (#71).
+- Node 24 is the supported runtime: `engines.node` is `>=24`, the Action runs
+  on `node24`, and every workflow runs Node 24 with one `actions/checkout` pin.
+  CI's check job also runs `npm run build` (#72). CI.md's and the README's
+  workflow examples pin `actions/checkout` and the Action to commit SHAs.
+- The `forge-governance` kind needs chant 0.124.49 or newer (`memberFile` from
+  0.124.48, `graph.reader` from 0.124.49). The test suite validates
+  `workspace-kinds.json` against chant's kinds schema and the graph reader's
+  output against chant's workspace graph schema (#73).
+- `--config` is optional for `reconcile`, `audit` and `report`. Without it the
+  policy is `governance.yml` in the working directory, and a run with neither
+  exits 2.
 
 ## 0.5.0 (2026-09-02)
 

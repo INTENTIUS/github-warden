@@ -4593,19 +4593,19 @@ var require_picomatch2 = __commonJS({
 });
 
 // node_modules/@intentius/chant/dist/project-root.js
-import { existsSync as existsSync2 } from "fs";
+import { existsSync as existsSync3 } from "fs";
 import { dirname as dirname2, join as join2, resolve } from "path";
 function findProjectConfig(startDir) {
   const resolvedStart = resolve(startDir);
   let dir = resolvedStart;
   for (; ; ) {
     const tsPath = join2(dir, "chant.config.ts");
-    if (existsSync2(tsPath))
+    if (existsSync3(tsPath))
       return { dir, configPath: tsPath };
     const jsonPath = join2(dir, "chant.config.json");
-    if (existsSync2(jsonPath))
+    if (existsSync3(jsonPath))
       return { dir, configPath: jsonPath };
-    if (existsSync2(join2(dir, ".git")) || existsSync2(join2(dir, "package.json"))) {
+    if (existsSync3(join2(dir, ".git")) || existsSync3(join2(dir, "package.json"))) {
       return { dir };
     }
     const parent = dirname2(dir);
@@ -4619,7 +4619,7 @@ function findWorkspaceRoot(startDir) {
   const start = resolve(startDir);
   let top;
   for (let dir = start; ; dir = dirname2(dir)) {
-    if (existsSync2(join2(dir, ".git"))) {
+    if (existsSync3(join2(dir, ".git"))) {
       top = dir;
       break;
     }
@@ -4628,8 +4628,8 @@ function findWorkspaceRoot(startDir) {
   }
   for (let dir = start; ; dir = dirname2(dir)) {
     const [json3, jsonc] = WORKSPACE_DECLARATION_FILES.map((name) => join2(dir, name));
-    const hasJson = existsSync2(json3);
-    const hasJsonc = existsSync2(jsonc);
+    const hasJson = existsSync3(json3);
+    const hasJsonc = existsSync3(jsonc);
     if (hasJson && hasJsonc)
       return { dir, file: json3, conflicting: jsonc };
     if (hasJson)
@@ -20118,7 +20118,7 @@ var init_module_source = __esm({
 });
 
 // node_modules/@intentius/chant/dist/ts-loader.js
-import { existsSync as existsSync3, readFileSync as readFileSync2, realpathSync } from "node:fs";
+import { existsSync as existsSync4, readFileSync as readFileSync2, realpathSync } from "node:fs";
 import * as nodeModule from "node:module";
 import { dirname as dirname5, join as join4, sep as sep2 } from "node:path";
 function compiledState() {
@@ -20133,7 +20133,7 @@ function chantPackageSourceTarget(specifier, parentPath) {
   for (; ; ) {
     const pkgDir = join4(dir, "node_modules", match[1]);
     const manifest = join4(pkgDir, "package.json");
-    if (existsSync3(manifest)) {
+    if (existsSync4(manifest)) {
       let exportsField;
       try {
         exportsField = JSON.parse(readFileSync2(manifest, "utf-8")).exports;
@@ -20164,7 +20164,7 @@ function chantPackageSourceTarget(specifier, parentPath) {
       if (typeof development !== "string")
         return void 0;
       const target = join4(pkgDir, star === void 0 ? development : development.split("*").join(star));
-      return existsSync3(target) ? realpathSync(target) : void 0;
+      return existsSync4(target) ? realpathSync(target) : void 0;
     }
     const parent = dirname5(dir);
     if (parent === dir)
@@ -22740,7 +22740,7 @@ error: ${text2}`);
 });
 
 // node_modules/@intentius/chant/dist/discovery/sandbox/bundle.js
-import { existsSync as existsSync4, mkdtempSync, readFileSync as readFileSync3, realpathSync as realpathSync2, rmSync, statSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync5, mkdtempSync, readFileSync as readFileSync3, realpathSync as realpathSync2, rmSync, statSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { createRequire as createRequire3 } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname as dirname6, join as join5, resolve as resolvePath } from "node:path";
@@ -22752,9 +22752,9 @@ function fastResolvePackage(specifier, fromDir) {
   let dir = fromDir;
   for (; ; ) {
     const packageDir = join5(dir, "node_modules", specifier);
-    if (existsSync4(packageDir)) {
+    if (existsSync5(packageDir)) {
       const pkgJsonPath = join5(packageDir, "package.json");
-      if (!existsSync4(pkgJsonPath))
+      if (!existsSync5(pkgJsonPath))
         return void 0;
       let pkg;
       try {
@@ -22768,7 +22768,7 @@ function fastResolvePackage(specifier, fromDir) {
       const main3 = pkg.main;
       const entry = typeof main3 === "string" ? main3 : "index.js";
       const resolved = resolvePath(packageDir, entry);
-      if (!existsSync4(resolved) || !statSync(resolved).isFile())
+      if (!existsSync5(resolved) || !statSync(resolved).isFile())
         return void 0;
       try {
         return realpathSync2(resolved);
@@ -23598,16 +23598,16 @@ var init_config_environments = __esm({
 });
 
 // node_modules/@intentius/chant/dist/config.js
-import { existsSync as existsSync5, readFileSync as readFileSync4 } from "fs";
+import { existsSync as existsSync6, readFileSync as readFileSync4 } from "fs";
 import { dirname as dirname10, join as join8, resolve as resolve4 } from "path";
 async function loadChantConfig(dir) {
   const tsPath = join8(dir, "chant.config.ts");
-  if (existsSync5(tsPath)) {
+  if (existsSync6(tsPath)) {
     const config2 = await evaluateProjectConfig(tsPath, dir);
     return { config: normalizeConfig(config2, tsPath), configPath: tsPath };
   }
   const jsonPath = join8(dir, "chant.config.json");
-  if (existsSync5(jsonPath)) {
+  if (existsSync6(jsonPath)) {
     const { readFileSync: readFileSync17 } = await import("fs");
     const content = readFileSync17(jsonPath, "utf-8");
     const parsed = JSON.parse(content);
@@ -26830,14 +26830,14 @@ var init_identity_gate_rule = __esm({
 });
 
 // node_modules/@intentius/chant/dist/workspace/class-data.js
-import { existsSync as existsSync6, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
+import { existsSync as existsSync7, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
 import { dirname as dirname12, join as join11, posix, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function findInstalledPackage(name, fromDir) {
   for (let dir = resolve5(fromDir); ; dir = dirname12(dir)) {
     const candidate = join11(dir, "node_modules", ...name.split("/"));
     try {
-      if (statSync3(candidate).isDirectory() && existsSync6(join11(candidate, "package.json")))
+      if (statSync3(candidate).isDirectory() && existsSync7(join11(candidate, "package.json")))
         return candidate;
     } catch {
     }
@@ -31650,7 +31650,7 @@ var init_declaration = __esm({
 
 // node_modules/@intentius/chant/dist/discovery/walk.js
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { closeSync, existsSync as existsSync7, openSync, readdirSync as readdirSync2, readSync, statSync as statSync4 } from "node:fs";
+import { closeSync, existsSync as existsSync8, openSync, readdirSync as readdirSync2, readSync, statSync as statSync4 } from "node:fs";
 import { isAbsolute as isAbsolute3, join as join12, relative as relative2, resolve as resolve6, sep as sep4 } from "node:path";
 function partsBelow(home, full) {
   const rel = relative2(home, resolve6(full));
@@ -31709,10 +31709,10 @@ function gitIgnoredBelow(root) {
   return ignored;
 }
 function isProjectBoundary(dir) {
-  if (existsSync7(join12(dir, "chant.config.ts")))
+  if (existsSync8(join12(dir, "chant.config.ts")))
     return true;
   const json3 = join12(dir, "chant.config.json");
-  return existsSync7(json3) && !isLintOnlyFragment(json3);
+  return existsSync8(json3) && !isLintOnlyFragment(json3);
 }
 function childProjectsAreBoundaries(walker, root) {
   return walker === "ops" || findProjectConfig(root).configPath !== void 0;
@@ -243670,7 +243670,7 @@ var init_fold = __esm({
 });
 
 // node_modules/@intentius/chant/dist/config-static.js
-import { existsSync as existsSync8, readFileSync as readFileSync8 } from "node:fs";
+import { existsSync as existsSync9, readFileSync as readFileSync8 } from "node:fs";
 function readLexiconDeclarationsStatically(startDir) {
   const { configPath } = findProjectConfigPastFragments(startDir);
   if (configPath === void 0)
@@ -245741,7 +245741,7 @@ var init_sbom = __esm({
 
 // node_modules/@intentius/chant/dist/components/verbs/tool-sbom-generator.js
 import { basename, dirname as dirname15, join as join15 } from "node:path";
-import { existsSync as existsSync9 } from "node:fs";
+import { existsSync as existsSync10 } from "node:fs";
 function countPackages(format, bytes) {
   try {
     const doc = JSON.parse(bytes);
@@ -245771,7 +245771,7 @@ function createToolSbomGenerator(options = {}) {
     async forImage(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
       const buildContext = dirname15(input.imagePath);
-      const hasDockerfile = existsSync9(join15(buildContext, "Dockerfile"));
+      const hasDockerfile = existsSync10(join15(buildContext, "Dockerfile"));
       if (hasDockerfile && await runner.available("docker")) {
         const out = scratchPath(options.workDir, input.imagePath, format);
         await runner.run(`docker buildx build --sbom=true --output type=local,dest=${q2(out)} ${q2(buildContext)}`);
@@ -245790,7 +245790,7 @@ function createToolSbomGenerator(options = {}) {
     async forJar(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
       const projectDir = dirname15(input.jarPath);
-      const hasPom = existsSync9(join15(projectDir, "pom.xml"));
+      const hasPom = existsSync10(join15(projectDir, "pom.xml"));
       if (hasPom && await runner.available("mvn")) {
         await requireTool(runner, "mvn", `run cyclonedx-maven against ${projectDir}`);
         const out = scratchPath(options.workDir, input.jarPath, "cyclonedx");
@@ -246348,7 +246348,7 @@ __export(which_chant_exports, {
   rootChantBin: () => rootChantBin
 });
 import { spawn } from "node:child_process";
-import { existsSync as existsSync10, readFileSync as readFileSync11, realpathSync as realpathSync4 } from "node:fs";
+import { existsSync as existsSync11, readFileSync as readFileSync11, realpathSync as realpathSync4 } from "node:fs";
 import { join as join16, relative as relative4, resolve as resolve8 } from "node:path";
 function locateWorkspace(cwd, at) {
   const top = gitTop(cwd);
@@ -246395,7 +246395,7 @@ function rootChantBin(rootOnDisk, version2) {
   if (typeof rel !== "string")
     return void 0;
   const bin = join16(dir, rel);
-  return existsSync10(bin) ? bin : void 0;
+  return existsSync11(bin) ? bin : void 0;
 }
 function declaredChantPin(located) {
   const file2 = DECLARATION_FILES.find((f) => located.tree.stat(f) === "file");
@@ -250391,7 +250391,7 @@ var init_conflict_check = __esm({
 
 // node_modules/@intentius/chant/dist/project-codegen.js
 import { createHash as createHash6 } from "node:crypto";
-import { existsSync as existsSync11, mkdirSync as mkdirSync2, readFileSync as readFileSync13, readdirSync as readdirSync3, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync12, mkdirSync as mkdirSync2, readFileSync as readFileSync13, readdirSync as readdirSync3, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname16, isAbsolute as isAbsolute5, join as join18, relative as relative5, resolve as resolve9, sep as sep5 } from "node:path";
 function resolveCodegenRoot(projectRoot, config2) {
   const codegen = config2.codegen;
@@ -250406,7 +250406,7 @@ function digestInputs(inputs) {
 }
 function readStamp(outDir) {
   const path = join18(outDir, STAMP_FILE);
-  if (!existsSync11(path))
+  if (!existsSync12(path))
     return void 0;
   try {
     const parsed = JSON.parse(readFileSync13(path, "utf8"));
@@ -250439,7 +250439,7 @@ async function checkProjectCodegen(plugin, projectRoot, config2) {
       message: `chant.config declares ${plugin.name} sources to generate, but ${where} has no generated code. Run \`chant generate\` and commit the result.`
     };
   }
-  const absent = stamp.files.filter((f) => !existsSync11(safeJoin(ctx.outDir, f)));
+  const absent = stamp.files.filter((f) => !existsSync12(safeJoin(ctx.outDir, f)));
   if (absent.length > 0) {
     return {
       status: "missing",
@@ -250500,7 +250500,7 @@ __export(plugins_exports, {
 import { createRequire as createRequire8 } from "node:module";
 import { dirname as dirname17, join as join19, resolve as resolve10 } from "node:path";
 import { fileURLToPath as fileURLToPath6 } from "node:url";
-import { existsSync as existsSync12, readdirSync as readdirSync4, readFileSync as readFileSync14 } from "node:fs";
+import { existsSync as existsSync13, readdirSync as readdirSync4, readFileSync as readFileSync14 } from "node:fs";
 function recordProjectLexicons(dir) {
   const read = readLexiconDeclarationsStatically(dir);
   if (read.status === "read")
@@ -250592,7 +250592,7 @@ function resolveLexiconVersions(lexiconNames2) {
       let dir = dirname17(entry);
       for (let depth = 0; depth < 10; depth++) {
         const candidate = join19(dir, "package.json");
-        if (existsSync12(candidate)) {
+        if (existsSync13(candidate)) {
           const pkg = JSON.parse(readFileSync14(candidate, "utf-8"));
           if (pkg.name === packageName && pkg.version) {
             versions[name] = pkg.version;
@@ -255380,7 +255380,7 @@ var init_engine = __esm({
 });
 
 // src/cli.ts
-import { existsSync as existsSync13, readFileSync as readFileSync16, writeFileSync as writeFileSync5 } from "node:fs";
+import { existsSync as existsSync14, readFileSync as readFileSync16, writeFileSync as writeFileSync5 } from "node:fs";
 import { pathToFileURL as pathToFileURL3 } from "node:url";
 
 // package.json
@@ -255785,6 +255785,15 @@ function loadGovernanceConfig(input) {
   }
   return { orgs };
 }
+
+// src/config/policy-path.ts
+import { existsSync } from "node:fs";
+var POLICY_FILE = "governance.yml";
+function resolvePolicyPath(given, exists = existsSync) {
+  if (given !== void 0) return given;
+  return exists(POLICY_FILE) ? POLICY_FILE : void 0;
+}
+var NO_POLICY_MESSAGE = `no --config given and no ${POLICY_FILE} in the working directory`;
 
 // src/cli.ts
 init_app_client();
@@ -257628,7 +257637,7 @@ function complianceArtifact(report2) {
 
 // src/workspace/members.ts
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync as existsSync2 } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 var READ_CONTRACT = 1;
@@ -257713,7 +257722,7 @@ function chantLauncher() {
     let dir = dirname(createRequire(import.meta.url).resolve("@intentius/chant"));
     for (let i = 0; i < 6; i++, dir = dirname(dir)) {
       const bin = join(dir, "bin", "chant");
-      if (existsSync(join(dir, "package.json")) && existsSync(bin)) return bin;
+      if (existsSync2(join(dir, "package.json")) && existsSync2(bin)) return bin;
     }
   } catch {
   }
@@ -257928,7 +257937,7 @@ var CliError = class extends Error {
 };
 function parseReconcileArgs(argv) {
   const args = {
-    config: "",
+    config: void 0,
     mode: "dry-run",
     cycles: [],
     appIdEnv: void 0,
@@ -258030,7 +258039,6 @@ function parseReconcileArgs(argv) {
     }
     i++;
   }
-  if (!args.config) throw new CliError(2, "--config is required");
   if (args.planJson !== void 0 && args.mode === "apply") {
     throw new CliError(2, "--plan-json writes a plan without applying it; it cannot be combined with --mode apply");
   }
@@ -258046,7 +258054,7 @@ function parseReconcileArgs(argv) {
 }
 function parseAuditArgs(argv) {
   const args = {
-    config: "",
+    config: void 0,
     appIdEnv: void 0,
     installationIdEnv: void 0,
     tokenEnv: void 0,
@@ -258118,7 +258126,6 @@ function parseAuditArgs(argv) {
     }
     i++;
   }
-  if (!args.config) throw new CliError(2, "--config is required");
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
   if (!hasTokenAuth && !hasAppAuth) {
@@ -258131,7 +258138,7 @@ function parseAuditArgs(argv) {
 }
 function parseReportArgs(argv) {
   const args = {
-    config: "",
+    config: void 0,
     appIdEnv: void 0,
     installationIdEnv: void 0,
     tokenEnv: void 0,
@@ -258214,7 +258221,6 @@ function parseReportArgs(argv) {
     }
     i++;
   }
-  if (!args.config) throw new CliError(2, "--config is required");
   const hasTokenAuth = !!args.tokenEnv;
   const hasAppAuth = !!(args.appIdEnv && args.installationIdEnv);
   if (!hasTokenAuth && !hasAppAuth) {
@@ -258307,19 +258313,7 @@ async function main(argv = process.argv.slice(2)) {
     if (err instanceof CliError) die(err.code, err.message);
     throw err;
   }
-  let rawConfig;
-  try {
-    const text2 = readFileSync16(args.config, "utf-8");
-    rawConfig = parseConfigFile(args.config, text2);
-  } catch (err) {
-    die(3, `failed to read config file "${args.config}": ${errMsg2(err)}`);
-  }
-  let config2;
-  try {
-    config2 = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg2(err)}`);
-  }
+  const config2 = readPolicy(args.config);
   let client;
   try {
     client = buildClient(args);
@@ -258418,6 +258412,21 @@ function die(code, message) {
 }
 function errMsg2(err) {
   return err instanceof Error ? err.message : String(err);
+}
+function readPolicy(given) {
+  const path = resolvePolicyPath(given);
+  if (path === void 0) die(2, NO_POLICY_MESSAGE);
+  let rawConfig;
+  try {
+    rawConfig = parseConfigFile(path, readFileSync16(path, "utf-8"));
+  } catch (err) {
+    die(3, `failed to read config file "${path}": ${errMsg2(err)}`);
+  }
+  try {
+    return loadGovernanceConfig(rawConfig);
+  } catch (err) {
+    die(2, `invalid governance config: ${errMsg2(err)}`);
+  }
 }
 function parseConfigFile(filePath, text2) {
   const lower = filePath.toLowerCase();
@@ -258562,19 +258571,7 @@ async function runAudit(argv) {
     if (err instanceof CliError) die(err.code, err.message);
     throw err;
   }
-  let rawConfig;
-  try {
-    const text2 = readFileSync16(auditArgs.config, "utf-8");
-    rawConfig = parseConfigFile(auditArgs.config, text2);
-  } catch (err) {
-    die(3, `failed to read config file "${auditArgs.config}": ${errMsg2(err)}`);
-  }
-  let config2;
-  try {
-    config2 = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg2(err)}`);
-  }
+  const config2 = readPolicy(auditArgs.config);
   const repoUrls = [];
   for (const [orgName, orgCfg] of Object.entries(config2.orgs)) {
     for (const repoName of Object.keys(orgCfg.repos ?? {})) {
@@ -258630,19 +258627,7 @@ async function runReport(argv) {
     if (err instanceof CliError) die(err.code, err.message);
     throw err;
   }
-  let rawConfig;
-  try {
-    const text2 = readFileSync16(reportArgs.config, "utf-8");
-    rawConfig = parseConfigFile(reportArgs.config, text2);
-  } catch (err) {
-    die(3, `failed to read config file "${reportArgs.config}": ${errMsg2(err)}`);
-  }
-  let config2;
-  try {
-    config2 = loadGovernanceConfig(rawConfig);
-  } catch (err) {
-    die(2, `invalid governance config: ${errMsg2(err)}`);
-  }
+  const config2 = readPolicy(reportArgs.config);
   let client;
   try {
     client = buildClient(reportArgs);
@@ -258802,7 +258787,7 @@ async function runCodeowners(argv) {
     process.exit(0);
   }
   if (args.check) {
-    const current = existsSync13(args.out) ? readFileSync16(args.out, "utf8") : null;
+    const current = existsSync14(args.out) ? readFileSync16(args.out, "utf8") : null;
     if (current !== text2) {
       process.stderr.write(`github-warden: ${args.out} is out of date; run codeowners --out ${args.out}
 `);
@@ -258947,7 +258932,7 @@ function printUsage() {
       "  checks      Print the ruleset requiring each member pipeline's job names.",
       "",
       "Flags (reconcile):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --mode dry-run|apply          Reconcile mode (default: dry-run).",
       "  --cycles <name[,name...]>     Cycle names to run (default: all).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
@@ -258958,7 +258943,7 @@ function printUsage() {
       "                                delete per resource type, in (0,1]. Default: 0.25.",
       "",
       "Flags (audit):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
@@ -258966,7 +258951,7 @@ function printUsage() {
       "                                Exit 4 when findings exceed threshold (default: none).",
       "",
       "Flags (report):",
-      "  --config <path>               Path to governance config file (YAML or JSON).",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --token-env / --app-id-env / --installation-id-env   Auth (as reconcile).",
       "  --cycles <name[,name...]>     Cycles to include (default: all).",
       "  --out <path>                  Write the JSON compliance artifact to this path.",
@@ -259013,7 +258998,7 @@ function printAuditUsage() {
       "using the warden App installation token.",
       "",
       "Flags:",
-      "  --config <path>               Path to governance config file (YAML or JSON). Required.",
+      "  --config <path>               Governance config, YAML or JSON (default: governance.yml).",
       "  --token-env <VAR>             Env var holding a pre-minted installation token.",
       "  --app-id-env <VAR>            Env var holding the GitHub App ID.",
       "  --installation-id-env <VAR>   Env var holding the installation ID.",
