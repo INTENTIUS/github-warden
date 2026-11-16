@@ -67,7 +67,7 @@ var init_host = __esm({
 // node_modules/typescript/lib/typescript.js
 var require_typescript = __commonJS({
   "node_modules/typescript/lib/typescript.js"(exports, module) {
-    var ts44 = {};
+    var ts45 = {};
     ((module2) => {
       "use strict";
       var __defProp2 = Object.defineProperty;
@@ -896,7 +896,7 @@ var require_typescript = __commonJS({
         getKeyForCompilerOptions: () => getKeyForCompilerOptions,
         getLanguageVariant: () => getLanguageVariant,
         getLastChild: () => getLastChild,
-        getLeadingCommentRanges: () => getLeadingCommentRanges,
+        getLeadingCommentRanges: () => getLeadingCommentRanges2,
         getLeadingCommentRangesOfNode: () => getLeadingCommentRangesOfNode,
         getLeftmostAccessExpression: () => getLeftmostAccessExpression,
         getLeftmostExpression: () => getLeftmostExpression,
@@ -8703,7 +8703,7 @@ ${lanes.join("\n")}
               return process.memoryUsage().heapUsed;
             },
             getFileSize(path) {
-              const stat = statSync7(path);
+              const stat = statSync8(path);
               if (stat == null ? void 0 : stat.isFile()) {
                 return stat.size;
               }
@@ -8747,7 +8747,7 @@ ${lanes.join("\n")}
             }
           };
           return nodeSystem;
-          function statSync7(path) {
+          function statSync8(path) {
             try {
               return _fs.statSync(path, statSyncOptions);
             } catch {
@@ -8806,7 +8806,7 @@ ${lanes.join("\n")}
               activeSession.post("Profiler.stop", (err, { profile }) => {
                 var _a7;
                 if (!err) {
-                  if ((_a7 = statSync7(profilePath)) == null ? void 0 : _a7.isDirectory()) {
+                  if ((_a7 = statSync8(profilePath)) == null ? void 0 : _a7.isDirectory()) {
                     profilePath = _path.join(profilePath, `${(/* @__PURE__ */ new Date()).toISOString().replace(/:/g, "-")}+P${process.pid}.cpuprofile`);
                   }
                   try {
@@ -8926,7 +8926,7 @@ ${lanes.join("\n")}
                 let stat;
                 if (typeof dirent === "string" || dirent.isSymbolicLink()) {
                   const name = combinePaths(path, entry);
-                  stat = statSync7(name);
+                  stat = statSync8(name);
                   if (!stat) {
                     continue;
                   }
@@ -8950,7 +8950,7 @@ ${lanes.join("\n")}
             return matchFiles(path, extensions, excludes, includes, useCaseSensitiveFileNames2, process.cwd(), depth, getAccessibleFileSystemEntries, realpath);
           }
           function fileSystemEntryExists(path, entryKind) {
-            const stat = statSync7(path);
+            const stat = statSync8(path);
             if (!stat) {
               return false;
             }
@@ -8992,7 +8992,7 @@ ${lanes.join("\n")}
           }
           function getModifiedTime3(path) {
             var _a7;
-            return (_a7 = statSync7(path)) == null ? void 0 : _a7.mtime;
+            return (_a7 = statSync8(path)) == null ? void 0 : _a7.mtime;
           }
           function setModifiedTime(path, time3) {
             try {
@@ -12450,7 +12450,7 @@ ${lanes.join("\n")}
         comments.push({ kind, pos, end, hasTrailingNewLine });
         return comments;
       }
-      function getLeadingCommentRanges(text2, pos) {
+      function getLeadingCommentRanges2(text2, pos) {
         return reduceEachLeadingCommentRange(
           text2,
           pos,
@@ -16697,7 +16697,7 @@ ${lanes.join("\n")}
               /*stopAtComments*/
               true
             )),
-            getLeadingCommentRanges(text2, node.pos)
+            getLeadingCommentRanges2(text2, node.pos)
           ) : getTrailingCommentRanges(text2, skipTrivia(
             text2,
             node.pos,
@@ -18248,9 +18248,9 @@ ${lanes.join("\n")}
           return getSpanOfTokenAtPosition(sourceFile, node.pos);
         }
         Debug.assert(!isJSDoc(errorNode));
-        const isMissing = nodeIsMissing(errorNode);
-        const pos = isMissing || isJsxText(node) ? errorNode.pos : skipTrivia(sourceFile.text, errorNode.pos);
-        if (isMissing) {
+        const isMissing2 = nodeIsMissing(errorNode);
+        const pos = isMissing2 || isJsxText(node) ? errorNode.pos : skipTrivia(sourceFile.text, errorNode.pos);
+        if (isMissing2) {
           Debug.assert(pos === errorNode.pos, "This failure could trigger https://github.com/Microsoft/TypeScript/issues/20809");
           Debug.assert(pos === errorNode.end, "This failure could trigger https://github.com/Microsoft/TypeScript/issues/20809");
         } else {
@@ -18320,10 +18320,10 @@ ${lanes.join("\n")}
         return isCustomPrologue(node) && isVariableStatement16(node) && every(node.declarationList.declarations, isHoistedVariable);
       }
       function getLeadingCommentRangesOfNode(node, sourceFileOfNode) {
-        return node.kind !== 12 ? getLeadingCommentRanges(sourceFileOfNode.text, node.pos) : void 0;
+        return node.kind !== 12 ? getLeadingCommentRanges2(sourceFileOfNode.text, node.pos) : void 0;
       }
       function getJSDocCommentRanges(node, text2) {
-        const commentRanges = node.kind === 170 || node.kind === 169 || node.kind === 219 || node.kind === 220 || node.kind === 218 || node.kind === 261 || node.kind === 282 ? concatenate(getTrailingCommentRanges(text2, node.pos), getLeadingCommentRanges(text2, node.pos)) : getLeadingCommentRanges(text2, node.pos);
+        const commentRanges = node.kind === 170 || node.kind === 169 || node.kind === 219 || node.kind === 220 || node.kind === 218 || node.kind === 261 || node.kind === 282 ? concatenate(getTrailingCommentRanges(text2, node.pos), getLeadingCommentRanges2(text2, node.pos)) : getLeadingCommentRanges2(text2, node.pos);
         return filter(
           commentRanges,
           (comment) => comment.end <= node.end && // Due to parse errors sometime empty parameter may get comments assigned to it that end up not in parameter range
@@ -21158,10 +21158,10 @@ ${lanes.join("\n")}
         let currentDetachedCommentInfo;
         if (removeComments) {
           if (node.pos === 0) {
-            leadingComments = filter(getLeadingCommentRanges(text2, node.pos), isPinnedCommentLocal);
+            leadingComments = filter(getLeadingCommentRanges2(text2, node.pos), isPinnedCommentLocal);
           }
         } else {
-          leadingComments = getLeadingCommentRanges(text2, node.pos);
+          leadingComments = getLeadingCommentRanges2(text2, node.pos);
         }
         if (leadingComments) {
           const detachedComments = [];
@@ -43549,7 +43549,7 @@ ${lanes.join("\n")}
       }
       function processCommentPragmas(context2, sourceText) {
         const pragmas = [];
-        for (const range of getLeadingCommentRanges(sourceText, 0) || emptyArray) {
+        for (const range of getLeadingCommentRanges2(sourceText, 0) || emptyArray) {
           const comment = sourceText.substring(range.pos, range.end);
           extractPragmas(pragmas, range, comment);
         }
@@ -123778,7 +123778,7 @@ ${lanes.join("\n")}
           }
         }
         function createImportCallExpressionAMD(arg, containsLexicalThis) {
-          const resolve15 = factory2.createUniqueName("resolve");
+          const resolve16 = factory2.createUniqueName("resolve");
           const reject2 = factory2.createUniqueName("reject");
           const parameters = [
             factory2.createParameterDeclaration(
@@ -123787,7 +123787,7 @@ ${lanes.join("\n")}
               /*dotDotDotToken*/
               void 0,
               /*name*/
-              resolve15
+              resolve16
             ),
             factory2.createParameterDeclaration(
               /*modifiers*/
@@ -123804,7 +123804,7 @@ ${lanes.join("\n")}
                 factory2.createIdentifier("require"),
                 /*typeArguments*/
                 void 0,
-                [factory2.createArrayLiteralExpression([arg || factory2.createOmittedExpression()]), resolve15, reject2]
+                [factory2.createArrayLiteralExpression([arg || factory2.createOmittedExpression()]), resolve16, reject2]
               )
             )
           ]);
@@ -131971,7 +131971,7 @@ ${lanes.join("\n")}
         }
         function willEmitLeadingNewLine(node) {
           if (!currentSourceFile) return false;
-          const leadingCommentRanges = getLeadingCommentRanges(currentSourceFile.text, node.pos);
+          const leadingCommentRanges = getLeadingCommentRanges2(currentSourceFile.text, node.pos);
           if (leadingCommentRanges) {
             const parseNode = getParseTreeNode(node);
             if (parseNode && isParenthesizedExpression12(parseNode.parent)) {
@@ -145264,7 +145264,7 @@ ${lanes.join("\n")}
           }
         }
       }
-      function build4(state, project2, cancellationToken, writeFile2, getCustomTransformers, onlyReferences) {
+      function build3(state, project2, cancellationToken, writeFile2, getCustomTransformers, onlyReferences) {
         mark("SolutionBuilder::beforeBuild");
         const result = buildWorker(state, project2, cancellationToken, writeFile2, getCustomTransformers, onlyReferences);
         mark("SolutionBuilder::afterBuild");
@@ -145577,9 +145577,9 @@ ${lanes.join("\n")}
       function createSolutionBuilderWorker(watch, hostOrHostWithWatch, rootNames, options, baseWatchOptions) {
         const state = createSolutionBuilderState(watch, hostOrHostWithWatch, rootNames, options, baseWatchOptions);
         return {
-          build: (project2, cancellationToken, writeFile2, getCustomTransformers) => build4(state, project2, cancellationToken, writeFile2, getCustomTransformers),
+          build: (project2, cancellationToken, writeFile2, getCustomTransformers) => build3(state, project2, cancellationToken, writeFile2, getCustomTransformers),
           clean: (project2) => clean2(state, project2),
-          buildReferences: (project2, cancellationToken, writeFile2, getCustomTransformers) => build4(
+          buildReferences: (project2, cancellationToken, writeFile2, getCustomTransformers) => build3(
             state,
             project2,
             cancellationToken,
@@ -182433,7 +182433,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
       function getTripleSlashReferenceCompletion(sourceFile, position, program, host, moduleSpecifierResolutionHost) {
         const compilerOptions = program.getCompilerOptions();
         const token = getTokenAtPosition(sourceFile, position);
-        const commentRanges = getLeadingCommentRanges(sourceFile.text, token.pos);
+        const commentRanges = getLeadingCommentRanges2(sourceFile.text, token.pos);
         const range = commentRanges && find(commentRanges, (commentRange) => position >= commentRange.pos && position <= commentRange.end);
         if (!range) {
           return void 0;
@@ -185899,7 +185899,7 @@ ${newComment.split("\n").map((c) => ` * ${c}`).join("\n")}
           if (!isIdentifierText(name, getEmitScriptTarget(compilerOptions), getLanguageVariant(file2.scriptKind))) {
             return false;
           }
-          const ranges = getLeadingCommentRanges(sourceFileText, node.pos);
+          const ranges = getLeadingCommentRanges2(sourceFileText, node.pos);
           if (!(ranges == null ? void 0 : ranges.length)) {
             return false;
           }
@@ -187927,7 +187927,7 @@ ${content}
         return void 0;
       }
       function addOutliningForLeadingCommentsForPos(pos, sourceFile, cancellationToken, out) {
-        const comments = getLeadingCommentRanges(sourceFile.text, pos);
+        const comments = getLeadingCommentRanges2(sourceFile.text, pos);
         if (!comments) return;
         let firstSingleLineCommentStart = -1;
         let lastSingleLineCommentEnd = -1;
@@ -190230,7 +190230,7 @@ ${content}
           return leadingTriviaOption === 1 ? fullStart : start;
         }
         if (hasTrailingComment) {
-          const comment = ((_a7 = getLeadingCommentRanges(sourceFile.text, fullStart)) == null ? void 0 : _a7[0]) || ((_b = getTrailingCommentRanges(sourceFile.text, fullStart)) == null ? void 0 : _b[0]);
+          const comment = ((_a7 = getLeadingCommentRanges2(sourceFile.text, fullStart)) == null ? void 0 : _a7[0]) || ((_b = getTrailingCommentRanges(sourceFile.text, fullStart)) == null ? void 0 : _b[0]);
           if (comment) {
             return skipTrivia(
               sourceFile.text,
@@ -190282,7 +190282,7 @@ ${content}
           return end;
         }
         if (trailingTriviaOption === 1) {
-          const comments = concatenate(getTrailingCommentRanges(sourceFile.text, end), getLeadingCommentRanges(sourceFile.text, end));
+          const comments = concatenate(getTrailingCommentRanges(sourceFile.text, end), getLeadingCommentRanges2(sourceFile.text, end));
           const realEnd = (_a7 = comments == null ? void 0 : comments[comments.length - 1]) == null ? void 0 : _a7.end;
           if (realEnd) {
             return realEnd;
@@ -191329,7 +191329,7 @@ ${options.prefix}` : "\n" : options.prefix
           position = shebang.length;
           advancePastLineBreak();
         }
-        const ranges = getLeadingCommentRanges(text2, position);
+        const ranges = getLeadingCommentRanges2(text2, position);
         if (!ranges) return position;
         let lastComment;
         let firstNodeLine;
@@ -196399,7 +196399,7 @@ ${options.prefix}` : "\n" : options.prefix
         getKeyForCompilerOptions: () => getKeyForCompilerOptions,
         getLanguageVariant: () => getLanguageVariant,
         getLastChild: () => getLastChild,
-        getLeadingCommentRanges: () => getLeadingCommentRanges,
+        getLeadingCommentRanges: () => getLeadingCommentRanges2,
         getLeadingCommentRangesOfNode: () => getLeadingCommentRangesOfNode,
         getLeftmostAccessExpression: () => getLeftmostAccessExpression,
         getLeftmostExpression: () => getLeftmostExpression,
@@ -210522,8 +210522,8 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         installPackage(options) {
           this.packageInstallId++;
           const request = { kind: "installPackage", ...options, id: this.packageInstallId };
-          const promise2 = new Promise((resolve15, reject2) => {
-            (this.packageInstalledPromise ?? (this.packageInstalledPromise = /* @__PURE__ */ new Map())).set(this.packageInstallId, { resolve: resolve15, reject: reject2 });
+          const promise2 = new Promise((resolve16, reject2) => {
+            (this.packageInstalledPromise ?? (this.packageInstalledPromise = /* @__PURE__ */ new Map())).set(this.packageInstallId, { resolve: resolve16, reject: reject2 });
           });
           this.installer.send(request);
           return promise2;
@@ -210795,9 +210795,9 @@ Additional information: BADCLIENT: Bad error code, ${badCode} not found in range
         };
       }
     })({ get exports() {
-      return ts44;
+      return ts45;
     }, set exports(v) {
-      ts44 = v;
+      ts45 = v;
       if (typeof module !== "undefined" && module.exports) {
         module.exports = v;
       }
@@ -234803,6 +234803,7 @@ var init_sbom_generator = __esm({
 });
 
 // node_modules/@intentius/chant/dist/module-source.js
+import { existsSync as existsSync4 } from "node:fs";
 import { dirname as dirname6, sep } from "node:path";
 import { fileURLToPath, pathToFileURL as pathToFileURL2 } from "node:url";
 function sourcePathOf(path) {
@@ -234814,7 +234815,9 @@ function sourcePathOf(path) {
   return path.slice(0, at) + `${sep}src${sep}` + path.slice(at + DIST.length);
 }
 function moduleSourceDir(moduleUrl) {
-  return dirname6(sourcePathOf(fileURLToPath(moduleUrl)));
+  const path = fileURLToPath(moduleUrl);
+  const source = dirname6(sourcePathOf(path));
+  return source === dirname6(path) || existsSync4(source) ? source : dirname6(path);
 }
 function isTypeScriptModule(pathOrUrl) {
   const path = pathOrUrl.replace(/[?#].*$/, "");
@@ -234829,20 +234832,60 @@ function resolvesDevelopment() {
   if (typeof process === "undefined")
     return false;
   const flags = [...process.execArgv, ...(process.env.NODE_OPTIONS ?? "").split(/\s+/)];
-  return flags.some((flag, i) => flag === "--conditions=development" || flag === "-C=development" || (flag === "--conditions" || flag === "-C") && flags[i + 1] === "development");
+  return flags.some((flag, i) => flag === "--conditions=@intentius/chant-source" || flag === "-C=@intentius/chant-source" || (flag === "--conditions" || flag === "-C") && flags[i + 1] === "@intentius/chant-source");
 }
 var DIST, SOURCE_EXPORT_CONDITIONS;
 var init_module_source = __esm({
   "node_modules/@intentius/chant/dist/module-source.js"() {
     DIST = `${sep}dist${sep}`;
-    SOURCE_EXPORT_CONDITIONS = resolvesDevelopment() ? ["development"] : [];
+    SOURCE_EXPORT_CONDITIONS = resolvesDevelopment() ? ["@intentius/chant-source"] : [];
+  }
+});
+
+// node_modules/@intentius/chant/dist/optional-peer.js
+import { createRequire as createRequire2 } from "node:module";
+function isMissing(err, name) {
+  const code2 = err?.code;
+  if (code2 !== "ERR_MODULE_NOT_FOUND" && code2 !== "MODULE_NOT_FOUND")
+    return false;
+  return String(err.message).split("\n")[0].includes(`'${name}`);
+}
+function missingPeerError(name, neededFor) {
+  return new Error(`chant needs ${name} to ${neededFor}; install it with: ${INSTALL[name]}`);
+}
+async function importOptionalPeer(name, neededFor, load4) {
+  try {
+    return await load4();
+  } catch (err) {
+    if (isMissing(err, name))
+      throw missingPeerError(name, neededFor);
+    throw err;
+  }
+}
+function requireOptionalPeer(name, specifier, neededFor, from) {
+  try {
+    return createRequire2(from)(specifier);
+  } catch (err) {
+    if (isMissing(err, name))
+      throw missingPeerError(name, neededFor);
+    throw err;
+  }
+}
+var INSTALL;
+var init_optional_peer = __esm({
+  "node_modules/@intentius/chant/dist/optional-peer.js"() {
+    INSTALL = {
+      esbuild: "npm i -D esbuild",
+      tsx: "npm i -D tsx"
+    };
   }
 });
 
 // node_modules/@intentius/chant/dist/ts-loader.js
-import { existsSync as existsSync4, readFileSync as readFileSync3, realpathSync } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync3, realpathSync } from "node:fs";
 import * as nodeModule from "node:module";
 import { dirname as dirname7, join as join6, sep as sep2 } from "node:path";
+import { fileURLToPath as fileURLToPath2, pathToFileURL as pathToFileURL3 } from "node:url";
 function compiledState() {
   return globalThis[STATE];
 }
@@ -234855,7 +234898,7 @@ function chantPackageSourceTarget(specifier, parentPath) {
   for (; ; ) {
     const pkgDir = join6(dir, "node_modules", match[1]);
     const manifest = join6(pkgDir, "package.json");
-    if (existsSync4(manifest)) {
+    if (existsSync5(manifest)) {
       let exportsField;
       try {
         exportsField = JSON.parse(readFileSync3(manifest, "utf-8")).exports;
@@ -234882,11 +234925,11 @@ function chantPackageSourceTarget(specifier, parentPath) {
           star = subpath.slice(prefix.length, subpath.length - suffix.length);
         }
       }
-      const development = entry && typeof entry === "object" ? entry.development : void 0;
-      if (typeof development !== "string")
+      const sourceTarget = entry && typeof entry === "object" ? entry["@intentius/chant-source"] : void 0;
+      if (typeof sourceTarget !== "string")
         return void 0;
-      const target = join6(pkgDir, star === void 0 ? development : development.split("*").join(star));
-      return existsSync4(target) ? realpathSync(target) : void 0;
+      const target = join6(pkgDir, star === void 0 ? sourceTarget : sourceTarget.split("*").join(star));
+      return existsSync5(target) ? realpathSync(target) : void 0;
     }
     const parent = dirname7(dir);
     if (parent === dir)
@@ -234900,10 +234943,10 @@ function ensureTypeScriptLoader() {
     return false;
   if (state.tsx)
     return true;
+  const load4 = (specifier) => requireOptionalPeer("tsx", specifier, "run TypeScript", import.meta.url);
+  load4("tsx/cjs/api").register();
+  load4("tsx/esm/api").register();
   state.tsx = true;
-  const require3 = createRequire2(import.meta.url);
-  require3("tsx/cjs/api").register();
-  require3("tsx/esm/api").register();
   return true;
 }
 function ensureTypeScriptLoaderFor(pathOrUrl) {
@@ -234916,13 +234959,18 @@ function typeScriptLoaderPending() {
   return state !== void 0 && !state.tsx;
 }
 function chantSourceDir(moduleUrl) {
-  return moduleSourceDir(moduleUrl);
+  const source = moduleSourceDir(moduleUrl);
+  return existsSync5(source) ? source : dirname7(fileURLToPath2(moduleUrl));
 }
-var createRequire2, registerHooks, STATE;
+function chantModule(path) {
+  return existsSync5(path) ? path : path.replace(/\.ts$/, ".js");
+}
+var registerHooks, STATE;
 var init_ts_loader = __esm({
   "node_modules/@intentius/chant/dist/ts-loader.js"() {
     init_module_source();
-    ({ createRequire: createRequire2, registerHooks } = nodeModule);
+    init_optional_peer();
+    ({ registerHooks } = nodeModule);
     STATE = /* @__PURE__ */ Symbol.for("chant.compiledCli");
   }
 });
@@ -234985,7 +235033,7 @@ var require_main = __commonJS({
     __export2(node_exports, {
       analyzeMetafile: () => analyzeMetafile,
       analyzeMetafileSync: () => analyzeMetafileSync,
-      build: () => build4,
+      build: () => build3,
       buildSync: () => buildSync,
       context: () => context2,
       default: () => node_default,
@@ -236160,7 +236208,7 @@ is not a problem with esbuild. You need to fix your environment instead.
         let latestResultPromise;
         let provideLatestResult;
         if (isContext)
-          requestCallbacks["on-end"] = (id, request2) => new Promise((resolve15) => {
+          requestCallbacks["on-end"] = (id, request2) => new Promise((resolve16) => {
             buildResponseToResult(request2, (err, result, onEndErrors, onEndWarnings) => {
               const response = {
                 errors: onEndErrors,
@@ -236170,7 +236218,7 @@ is not a problem with esbuild. You need to fix your environment instead.
               latestResultPromise = void 0;
               provideLatestResult = void 0;
               sendResponse(id, response);
-              resolve15();
+              resolve16();
             });
           });
         sendRequest(refs, request, (error51, response) => {
@@ -236187,10 +236235,10 @@ is not a problem with esbuild. You need to fix your environment instead.
           let didDispose = false;
           const result = {
             rebuild: () => {
-              if (!latestResultPromise) latestResultPromise = new Promise((resolve15, reject2) => {
+              if (!latestResultPromise) latestResultPromise = new Promise((resolve16, reject2) => {
                 let settlePromise;
                 provideLatestResult = (err, result2) => {
-                  if (!settlePromise) settlePromise = () => err ? reject2(err) : resolve15(result2);
+                  if (!settlePromise) settlePromise = () => err ? reject2(err) : resolve16(result2);
                 };
                 const triggerAnotherBuild = () => {
                   const request2 = {
@@ -236211,7 +236259,7 @@ is not a problem with esbuild. You need to fix your environment instead.
               });
               return latestResultPromise;
             },
-            watch: (options2 = {}) => new Promise((resolve15, reject2) => {
+            watch: (options2 = {}) => new Promise((resolve16, reject2) => {
               if (!streamIn.hasFS) throw new Error(`Cannot use the "watch" API in this environment`);
               const keys = {};
               const delay = getFlag(options2, keys, "delay", mustBeInteger);
@@ -236223,10 +236271,10 @@ is not a problem with esbuild. You need to fix your environment instead.
               if (delay) request2.delay = delay;
               sendRequest(refs, request2, (error210) => {
                 if (error210) reject2(new Error(error210));
-                else resolve15(void 0);
+                else resolve16(void 0);
               });
             }),
-            serve: (options2 = {}) => new Promise((resolve15, reject2) => {
+            serve: (options2 = {}) => new Promise((resolve16, reject2) => {
               if (!streamIn.hasFS) throw new Error(`Cannot use the "serve" API in this environment`);
               const keys = {};
               const port = getFlag(options2, keys, "port", mustBeValidPortNumber);
@@ -236264,28 +236312,28 @@ is not a problem with esbuild. You need to fix your environment instead.
                     sendResponse(id, {});
                   };
                 }
-                resolve15(response2);
+                resolve16(response2);
               });
             }),
-            cancel: () => new Promise((resolve15) => {
-              if (didDispose) return resolve15();
+            cancel: () => new Promise((resolve16) => {
+              if (didDispose) return resolve16();
               const request2 = {
                 command: "cancel",
                 key: buildKey
               };
               sendRequest(refs, request2, () => {
-                resolve15();
+                resolve16();
               });
             }),
-            dispose: () => new Promise((resolve15) => {
-              if (didDispose) return resolve15();
+            dispose: () => new Promise((resolve16) => {
+              if (didDispose) return resolve16();
               didDispose = true;
               const request2 = {
                 command: "dispose",
                 key: buildKey
               };
               sendRequest(refs, request2, () => {
-                resolve15();
+                resolve16();
                 scheduleOnDisposeCallbacks();
                 refs.unref();
               });
@@ -236324,7 +236372,7 @@ is not a problem with esbuild. You need to fix your environment instead.
             onLoad: []
           };
           i++;
-          let resolve15 = (path3, options = {}) => {
+          let resolve16 = (path3, options = {}) => {
             if (!isSetupDone) throw new Error('Cannot call "resolve" before plugin setup has completed');
             if (typeof path3 !== "string") throw new Error(`The path to resolve must be a string`);
             let keys2 = /* @__PURE__ */ Object.create(null);
@@ -236368,7 +236416,7 @@ is not a problem with esbuild. You need to fix your environment instead.
           };
           let promise2 = setup({
             initialOptions,
-            resolve: resolve15,
+            resolve: resolve16,
             onStart(callback) {
               let registeredText = `This error came from the "onStart" callback registered here:`;
               let registeredNote = extractCallerV8(new Error(registeredText), streamIn, "onStart");
@@ -237106,7 +237154,7 @@ More information: The file containing the code for esbuild's JavaScript API (${_
       }
     };
     var version2 = "0.28.1";
-    var build4 = (options) => ensureServiceIsRunning().build(options);
+    var build3 = (options) => ensureServiceIsRunning().build(options);
     var context2 = (buildOptions) => ensureServiceIsRunning().context(buildOptions);
     var transform2 = (input, options) => ensureServiceIsRunning().transform(input, options);
     var formatMessages = (messages, options) => ensureServiceIsRunning().formatMessages(messages, options);
@@ -237255,46 +237303,46 @@ More information: The file containing the code for esbuild's JavaScript API (${_
         }
       };
       longLivedService = {
-        build: (options) => new Promise((resolve15, reject2) => {
+        build: (options) => new Promise((resolve16, reject2) => {
           service.buildOrContext({
             callName: "build",
             refs,
             options,
             isTTY: isTTY(),
             defaultWD,
-            callback: (err, res) => err ? reject2(err) : resolve15(res)
+            callback: (err, res) => err ? reject2(err) : resolve16(res)
           });
         }),
-        context: (options) => new Promise((resolve15, reject2) => service.buildOrContext({
+        context: (options) => new Promise((resolve16, reject2) => service.buildOrContext({
           callName: "context",
           refs,
           options,
           isTTY: isTTY(),
           defaultWD,
-          callback: (err, res) => err ? reject2(err) : resolve15(res)
+          callback: (err, res) => err ? reject2(err) : resolve16(res)
         })),
-        transform: (input, options) => new Promise((resolve15, reject2) => service.transform({
+        transform: (input, options) => new Promise((resolve16, reject2) => service.transform({
           callName: "transform",
           refs,
           input,
           options: options || {},
           isTTY: isTTY(),
           fs: fsAsync,
-          callback: (err, res) => err ? reject2(err) : resolve15(res)
+          callback: (err, res) => err ? reject2(err) : resolve16(res)
         })),
-        formatMessages: (messages, options) => new Promise((resolve15, reject2) => service.formatMessages({
+        formatMessages: (messages, options) => new Promise((resolve16, reject2) => service.formatMessages({
           callName: "formatMessages",
           refs,
           messages,
           options,
-          callback: (err, res) => err ? reject2(err) : resolve15(res)
+          callback: (err, res) => err ? reject2(err) : resolve16(res)
         })),
-        analyzeMetafile: (metafile, options) => new Promise((resolve15, reject2) => service.analyzeMetafile({
+        analyzeMetafile: (metafile, options) => new Promise((resolve16, reject2) => service.analyzeMetafile({
           callName: "analyzeMetafile",
           refs,
           metafile: typeof metafile === "string" ? metafile : JSON.stringify(metafile),
           options,
-          callback: (err, res) => err ? reject2(err) : resolve15(res)
+          callback: (err, res) => err ? reject2(err) : resolve16(res)
         }))
       };
       return longLivedService;
@@ -237372,13 +237420,13 @@ error: ${text2}`);
         worker.postMessage(msg);
         let status = Atomics.wait(sharedBufferView, 0, 0);
         if (status !== "ok" && status !== "not-equal") throw new Error("Internal error: Atomics.wait() failed: " + status);
-        let { message: { id: id2, resolve: resolve15, reject: reject2, properties } } = worker_threads2.receiveMessageOnPort(mainPort);
+        let { message: { id: id2, resolve: resolve16, reject: reject2, properties } } = worker_threads2.receiveMessageOnPort(mainPort);
         if (id !== id2) throw new Error(`Internal error: Expected id ${id} but got id ${id2}`);
         if (reject2) {
           applyProperties(reject2, properties);
           throw reject2;
         }
-        return resolve15;
+        return resolve16;
       };
       worker.unref();
       return {
@@ -237462,7 +237510,7 @@ error: ${text2}`);
 });
 
 // node_modules/@intentius/chant/dist/discovery/sandbox/bundle.js
-import { existsSync as existsSync5, mkdtempSync, readFileSync as readFileSync4, realpathSync as realpathSync2, rmSync, statSync as statSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync6, mkdtempSync, readFileSync as readFileSync4, realpathSync as realpathSync2, rmSync, statSync as statSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { createRequire as createRequire3 } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname as dirname8, join as join7, resolve as resolvePath } from "node:path";
@@ -237474,9 +237522,9 @@ function fastResolvePackage(specifier, fromDir) {
   let dir = fromDir;
   for (; ; ) {
     const packageDir = join7(dir, "node_modules", specifier);
-    if (existsSync5(packageDir)) {
+    if (existsSync6(packageDir)) {
       const pkgJsonPath = join7(packageDir, "package.json");
-      if (!existsSync5(pkgJsonPath))
+      if (!existsSync6(pkgJsonPath))
         return void 0;
       let pkg;
       try {
@@ -237490,7 +237538,7 @@ function fastResolvePackage(specifier, fromDir) {
       const main3 = pkg.main;
       const entry = typeof main3 === "string" ? main3 : "index.js";
       const resolved = resolvePath(packageDir, entry);
-      if (!existsSync5(resolved) || !statSync2(resolved).isFile())
+      if (!existsSync6(resolved) || !statSync2(resolved).isFile())
         return void 0;
       try {
         return realpathSync2(resolved);
@@ -237525,10 +237573,10 @@ function externalTrustedPackagesPlugin() {
   }
   const plugin = {
     name: "chant-sandbox-external-trusted-packages",
-    setup(build4) {
+    setup(build3) {
       for (const [name, path] of resolved) {
         const filter = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
-        build4.onResolve({ filter }, () => ({ path, external: true }));
+        build3.onResolve({ filter }, () => ({ path, external: true }));
       }
     }
   };
@@ -237537,8 +237585,8 @@ function externalTrustedPackagesPlugin() {
 function chantCoreSourcePlugin() {
   return {
     name: "chant-sandbox-core-source",
-    setup(build4) {
-      build4.onResolve({ filter: /^@intentius\/chant(?:\/.*)?$/ }, (args) => {
+    setup(build3) {
+      build3.onResolve({ filter: /^@intentius\/chant(?:\/.*)?$/ }, (args) => {
         if (!args.importer)
           return void 0;
         const target = chantPackageSourceTarget(args.path, args.importer);
@@ -237553,9 +237601,16 @@ async function bundleDriver(driverSource) {
   writeFileSync2(entryPath, driverSource, "utf-8");
   const outfile = join7(bundleDir, "child.mjs");
   const { plugin, readPaths } = externalTrustedPackagesPlugin();
+  let esbuildModule;
+  try {
+    esbuildModule = await importOptionalPeer("esbuild", "bundle a TypeScript project", () => Promise.resolve().then(() => __toESM(require_main(), 1)));
+  } catch (err) {
+    rmSync(bundleDir, { recursive: true, force: true });
+    throw err;
+  }
   const start = performance.now();
   try {
-    await esbuild.build({
+    await esbuildModule.build({
       entryPoints: [entryPath],
       outfile,
       bundle: true,
@@ -237578,11 +237633,11 @@ async function bundleDriver(driverSource) {
   const bytes = statSync2(outfile).size;
   return { bundlePath: outfile, bundleDir, externalReadPaths: readPaths, durationMs, bytes };
 }
-var esbuild, HERE, require2, EXTERNAL_PACKAGES;
+var HERE, require2, EXTERNAL_PACKAGES;
 var init_bundle = __esm({
   "node_modules/@intentius/chant/dist/discovery/sandbox/bundle.js"() {
-    esbuild = __toESM(require_main(), 1);
     init_module_source();
+    init_optional_peer();
     init_ts_loader();
     HERE = import.meta.dirname;
     require2 = createRequire3(import.meta.url);
@@ -237678,16 +237733,16 @@ var init_driver = __esm({
     init_ts_loader();
     HERE2 = chantSourceDir(import.meta.url);
     DISCOVERY_DIR = join8(HERE2, "..");
-    COLLECT_MODULE = join8(DISCOVERY_DIR, "collect.ts");
-    RESOLVE_MODULE = join8(DISCOVERY_DIR, "resolve.ts");
-    ENTITY_WIRE_CODEC_MODULE = join8(DISCOVERY_DIR, "entity-wire-codec.ts");
-    CHILD_ERRORS_MODULE = join8(HERE2, "child-errors.ts");
-    PROVENANCE_MODULE = join8(dirname9(DISCOVERY_DIR), "provenance.ts");
-    CONFIG_WIRE_MODULE = join8(HERE2, "config-wire.ts");
-    POLICY_WIRE_MODULE = join8(HERE2, "policy-wire.ts");
-    POST_SYNTH_MODULE = join8(dirname9(DISCOVERY_DIR), "lint", "post-synth.ts");
-    PARAMS_MODULE = join8(dirname9(DISCOVERY_DIR), "params.ts");
-    INTEROP_MODULE = join8(dirname9(DISCOVERY_DIR), "module-interop.ts");
+    COLLECT_MODULE = chantModule(join8(DISCOVERY_DIR, "collect.ts"));
+    RESOLVE_MODULE = chantModule(join8(DISCOVERY_DIR, "resolve.ts"));
+    ENTITY_WIRE_CODEC_MODULE = chantModule(join8(DISCOVERY_DIR, "entity-wire-codec.ts"));
+    CHILD_ERRORS_MODULE = chantModule(join8(HERE2, "child-errors.ts"));
+    PROVENANCE_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "provenance.ts"));
+    CONFIG_WIRE_MODULE = chantModule(join8(HERE2, "config-wire.ts"));
+    POLICY_WIRE_MODULE = chantModule(join8(HERE2, "policy-wire.ts"));
+    POST_SYNTH_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "lint", "post-synth.ts"));
+    PARAMS_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "params.ts"));
+    INTEROP_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "module-interop.ts"));
   }
 });
 
@@ -237937,7 +237992,7 @@ var init_config_sandbox = __esm({
 // node_modules/@intentius/chant/dist/lexicon-module.js
 import { createRequire as createRequire4 } from "node:module";
 import { dirname as dirname11, isAbsolute, join as join9, relative as relative2, resolve as resolve6, sep as sep3 } from "node:path";
-import { pathToFileURL as pathToFileURL3 } from "node:url";
+import { pathToFileURL as pathToFileURL4 } from "node:url";
 function lexiconDeclarationName(entry) {
   return typeof entry === "string" ? entry : entry.name;
 }
@@ -238035,11 +238090,11 @@ function resolveFromProject(spec, fromDir = process.cwd()) {
 }
 function resolveImport(spec) {
   if (isAbsolute(spec))
-    return pathToFileURL3(spec).href;
+    return pathToFileURL4(spec).href;
   const resolveMeta = import.meta.resolve;
   if (typeof resolveMeta === "function")
     return resolveMeta(spec);
-  return pathToFileURL3(createRequire4(import.meta.url).resolve(spec)).href;
+  return pathToFileURL4(createRequire4(import.meta.url).resolve(spec)).href;
 }
 async function importLexiconPackage(spec, fromDir = process.cwd()) {
   const pkg = packageNameOf(spec);
@@ -238070,7 +238125,7 @@ async function importFromProject(spec, fromDir, err) {
   if (resolved === void 0)
     throw err;
   ensureTypeScriptLoaderFor(resolved);
-  return esModuleNamespace(await import(pathToFileURL3(resolved).href));
+  return esModuleNamespace(await import(pathToFileURL4(resolved).href));
 }
 var modulePaths, moduleRoots;
 var init_lexicon_module = __esm({
@@ -238120,7 +238175,7 @@ var init_decide_config = __esm({
 });
 
 // node_modules/@intentius/chant/dist/lifecycle/publish-declaration.js
-var envName, sbomField, NpmPublishSchema, OciPublishSchema, ForgePublishSchema, HomebrewPublishSchema, MarketplacePublishSchema, TauriUpdaterPublishSchema, PublishDeclarationSchema;
+var envName, sbomField, NpmPublishSchema, OciPublishSchema, ForgePublishSchema, HomebrewPublishSchema, MarketplacePublishSchema, TauriUpdaterPublishSchema, PypiPublishSchema, CargoPublishSchema, McpRegistryPublishSchema, INDEX_PRESETS, IndexPublishSchema, PublishDeclarationSchema;
 var init_publish_declaration = __esm({
   "node_modules/@intentius/chant/dist/lifecycle/publish-declaration.js"() {
     init_zod();
@@ -238195,26 +238250,37 @@ var init_publish_declaration = __esm({
       /** Files to attach, relative to the member. May be empty when `notes` gives the release its body. */
       assets: external_exports.array(external_exports.string().min(1)),
       /**
-       * The release's notes (#4658): a section of a file in the member, sent as
-       * the release's body on GitHub and Forgejo and its description on GitLab.
+       * The release's notes (#4658), sent as the release's body on GitHub and
+       * Forgejo and its description on GitLab: a section of a file in the
+       * member, notes generated for the release (#5153), or both, between
+       * `before` and `after`. They are decided when the target stages, so the
+       * draft release carries them before the reveal.
        */
       notes: external_exports.object({
-        /** The file, relative to the member, such as `CHANGELOG.md` or a docs site's changes page. */
-        file: external_exports.string().min(1),
+        /** The file, relative to the member, such as `CHANGELOG.md` or a docs site's changes page. Needs `heading`. */
+        file: external_exports.string().min(1).optional(),
         /**
          * The heading that starts the section, such as `## In {version}` or `## [{version}]`. `{label}`, `{version}`
          * (the label from its first digit) and `{tag}` are filled in. The section runs to the next heading of the same
          * level or higher.
          */
-        heading: external_exports.string().regex(/^#{1,6} \S/, "a markdown heading, such as ## {version}"),
+        heading: external_exports.string().regex(/^#{1,6} \S/, "a markdown heading, such as ## {version}").optional(),
         /** Links that start with `/` are made absolute against this, such as `https://docs.example.com`. */
         linkBase: external_exports.string().url().optional(),
-        /** A paragraph before the section, with the same placeholders. */
+        /**
+         * Notes generated for the release, after the file's section (#5153). `forge`: the forge's own, GitHub's
+         * generate-notes or GitLab's changelog from `Changelog:` commit trailers; Forgejo has none and is refused.
+         * `commits`: chant's own, from the conventional commits in the member since its previous release.
+         */
+        generate: external_exports.enum(["forge", "commits"]).optional(),
+        /** With `generate: "commits"`: the commit types listed. Default `feat`, `fix` and `perf`. A breaking change is listed whatever its type; `*` lists every commit. */
+        types: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+        /** A paragraph before the notes, with the same placeholders. */
         before: external_exports.string().min(1).optional(),
-        /** A paragraph after the section, with the same placeholders. */
+        /** A paragraph after the notes, with the same placeholders. */
         after: external_exports.string().min(1).optional()
-      }).strict().optional(),
-      /** The forge release's tag. Default: the tag the cut made, `release/<label>` or `release/<member>/<label>`. */
+      }).strict().refine((n) => n.file === void 0 === (n.heading === void 0), { message: "notes.file and notes.heading go together", path: ["heading"] }).refine((n) => n.file !== void 0 || n.generate !== void 0, { message: "notes need a file section, generate, or both", path: ["generate"] }).refine((n) => n.types === void 0 || n.generate === "commits", { message: 'notes.types applies to generate: "commits"', path: ["types"] }).optional(),
+      /** The forge release's tag. Default: the tag the cut made, from `release.tag` (#5150; `release/<label>` or `release/<member>/<label>` when unset). */
       tag: external_exports.string().min(1).optional(),
       /** The variable holding the token. Default `GITHUB_TOKEN`, `GITLAB_TOKEN` (then `CI_JOB_TOKEN`), or `FORGEJO_TOKEN`. */
       tokenEnv: envName.optional(),
@@ -238307,29 +238373,184 @@ var init_publish_declaration = __esm({
       /** The variable holding the token. Default `GITHUB_TOKEN`. */
       tokenEnv: envName.optional()
     }).strict();
-    PublishDeclarationSchema = external_exports.discriminatedUnion("type", [NpmPublishSchema, OciPublishSchema, ForgePublishSchema, HomebrewPublishSchema, MarketplacePublishSchema, TauriUpdaterPublishSchema]);
+    PypiPublishSchema = external_exports.object({
+      type: external_exports.literal("pypi"),
+      /**
+       * The wheels and sdists, relative to the member: a file, a directory
+       * (every `.whl`, `.tar.gz` and `.zip` in it), or `artifact:<name>` for the
+       * files the release records for that `release.artifacts` entry.
+       */
+      files: external_exports.array(external_exports.string().min(1)).min(1),
+      /** `pypi` (the default) or `testpypi`. */
+      index: external_exports.enum(["pypi", "testpypi"]).optional(),
+      /** Another index's upload URL, such as `https://pypi.example.com/legacy/`. Needs `simpleUrl`. */
+      uploadUrl: external_exports.string().url().optional(),
+      /** That index's simple API root, such as `https://pypi.example.com/simple/`, which the stage and reveal read. */
+      simpleUrl: external_exports.string().url().optional(),
+      /**
+       * `token` reads an API token from `tokenEnv`. `trusted-publishing`
+       * exchanges the run's OIDC ID token for a short-lived upload token, on
+       * PyPI and TestPyPI only. Unset: a token when `tokenEnv`'s variable is
+       * set, else trusted publishing when the run has an OIDC ID token.
+       */
+      auth: external_exports.enum(["token", "trusted-publishing"]).optional(),
+      /** The variable holding the API token. Default `PYPI_TOKEN`, or `TEST_PYPI_TOKEN` for TestPyPI. */
+      tokenEnv: envName.optional(),
+      /** The variable holding the user name the token is sent with. Default: `__token__`, as PyPI's API tokens take. */
+      usernameEnv: envName.optional(),
+      /**
+       * `false` publishes wheels without an SBOM under the `supply-chain`
+       * group, which otherwise refuses a wheel that carries none in its
+       * `.dist-info/sboms/` (PEP 770).
+       */
+      sbom: external_exports.literal(false).optional(),
+      /**
+       * Upload the PEP 740 attestations beside each file, `<file>.<name>.attestation`
+       * as `pypi-attestations sign` writes them. Default `true`. chant does not
+       * write them.
+       */
+      attestations: external_exports.boolean().optional()
+    }).strict().refine((d) => d.uploadUrl === void 0 === (d.simpleUrl === void 0), { message: "uploadUrl and simpleUrl go together", path: ["simpleUrl"] }).refine((d) => d.uploadUrl === void 0 || d.index === void 0, { message: "index names PyPI or TestPyPI; uploadUrl names another index, so set one of them", path: ["index"] }).refine((d) => d.uploadUrl === void 0 || d.auth !== "trusted-publishing", { message: "trusted publishing is PyPI's and TestPyPI's; another index takes a token", path: ["auth"] }).refine((d) => d.auth !== "trusted-publishing" || d.tokenEnv === void 0 && d.usernameEnv === void 0, { message: "auth: trusted-publishing reads no token", path: ["tokenEnv"] });
+    CargoPublishSchema = external_exports.object({
+      type: external_exports.literal("cargo"),
+      /** The `Cargo.toml` of the workspace or the crate, relative to the member. Default `Cargo.toml`. */
+      manifest: external_exports.string().min(1).optional(),
+      /** The crates to publish, by package name. Default: every workspace member whose `publish` allows the registry. */
+      crates: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+      /** A registry named in the project's `.cargo/config.toml`, passed as `cargo publish --registry`. Default: crates.io. Needs `index`. */
+      registry: external_exports.string().regex(/^[A-Za-z0-9_-]+$/, "a registry name from .cargo/config.toml").optional(),
+      /** The registry's sparse index, such as `sparse+https://cargo.example.com/index/`, which the stage and reveal read. Default: crates.io's. */
+      index: external_exports.string().regex(/^(sparse\+)?https?:\/\//, "a sparse index URL").optional(),
+      /** crates.io's API root, for trusted publishing. Default `https://crates.io`. */
+      api: external_exports.string().url().optional(),
+      /**
+       * `token` reads a registry token from `tokenEnv`. `trusted-publishing`
+       * exchanges the run's OIDC ID token for a short-lived crates.io token,
+       * revoked after the publish. Unset: a token when `tokenEnv`'s variable is
+       * set, else trusted publishing when the run has an OIDC ID token.
+       */
+      auth: external_exports.enum(["token", "trusted-publishing"]).optional(),
+      /** The variable holding the token. Default `CARGO_REGISTRY_TOKEN`, or `CARGO_REGISTRIES_<NAME>_TOKEN` with `registry`, the variables cargo reads. */
+      tokenEnv: envName.optional(),
+      /** `false` publishes under the `supply-chain` group, which otherwise refuses this target: a registry keeps no SBOM beside a crate. */
+      sbom: external_exports.literal(false).optional()
+    }).strict().refine((d) => d.registry === void 0 || d.index !== void 0, { message: "a registry other than crates.io needs its sparse index", path: ["index"] }).refine((d) => d.registry === void 0 || d.auth !== "trusted-publishing", { message: "trusted publishing is crates.io's; another registry takes a token", path: ["auth"] }).refine((d) => d.auth !== "trusted-publishing" || d.tokenEnv === void 0, { message: "auth: trusted-publishing reads no token", path: ["tokenEnv"] });
+    McpRegistryPublishSchema = external_exports.object({
+      type: external_exports.literal("mcp-registry"),
+      /** The `server.json`, relative to the member. Default `server.json`. Its `version` and each package's version must be the release's label. */
+      server: external_exports.string().min(1).optional(),
+      /** The registry's root. Default `https://registry.modelcontextprotocol.io`. */
+      registry: external_exports.string().url().optional(),
+      /**
+       * How the target gets a registry token. `"github-oidc"` (the default)
+       * exchanges the GitHub Actions OIDC token of a job with `id-token: write`.
+       * `"github-token"` exchanges a GitHub token read from `tokenEnv`, default
+       * `MCP_GITHUB_TOKEN`. `"registry-token"` sends a registry token read from
+       * `tokenEnv`, default `MCP_REGISTRY_TOKEN`, such as one `mcp-publisher`
+       * got by a DNS or HTTP login.
+       */
+      auth: external_exports.enum(["github-oidc", "github-token", "registry-token"]).optional(),
+      /** The variable holding the token, under `github-token` or `registry-token`. */
+      tokenEnv: envName.optional()
+    }).strict();
+    INDEX_PRESETS = ["krew", "winget", "scoop", "homebrew-core", "homebrew-tap", "zed", "artifacthub"];
+    IndexPublishSchema = external_exports.object({
+      type: external_exports.literal("index"),
+      /** Defaults for a known index: its repository, mode, manifest path and pull request title. */
+      preset: external_exports.enum(INDEX_PRESETS).optional(),
+      /** The index repository, `owner/name`. Default: the preset's, where it has one (krew, winget, homebrew-core, zed). */
+      repo: external_exports.string().regex(/^[^/\s]+\/[^/\s]+$/, "owner/name").optional(),
+      /** The package's name in the index: the krew plugin, the winget `PackageIdentifier`, the Scoop app, the formula, the Zed extension id, the Artifact Hub package. */
+      name: external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9._+-]*$/, "a name of letters, digits, '.', '_', '+' and '-'"),
+      /** `commit` pushes to `branch` of `repo`; `pull-request` opens a pull request on `repo` from a branch of `fork`. Default: the preset's, else `pull-request`. */
+      mode: external_exports.enum(["commit", "pull-request"]).optional(),
+      /** One manifest template, relative to the member, written to `path`. */
+      template: external_exports.string().min(1).optional(),
+      /** Where `template` goes in the index. Default: the preset's path. `{name}`, `{version}`, `{label}`, `{letter}` (the name's first letter, lowercased) and `{namePath}` (the name with each `.` a `/`) are filled in. */
+      path: external_exports.string().min(1).optional(),
+      /** More manifests: each path in the index, with the same placeholders as `path`, and its template relative to the member. */
+      files: external_exports.record(external_exports.string().min(1), external_exports.string().min(1)).optional(),
+      /** The release's files the manifests download: `artifact:<name>` for an entry of `release.artifacts`, or a path the release records. Each SHA-256 is the one the release records. */
+      assets: external_exports.array(external_exports.string().min(1)).optional(),
+      /** Where each asset is downloaded from: `{tag}`, `{label}`, `{version}` and `{name}` (its file name) are filled in. Needed with `assets`. */
+      url: external_exports.string().min(1).optional(),
+      /** The branch of `repo` the index is read from, and the base of a pull request. Default: the repository's default branch. */
+      branch: external_exports.string().min(1).optional(),
+      /** `pull-request` only: the repository the branch is pushed to, `owner/name`. Default: the token's user's fork of `repo`, made when it has none. `repo` itself opens the pull request from a branch of `repo`. */
+      fork: external_exports.string().regex(/^[^/\s]+\/[^/\s]+$/, "owner/name").optional(),
+      /** The commit message and pull request title: `{name}`, `{version}`, `{label}` and `{tag}` are filled in. Default: the preset's. */
+      title: external_exports.string().min(1).optional(),
+      /** The pull request's body, with the same placeholders. */
+      body: external_exports.string().min(1).optional(),
+      /** The GitHub API root. Default `$GITHUB_API_URL`, else `https://api.github.com`. */
+      api: external_exports.string().url().optional(),
+      /** The variable holding the token. Default `HOMEBREW_TAP_TOKEN` under the homebrew-tap preset, else `INDEX_TOKEN`. */
+      tokenEnv: envName.optional(),
+      /** `commit` only: the variable holding an SSH private key that may push to `repo`, such as a deploy key. Set, the target pushes with git over SSH and reads no token. */
+      sshKeyEnv: envName.optional(),
+      /** What a refusal from the index does: `warn` (the default) prints a warning and leaves the target unrecorded, so a run of the same publish tries again; `fail` fails the publish. */
+      onRefusal: external_exports.enum(["fail", "warn"]).optional()
+    }).strict().refine((d) => d.sshKeyEnv === void 0 || d.tokenEnv === void 0, { message: "keep one of tokenEnv and sshKeyEnv", path: ["sshKeyEnv"] }).refine((d) => d.path === void 0 || d.template !== void 0, { message: "path is where template goes; name a template", path: ["path"] }).refine((d) => (d.assets?.length ?? 0) === 0 || d.url !== void 0, { message: "assets need url, the pattern each is downloaded from", path: ["url"] });
+    PublishDeclarationSchema = external_exports.discriminatedUnion("type", [
+      NpmPublishSchema,
+      OciPublishSchema,
+      ForgePublishSchema,
+      HomebrewPublishSchema,
+      MarketplacePublishSchema,
+      TauriUpdaterPublishSchema,
+      PypiPublishSchema,
+      CargoPublishSchema,
+      McpRegistryPublishSchema,
+      IndexPublishSchema
+    ]);
   }
 });
 
 // node_modules/@intentius/chant/dist/config-environments.js
-var EXECUTOR_FORGES;
+var EXECUTOR_FORGES, EXECUTOR_CI_SYSTEMS;
 var init_config_environments = __esm({
   "node_modules/@intentius/chant/dist/config-environments.js"() {
     EXECUTOR_FORGES = ["github", "gitlab", "forgejo"];
+    EXECUTOR_CI_SYSTEMS = ["github", "gitlab", "forgejo", "prow"];
+  }
+});
+
+// node_modules/@intentius/chant/dist/ci-system.js
+function defaultCiOf(forge) {
+  return forge;
+}
+function defaultForgeOf(ci) {
+  return CI_SYSTEM_FORGES[ci][0];
+}
+function forgeCiProblem(forge, ci) {
+  const forges = CI_SYSTEM_FORGES[ci];
+  if (forges.includes(forge))
+    return void 0;
+  return `ci: ${ci} runs jobs for a repository on ${forges.join(" or ")}, and this forge is ${forge}`;
+}
+var CI_SYSTEM_FORGES;
+var init_ci_system = __esm({
+  "node_modules/@intentius/chant/dist/ci-system.js"() {
+    CI_SYSTEM_FORGES = {
+      github: ["github"],
+      gitlab: ["gitlab"],
+      forgejo: ["forgejo"],
+      prow: ["github"]
+    };
   }
 });
 
 // node_modules/@intentius/chant/dist/config.js
-import { existsSync as existsSync6, readFileSync as readFileSync5 } from "fs";
+import { existsSync as existsSync7, readFileSync as readFileSync5 } from "fs";
 import { dirname as dirname12, join as join10, resolve as resolve7 } from "path";
 async function loadChantConfig(dir) {
   const tsPath = join10(dir, "chant.config.ts");
-  if (existsSync6(tsPath)) {
+  if (existsSync7(tsPath)) {
     const config2 = await evaluateProjectConfig(tsPath, dir);
     return { config: normalizeConfig(config2, tsPath), configPath: tsPath };
   }
   const jsonPath = join10(dir, "chant.config.json");
-  if (existsSync6(jsonPath)) {
+  if (existsSync7(jsonPath)) {
     const { readFileSync: readFileSync18 } = await import("fs");
     const content = readFileSync18(jsonPath, "utf-8");
     const parsed = JSON.parse(content);
@@ -238429,7 +238650,7 @@ function normalizeConfig(raw, source) {
   }
   return raw;
 }
-var S3StoreSettingsShape, EnvironmentEntrySchema, LexiconEntrySchema, ChantConfigSchema, DEFAULT_CHANT_CONFIG, ROOT_SOURCE_EXCLUDES, LINT_FRAGMENT_KEYS, isCommentKey, PROJECT_CONFIG_KEYS, InvalidChantConfigError;
+var S3StoreSettingsShape, RELEASE_TOOLCHAIN_NAMES, ReleaseVersionFileSchema, ReleaseToolchainSchema, EnvironmentEntrySchema, LexiconEntrySchema, ChantConfigSchema, DEFAULT_CHANT_CONFIG, ROOT_SOURCE_EXCLUDES, LINT_FRAGMENT_KEYS, isCommentKey, PROJECT_CONFIG_KEYS, InvalidChantConfigError;
 var init_config = __esm({
   "node_modules/@intentius/chant/dist/config.js"() {
     init_zod();
@@ -238440,6 +238661,7 @@ var init_config = __esm({
     init_decide_config();
     init_publish_declaration();
     init_config_environments();
+    init_ci_system();
     init_config_environments();
     S3StoreSettingsShape = {
       bucket: external_exports.string().min(1),
@@ -238453,6 +238675,14 @@ var init_config = __esm({
         sessionToken: external_exports.string().min(1).optional()
       }).strict().optional()
     };
+    RELEASE_TOOLCHAIN_NAMES = ["node", "go", "python", "rust", "java"];
+    ReleaseVersionFileSchema = external_exports.union([
+      external_exports.string().min(1),
+      external_exports.object({ path: external_exports.string().min(1), format: external_exports.enum(["cargo", "cargo-lock", "pyproject", "helm", "mcp-server", "krew", "artifacthub"]).optional(), appVersion: external_exports.boolean().optional(), crates: external_exports.array(external_exports.string().min(1)).min(1).optional() }).strict(),
+      external_exports.object({ path: external_exports.string().min(1), field: external_exports.string().min(1), prefix: external_exports.string().optional() }).strict(),
+      external_exports.object({ path: external_exports.string().min(1), pattern: external_exports.string().min(1), prefix: external_exports.string().optional() }).strict()
+    ]);
+    ReleaseToolchainSchema = external_exports.union([external_exports.enum(RELEASE_TOOLCHAIN_NAMES), external_exports.object({ name: external_exports.enum(RELEASE_TOOLCHAIN_NAMES), version: external_exports.string().min(1) }).strict()]);
     EnvironmentEntrySchema = external_exports.union([
       external_exports.string().min(1),
       external_exports.object({
@@ -238461,8 +238691,14 @@ var init_config = __esm({
         canary: external_exports.boolean().optional(),
         executor: external_exports.object({
           forge: external_exports.enum(EXECUTOR_FORGES),
+          // #5170: the CI system that runs the workflow, when it is not the forge's own.
+          ci: external_exports.enum(EXECUTOR_CI_SYSTEMS).optional(),
           workflow: external_exports.string().min(1)
-        }).strict().optional()
+        }).strict().superRefine((e, ctx) => {
+          const problem = e.ci === void 0 ? void 0 : forgeCiProblem(e.forge, e.ci);
+          if (problem)
+            ctx.addIssue({ code: "custom", message: problem, path: ["ci"] });
+        }).optional()
       })
     ]);
     LexiconEntrySchema = external_exports.union([
@@ -238521,18 +238757,82 @@ var init_config = __esm({
             args: external_exports.record(external_exports.string(), external_exports.string()).optional()
           }).strict()
         ])).optional(),
+        // #5151: files the cut builds once and records, handed to the publish job.
+        artifacts: external_exports.array(external_exports.union([
+          external_exports.object({
+            name: external_exports.string().min(1),
+            // #5183: no build command records the files something else built, such as a release.workflow.builds job.
+            build: external_exports.string().min(1).optional(),
+            builtBy: external_exports.union([external_exports.string().min(1), external_exports.array(external_exports.string().min(1)).min(1)]).optional(),
+            outputs: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+            platforms: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+            archive: external_exports.union([
+              external_exports.literal(true),
+              external_exports.object({
+                name: external_exports.string().min(1).optional(),
+                dir: external_exports.string().min(1).optional(),
+                files: external_exports.array(external_exports.string().min(1)).optional(),
+                format: external_exports.enum(["tar.gz", "zip"]).optional()
+              }).strict()
+            ]).optional()
+          }).strict(),
+          external_exports.object({
+            name: external_exports.string().min(1),
+            goreleaser: external_exports.object({ config: external_exports.string().min(1).optional(), dist: external_exports.string().min(1).optional(), types: external_exports.array(external_exports.string().min(1)).min(1).optional() }).strict()
+          }).strict(),
+          external_exports.object({ name: external_exports.string().min(1), checksums: external_exports.string().min(1), of: external_exports.array(external_exports.string().min(1)).min(1).optional() }).strict()
+        ])).optional(),
         lane: external_exports.string().regex(/^[a-z0-9][a-z0-9-]*$/, "a ci.green lane name: lowercase letters, digits and dashes").optional(),
+        // #5149: what says a commit may be released.
+        green: external_exports.enum(["chant", "forge-checks", "none"]).optional(),
+        // #5157: commands a publish runs after every target has staged and before any reveals.
+        verify: external_exports.array(external_exports.union([external_exports.string().min(1), external_exports.object({ name: external_exports.string().min(1).optional(), run: external_exports.string().min(1) }).strict()])).optional(),
+        // #5165: workspace members a train publish reveals before this one, beside what the targets' names say.
+        dependsOn: external_exports.array(external_exports.string().min(1)).optional(),
+        // #5134: tag prefixes of releases cut before members had ledgers, read as a last release by `chant release changed`.
+        legacyTags: external_exports.array(external_exports.string().min(1)).optional(),
+        // #5191: what a breaking change does to a 0.x version when the label comes from commits.
+        breakingOnZero: external_exports.enum(["minor", "major"]).optional(),
+        // #5150: the tag a cut makes, as a template, and the floating tag a publish moves.
+        tag: external_exports.union([external_exports.string().min(1), external_exports.object({ name: external_exports.string().min(1), floating: external_exports.string().min(1).optional() }).strict()]).optional(),
+        // #5164: Sigstore signatures and SLSA provenance at publish; on under the supply-chain group unless false.
+        signing: external_exports.union([
+          external_exports.boolean(),
+          external_exports.object({ identity: external_exports.string().min(1).optional(), issuer: external_exports.string().min(1).optional() }).strict()
+        ]).optional(),
         // #4840: the label stamped into these packages' package.json at the cut and the publish.
         version: external_exports.object({
-          packages: external_exports.array(external_exports.string().min(1)).min(1),
-          lockfile: external_exports.union([external_exports.string().min(1), external_exports.literal(false)]).optional()
+          packages: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+          lockfile: external_exports.union([external_exports.string().min(1), external_exports.literal(false)]).optional(),
+          // #5155: what happens to the ranges of workspace dependencies.
+          ranges: external_exports.enum(["keep", "exact", "caret", "train"]).optional(),
+          // #5156: other manifests the label goes into, by format, field or pattern.
+          files: external_exports.array(ReleaseVersionFileSchema).min(1).optional()
+        }).strict().refine((v) => v.packages !== void 0 || v.files !== void 0, { message: "release.version names packages, files, or both" }).optional(),
+        // #5154: a workspace root's members release as a train: the environment it is recorded for, and how it is cut and built.
+        train: external_exports.object({
+          env: external_exports.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "an environment name: letters, digits, dots, dashes and underscores"),
+          first: external_exports.enum(["each", "together"]).optional(),
+          check: external_exports.array(external_exports.string().min(1)).optional(),
+          buildDependencies: external_exports.union([external_exports.string().min(1), external_exports.literal(false)]).optional()
         }).strict().optional(),
         workflow: external_exports.object({
           trigger: external_exports.enum(["tag", "dispatch"]).optional(),
           gate: external_exports.enum(["last-green", "head"]).optional(),
-          install: external_exports.string().min(1).optional(),
+          install: external_exports.union([external_exports.string().min(1), external_exports.literal(false)]).optional(),
           build: external_exports.union([external_exports.string().min(1), external_exports.literal(false)]).optional(),
           chant: external_exports.string().min(1).optional(),
+          // #5152: the toolchains the jobs set up, and per-platform build jobs before the cut.
+          toolchains: external_exports.union([external_exports.array(ReleaseToolchainSchema), external_exports.literal(false)]).optional(),
+          builds: external_exports.array(external_exports.object({
+            name: external_exports.string().regex(/^[a-z0-9][a-z0-9-]*$/, "a job name: lowercase letters, digits and dashes"),
+            runner: external_exports.union([external_exports.string().min(1), external_exports.array(external_exports.string().min(1)).min(1)]),
+            build: external_exports.string().min(1),
+            outputs: external_exports.array(external_exports.string().min(1)).min(1),
+            install: external_exports.union([external_exports.string().min(1), external_exports.literal(false)]).optional(),
+            toolchains: external_exports.union([external_exports.array(ReleaseToolchainSchema), external_exports.literal(false)]).optional(),
+            env: external_exports.record(external_exports.string(), external_exports.string()).optional()
+          }).strict()).optional(),
           after: external_exports.array(external_exports.string().min(1)).optional(),
           permissions: external_exports.record(external_exports.string(), external_exports.enum(["read", "write"])).optional(),
           env: external_exports.record(external_exports.string(), external_exports.string()).optional(),
@@ -238540,7 +238840,9 @@ var init_config = __esm({
             external_exports.object({ uses: external_exports.string().min(1), with: external_exports.record(external_exports.string(), external_exports.union([external_exports.string(), external_exports.number(), external_exports.boolean()])).optional(), env: external_exports.record(external_exports.string(), external_exports.string()).optional() }).strict(),
             external_exports.object({ run: external_exports.string().min(1), env: external_exports.record(external_exports.string(), external_exports.string()).optional() }).strict()
           ])).optional(),
-          file: external_exports.string().regex(/^[^/][^\0]*$/, "a path from the repository root").refine((f) => !f.split("/").includes(".."), "a path inside the repository").optional()
+          file: external_exports.string().regex(/^[^/][^\0]*$/, "a path from the repository root").refine((f) => !f.split("/").includes(".."), "a path inside the repository").optional(),
+          // #5161: chant release doctor before the cut (dispatch, default on) or the publish (tag, opt in).
+          doctor: external_exports.boolean().optional()
         }).strict().optional()
       }).optional(),
       // Strict: a misspelt key here would leave Ops on the local runtime with
@@ -238625,13 +238927,13 @@ var init_retention_policy = __esm({
 
 // node_modules/@intentius/chant/dist/pr-report-url.js
 import { dirname as dirname13, isAbsolute as isAbsolute2, join as join11 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 function parseReportUrl(raw, name = "--report-url") {
   const url2 = raw.trim();
   if (url2.startsWith("file://")) {
     let dir;
     try {
-      dir = fileURLToPath2(url2);
+      dir = fileURLToPath3(url2);
     } catch (err) {
       return { error: `${name} ${url2}: ${err instanceof Error ? err.message : String(err)}` };
     }
@@ -238925,6 +239227,14 @@ var init_declaration_schema = __esm({
           },
           description: "What the workspace's CI decides about its commits (#3573, ws-103). Added in schema 1 by chant 0.108.0, so a declaration that uses it sets minReader to 0.108.0 or newer.",
           properties: {
+            forge: {
+              enum: ["github", "gitlab", "forgejo"],
+              description: "The forge the repository is on (#5170): where its pull requests, comments and commit statuses live, and whose API chant reads. Absent: the forge system names, else the forge each command reads from its job or its flags. Added in schema 1 by chant 0.124.101, so a declaration that uses it sets minReader to 0.124.101 or newer."
+            },
+            system: {
+              enum: ["github", "gitlab", "forgejo", "prow"],
+              description: "The CI system that runs the repository's jobs and reads the pipeline files chant writes (#5170): github (GitHub Actions), gitlab (GitLab CI), forgejo (Forgejo Actions) or prow. Absent: the forge's own. prow runs jobs for a repository on github only, and a pair that cannot run is refused. Added in schema 1 by chant 0.124.101, so a declaration that uses it sets minReader to 0.124.101 or newer."
+            },
             green: {
               $ref: "#/$defs/ciGreen"
             },
@@ -239429,6 +239739,12 @@ var init_declaration_schema = __esm({
             },
             fields: {
               $ref: "#/$defs/memberFields"
+            },
+            runsOn: {
+              type: "string",
+              minLength: 1,
+              pattern: "^[^/\\s]+/\\S+$",
+              description: "The cluster resource this member runs on, as `<member>/<address>`: the member that holds it and its address (`infra/google_container_cluster.prod`), or its node id in the graph. chant workspace graph draws a declared edge from each Argo CD cluster Secret this member holds to that node, for a repo where the Secret's name is not the cluster's (#5101). A node it names that the graph does not hold, or more than one, is a warning and draws no edge. Added in schema 1 by chant 0.124.98, so a declaration that uses it sets minReader to 0.124.98 or newer."
             },
             links: {
               type: "array",
@@ -241575,14 +241891,14 @@ var init_identity_gate_rule = __esm({
 });
 
 // node_modules/@intentius/chant/dist/workspace/class-data.js
-import { existsSync as existsSync7, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
+import { existsSync as existsSync8, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
 import { dirname as dirname14, join as join13, posix as posix2, resolve as resolve8 } from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
 function findInstalledPackage(name, fromDir) {
   for (let dir = resolve8(fromDir); ; dir = dirname14(dir)) {
     const candidate = join13(dir, "node_modules", ...name.split("/"));
     try {
-      if (statSync4(candidate).isDirectory() && existsSync7(join13(candidate, "package.json")))
+      if (statSync4(candidate).isDirectory() && existsSync8(join13(candidate, "package.json")))
         return candidate;
     } catch {
     }
@@ -241594,7 +241910,7 @@ var CHANT_INSTALL, CORE_ROLES;
 var init_class_data = __esm({
   "node_modules/@intentius/chant/dist/workspace/class-data.js"() {
     init_identity_gate_rule();
-    CHANT_INSTALL = dirname14(fileURLToPath3(import.meta.url));
+    CHANT_INSTALL = dirname14(fileURLToPath4(import.meta.url));
     CORE_ROLES = new Set(CORE_CLASSES.map((c) => c.role).filter((r) => r !== null));
   }
 });
@@ -244964,9 +245280,9 @@ var init_jsonc = __esm({
 
 // node_modules/@intentius/chant/dist/package-version.js
 import { readFileSync as readFileSync8 } from "node:fs";
-import { fileURLToPath as fileURLToPath4 } from "node:url";
+import { fileURLToPath as fileURLToPath5 } from "node:url";
 function readChantPackageVersion() {
-  return JSON.parse(readFileSync8(fileURLToPath4(new URL("../package.json", import.meta.url)), "utf-8")).version;
+  return JSON.parse(readFileSync8(fileURLToPath5(new URL("../package.json", import.meta.url)), "utf-8")).version;
 }
 var init_package_version = __esm({
   "node_modules/@intentius/chant/dist/package-version.js"() {
@@ -245588,6 +245904,7 @@ function parseDeclaration(text2, file2, reader = readerVersion(), options = {}) 
       generated,
       outputs: e.outputs === void 0 ? null : [...e.outputs],
       fields: e.fields === void 0 ? null : structuredClone(e.fields),
+      runsOn: e.runsOn ?? null,
       links,
       records,
       diagrams,
@@ -245847,7 +246164,17 @@ function ciOf(raw, at) {
   const block = raw;
   const hooks = ciHooksOf(block.hooks, "/ci/hooks", at);
   const policy = ciPolicyOf(block.policy, at);
+  let forgeCi;
+  if (block.forge !== void 0 || block.system !== void 0) {
+    const forge = block.forge ?? defaultForgeOf(block.system);
+    const ci = block.system ?? defaultCiOf(forge);
+    const problem = forgeCiProblem(forge, ci);
+    if (problem)
+      throw new WorkspaceReadError2("declaration-invalid", `ci.system: ${problem.replace(/^ci: /, "")}`, at("/ci/system"));
+    forgeCi = { forge, ci };
+  }
   const workflow = {
+    ...forgeCi ? { forgeCi } : {},
     ...block.workflow !== void 0 ? { workflow: block.workflow } : {},
     ...hooks ? { hooks } : {},
     ...block.branches !== void 0 ? { branches: globMap(block.branches) } : {},
@@ -246319,6 +246646,7 @@ var init_declaration = __esm({
   "node_modules/@intentius/chant/dist/workspace/declaration.js"() {
     init_retention_policy();
     init_pr_report_url();
+    init_ci_system();
     init_notify();
     init_declaration_schema();
     init_ci_branches();
@@ -246395,7 +246723,7 @@ var init_declaration = __esm({
 
 // node_modules/@intentius/chant/dist/discovery/walk.js
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { closeSync, existsSync as existsSync8, openSync, readdirSync as readdirSync3, readSync, statSync as statSync5 } from "node:fs";
+import { closeSync, existsSync as existsSync9, openSync, readdirSync as readdirSync3, readSync, statSync as statSync5 } from "node:fs";
 import { isAbsolute as isAbsolute3, join as join14, relative as relative3, resolve as resolve9, sep as sep4 } from "node:path";
 function partsBelow(home, full) {
   const rel = relative3(home, resolve9(full));
@@ -246454,10 +246782,10 @@ function gitIgnoredBelow(root) {
   return ignored;
 }
 function isProjectBoundary(dir) {
-  if (existsSync8(join14(dir, "chant.config.ts")))
+  if (existsSync9(join14(dir, "chant.config.ts")))
     return true;
   const json3 = join14(dir, "chant.config.json");
-  return existsSync8(json3) && !isLintOnlyFragment(json3);
+  return existsSync9(json3) && !isLintOnlyFragment(json3);
 }
 function childProjectsAreBoundaries(walker, root) {
   return walker === "ops" || findProjectConfig(root).configPath !== void 0;
@@ -247674,7 +248002,7 @@ var init_fold2 = __esm({
 });
 
 // node_modules/@intentius/chant/dist/config-static.js
-import { existsSync as existsSync9, readFileSync as readFileSync9 } from "node:fs";
+import { existsSync as existsSync10, readFileSync as readFileSync9 } from "node:fs";
 function readLexiconDeclarationsStatically(startDir) {
   const { configPath: configPath2 } = findProjectConfigPastFragments(startDir);
   if (configPath2 === void 0)
@@ -248402,198 +248730,211 @@ var init_single_concern_file = __esm({
   }
 });
 
+// node_modules/@intentius/chant/dist/lint/rules/imported-source.js
+var ts19, IMPORTED_SOURCE_MARKER, IMPORTED_SOURCE_HEADER;
+var init_imported_source = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/imported-source.js"() {
+    ts19 = __toESM(require_typescript(), 1);
+    IMPORTED_SOURCE_MARKER = "// chant:imported";
+    IMPORTED_SOURCE_HEADER = `${IMPORTED_SOURCE_MARKER} - declarations keep the names of the source template; COR004 and COR005 skip this file.
+`;
+  }
+});
+
 // node_modules/@intentius/chant/dist/lint/rules/declarable-naming-convention.js
-var ts19;
+var ts20;
 var init_declarable_naming_convention = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/declarable-naming-convention.js"() {
-    ts19 = __toESM(require_typescript(), 1);
+    ts20 = __toESM(require_typescript(), 1);
+    init_imported_source();
   }
 });
 
 // node_modules/@intentius/chant/dist/lint/rules/no-unused-declarable-import.js
-var ts20;
+var ts21;
 var init_no_unused_declarable_import = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/no-unused-declarable-import.js"() {
-    ts20 = __toESM(require_typescript(), 1);
-  }
-});
-
-// node_modules/@intentius/chant/dist/lint/rules/no-redundant-value-cast.js
-var ts21;
-var init_no_redundant_value_cast = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/no-redundant-value-cast.js"() {
     ts21 = __toESM(require_typescript(), 1);
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/no-unused-declarable.js
+// node_modules/@intentius/chant/dist/lint/rules/no-redundant-value-cast.js
 var ts22;
+var init_no_redundant_value_cast = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/no-redundant-value-cast.js"() {
+    ts22 = __toESM(require_typescript(), 1);
+  }
+});
+
+// node_modules/@intentius/chant/dist/lint/rules/no-unused-declarable.js
+var ts23;
 var init_no_unused_declarable = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/no-unused-declarable.js"() {
-    ts22 = __toESM(require_typescript(), 1);
+    ts23 = __toESM(require_typescript(), 1);
     init_property_kind();
+    init_imported_source();
   }
 });
 
 // node_modules/@intentius/chant/dist/lint/rules/no-cyclic-declarable-ref.js
-var ts23;
+var ts24;
 var init_no_cyclic_declarable_ref = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/no-cyclic-declarable-ref.js"() {
-    ts23 = __toESM(require_typescript(), 1);
-  }
-});
-
-// node_modules/@intentius/chant/dist/lint/rules/no-redundant-type-import.js
-var ts24;
-var init_no_redundant_type_import = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/no-redundant-type-import.js"() {
     ts24 = __toESM(require_typescript(), 1);
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/no-string-ref.js
+// node_modules/@intentius/chant/dist/lint/rules/no-redundant-type-import.js
 var ts25;
-var init_no_string_ref = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/no-string-ref.js"() {
+var init_no_redundant_type_import = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/no-redundant-type-import.js"() {
     ts25 = __toESM(require_typescript(), 1);
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/composite-scope.js
+// node_modules/@intentius/chant/dist/lint/rules/no-string-ref.js
 var ts26;
-var init_composite_scope = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/composite-scope.js"() {
+var init_no_string_ref = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/no-string-ref.js"() {
     ts26 = __toESM(require_typescript(), 1);
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/evl001-non-literal-expression.js
+// node_modules/@intentius/chant/dist/lint/rules/composite-scope.js
 var ts27;
+var init_composite_scope = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/composite-scope.js"() {
+    ts27 = __toESM(require_typescript(), 1);
+  }
+});
+
+// node_modules/@intentius/chant/dist/lint/rules/evl001-non-literal-expression.js
+var ts28;
 var init_evl001_non_literal_expression = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/evl001-non-literal-expression.js"() {
-    ts27 = __toESM(require_typescript(), 1);
+    ts28 = __toESM(require_typescript(), 1);
     init_composite_scope();
     init_subset2();
   }
 });
 
 // node_modules/@intentius/chant/dist/lint/rules/evl002-control-flow-resource.js
-var ts28, CONTROL_FLOW_KINDS;
+var ts29, CONTROL_FLOW_KINDS;
 var init_evl002_control_flow_resource = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/evl002-control-flow-resource.js"() {
-    ts28 = __toESM(require_typescript(), 1);
+    ts29 = __toESM(require_typescript(), 1);
     CONTROL_FLOW_KINDS = /* @__PURE__ */ new Set([
-      ts28.SyntaxKind.IfStatement,
-      ts28.SyntaxKind.ForStatement,
-      ts28.SyntaxKind.ForInStatement,
-      ts28.SyntaxKind.ForOfStatement,
-      ts28.SyntaxKind.WhileStatement,
-      ts28.SyntaxKind.DoStatement,
-      ts28.SyntaxKind.SwitchStatement,
-      ts28.SyntaxKind.TryStatement
+      ts29.SyntaxKind.IfStatement,
+      ts29.SyntaxKind.ForStatement,
+      ts29.SyntaxKind.ForInStatement,
+      ts29.SyntaxKind.ForOfStatement,
+      ts29.SyntaxKind.WhileStatement,
+      ts29.SyntaxKind.DoStatement,
+      ts29.SyntaxKind.SwitchStatement,
+      ts29.SyntaxKind.TryStatement
     ]);
   }
 });
 
 // node_modules/@intentius/chant/dist/lint/rules/evl003-dynamic-property-access.js
-var ts29;
+var ts30;
 var init_evl003_dynamic_property_access = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/evl003-dynamic-property-access.js"() {
-    ts29 = __toESM(require_typescript(), 1);
+    ts30 = __toESM(require_typescript(), 1);
     init_subset2();
   }
 });
 
 // node_modules/@intentius/chant/dist/lint/rules/evl004-spread-non-const.js
-var ts30;
+var ts31;
 var init_evl004_spread_non_const = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/evl004-spread-non-const.js"() {
-    ts30 = __toESM(require_typescript(), 1);
+    ts31 = __toESM(require_typescript(), 1);
     init_composite_scope();
   }
 });
 
 // node_modules/@intentius/chant/dist/lint/rules/evl005-resource-block-body.js
-var ts31;
+var ts32;
 var init_evl005_resource_block_body = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/evl005-resource-block-body.js"() {
-    ts31 = __toESM(require_typescript(), 1);
-  }
-});
-
-// node_modules/@intentius/chant/dist/lint/rules/evl007-invalid-siblings.js
-var ts32;
-var init_evl007_invalid_siblings = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/evl007-invalid-siblings.js"() {
     ts32 = __toESM(require_typescript(), 1);
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/evl009-composite-no-constant.js
+// node_modules/@intentius/chant/dist/lint/rules/evl007-invalid-siblings.js
 var ts33;
-var init_evl009_composite_no_constant = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/evl009-composite-no-constant.js"() {
+var init_evl007_invalid_siblings = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/evl007-invalid-siblings.js"() {
     ts33 = __toESM(require_typescript(), 1);
-    init_composite_scope();
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/evl010-composite-no-transform.js
+// node_modules/@intentius/chant/dist/lint/rules/evl009-composite-no-constant.js
 var ts34;
-var init_evl010_composite_no_transform = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/evl010-composite-no-transform.js"() {
+var init_evl009_composite_no_constant = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/evl009-composite-no-constant.js"() {
     ts34 = __toESM(require_typescript(), 1);
     init_composite_scope();
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/evl011-symbolic-in-template.js
+// node_modules/@intentius/chant/dist/lint/rules/evl010-composite-no-transform.js
 var ts35;
-var init_evl011_symbolic_in_template = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/evl011-symbolic-in-template.js"() {
+var init_evl010_composite_no_transform = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/evl010-composite-no-transform.js"() {
     ts35 = __toESM(require_typescript(), 1);
-  }
-});
-
-// node_modules/@intentius/chant/dist/lint/rules/cor017-composite-name-match.js
-var ts36;
-var init_cor017_composite_name_match = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/cor017-composite-name-match.js"() {
-    ts36 = __toESM(require_typescript(), 1);
     init_composite_scope();
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/cor018-composite-prefer-lexicon-type.js
+// node_modules/@intentius/chant/dist/lint/rules/evl011-symbolic-in-template.js
+var ts36;
+var init_evl011_symbolic_in_template = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/evl011-symbolic-in-template.js"() {
+    ts36 = __toESM(require_typescript(), 1);
+  }
+});
+
+// node_modules/@intentius/chant/dist/lint/rules/cor017-composite-name-match.js
 var ts37;
-var init_cor018_composite_prefer_lexicon_type = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/cor018-composite-prefer-lexicon-type.js"() {
+var init_cor017_composite_name_match = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/cor017-composite-name-match.js"() {
     ts37 = __toESM(require_typescript(), 1);
     init_composite_scope();
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/cor021-env-literal-name.js
+// node_modules/@intentius/chant/dist/lint/rules/cor018-composite-prefer-lexicon-type.js
 var ts38;
-var init_cor021_env_literal_name = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/cor021-env-literal-name.js"() {
+var init_cor018_composite_prefer_lexicon_type = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/cor018-composite-prefer-lexicon-type.js"() {
     ts38 = __toESM(require_typescript(), 1);
+    init_composite_scope();
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/cor022-receipt-leaf.js
+// node_modules/@intentius/chant/dist/lint/rules/cor021-env-literal-name.js
 var ts39;
-var init_cor022_receipt_leaf = __esm({
-  "node_modules/@intentius/chant/dist/lint/rules/cor022-receipt-leaf.js"() {
+var init_cor021_env_literal_name = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/cor021-env-literal-name.js"() {
     ts39 = __toESM(require_typescript(), 1);
   }
 });
 
-// node_modules/@intentius/chant/dist/lint/rules/cor024-receipt-secret-pointer.js
+// node_modules/@intentius/chant/dist/lint/rules/cor022-receipt-leaf.js
 var ts40;
+var init_cor022_receipt_leaf = __esm({
+  "node_modules/@intentius/chant/dist/lint/rules/cor022-receipt-leaf.js"() {
+    ts40 = __toESM(require_typescript(), 1);
+  }
+});
+
+// node_modules/@intentius/chant/dist/lint/rules/cor024-receipt-secret-pointer.js
+var ts41;
 var init_cor024_receipt_secret_pointer = __esm({
   "node_modules/@intentius/chant/dist/lint/rules/cor024-receipt-secret-pointer.js"() {
-    ts40 = __toESM(require_typescript(), 1);
+    ts41 = __toESM(require_typescript(), 1);
     init_cor022_receipt_leaf();
   }
 });
@@ -248672,45 +249013,45 @@ function collectNodes(root, predicate) {
     if (predicate(node)) {
       results.push(node);
     }
-    ts42.forEachChild(node, visit);
+    ts43.forEachChild(node, visit);
   }
   visit(root);
   return results;
 }
 function selectResource(sf) {
-  return collectNodes(sf, (node) => ts42.isNewExpression(node));
+  return collectNodes(sf, (node) => ts43.isNewExpression(node));
 }
 function selectAnyResource(sf) {
   return selectResource(sf);
 }
 function selectStringLiteral(sf) {
-  return collectNodes(sf, (node) => ts42.isStringLiteral(node));
+  return collectNodes(sf, (node) => ts43.isStringLiteral(node));
 }
 function selectExportName(sf) {
   return collectNodes(sf, (node) => {
-    if (ts42.isVariableStatement(node)) {
-      return node.modifiers?.some((m) => m.kind === ts42.SyntaxKind.ExportKeyword) ?? false;
+    if (ts43.isVariableStatement(node)) {
+      return node.modifiers?.some((m) => m.kind === ts43.SyntaxKind.ExportKeyword) ?? false;
     }
-    if (ts42.isFunctionDeclaration(node) || ts42.isClassDeclaration(node)) {
-      return node.modifiers?.some((m) => m.kind === ts42.SyntaxKind.ExportKeyword) ?? false;
+    if (ts43.isFunctionDeclaration(node) || ts43.isClassDeclaration(node)) {
+      return node.modifiers?.some((m) => m.kind === ts43.SyntaxKind.ExportKeyword) ?? false;
     }
     return false;
   });
 }
 function selectImportSource(sf) {
   return collectNodes(sf, (node) => {
-    if (ts42.isImportDeclaration(node)) {
+    if (ts43.isImportDeclaration(node)) {
       return true;
     }
     return false;
   });
 }
 function selectProperty(sf) {
-  return collectNodes(sf, (node) => ts42.isPropertyAssignment(node));
+  return collectNodes(sf, (node) => ts43.isPropertyAssignment(node));
 }
 function selectResourceType(sf) {
   return collectNodes(sf, (node) => {
-    if (ts42.isNewExpression(node) && node.typeArguments && node.typeArguments.length > 0) {
+    if (ts43.isNewExpression(node) && node.typeArguments && node.typeArguments.length > 0) {
       return true;
     }
     return false;
@@ -248718,18 +249059,18 @@ function selectResourceType(sf) {
 }
 function selectExportedConst(sf) {
   return collectNodes(sf, (node) => {
-    if (!ts42.isVariableStatement(node))
+    if (!ts43.isVariableStatement(node))
       return false;
-    const hasExport = node.modifiers?.some((m) => m.kind === ts42.SyntaxKind.ExportKeyword) ?? false;
+    const hasExport = node.modifiers?.some((m) => m.kind === ts43.SyntaxKind.ExportKeyword) ?? false;
     if (!hasExport)
       return false;
-    return node.declarationList.flags === ts42.NodeFlags.Const || (node.declarationList.flags & ts42.NodeFlags.Const) !== 0;
+    return node.declarationList.flags === ts43.NodeFlags.Const || (node.declarationList.flags & ts43.NodeFlags.Const) !== 0;
   });
 }
-var ts42, selectorRegistry, builtins;
+var ts43, selectorRegistry, builtins;
 var init_selectors = __esm({
   "node_modules/@intentius/chant/dist/lint/selectors.js"() {
-    ts42 = __toESM(require_typescript(), 1);
+    ts43 = __toESM(require_typescript(), 1);
     selectorRegistry = /* @__PURE__ */ new Map();
     builtins = [
       ["resource", selectResource],
@@ -248795,9 +249136,9 @@ var init_format = __esm({
 
 // node_modules/@intentius/chant/dist/runtime-adapter.js
 import { dirname as dirname15 } from "path";
-import { fileURLToPath as fileURLToPath5 } from "url";
+import { fileURLToPath as fileURLToPath6 } from "url";
 function moduleDir(importMetaUrl) {
-  return dirname15(fileURLToPath5(importMetaUrl));
+  return dirname15(fileURLToPath6(importMetaUrl));
 }
 var init_runtime_adapter = __esm({
   "node_modules/@intentius/chant/dist/runtime-adapter.js"() {
@@ -249254,11 +249595,11 @@ function q(value) {
 function probeBoltPort(endpoint, timeoutMs = 5e3) {
   const [host, portStr] = endpoint.split(":");
   const port = Number(portStr ?? 7687);
-  return new Promise((resolve15) => {
+  return new Promise((resolve16) => {
     const socket = createConnection({ host, port, timeout: timeoutMs });
     const finish = (healthy) => {
       socket.destroy();
-      resolve15(healthy);
+      resolve16(healthy);
     };
     socket.once("connect", () => finish(true));
     socket.once("timeout", () => finish(false));
@@ -249274,7 +249615,7 @@ function defaultCloudExecutor() {
   return defaultExecutor;
 }
 function sleep(ms) {
-  return new Promise((resolve15) => setTimeout(resolve15, ms));
+  return new Promise((resolve16) => setTimeout(resolve16, ms));
 }
 var execFileAsync, realDocker, realNeo4j, defaultExecutor;
 var init_cloud_executor = __esm({
@@ -249644,7 +249985,7 @@ var init_sbom = __esm({
 
 // node_modules/@intentius/chant/dist/components/verbs/tool-sbom-generator.js
 import { basename as basename2, dirname as dirname17, join as join17 } from "node:path";
-import { existsSync as existsSync10 } from "node:fs";
+import { existsSync as existsSync11 } from "node:fs";
 function countPackages(format, bytes) {
   try {
     const doc = JSON.parse(bytes);
@@ -249674,7 +250015,7 @@ function createToolSbomGenerator(options = {}) {
     async forImage(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
       const buildContext = dirname17(input.imagePath);
-      const hasDockerfile = existsSync10(join17(buildContext, "Dockerfile"));
+      const hasDockerfile = existsSync11(join17(buildContext, "Dockerfile"));
       if (hasDockerfile && await runner.available("docker")) {
         const out = scratchPath(options.workDir, input.imagePath, format);
         await runner.run(`docker buildx build --sbom=true --output type=local,dest=${q2(out)} ${q2(buildContext)}`);
@@ -249693,7 +250034,7 @@ function createToolSbomGenerator(options = {}) {
     async forJar(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
       const projectDir = dirname17(input.jarPath);
-      const hasPom = existsSync10(join17(projectDir, "pom.xml"));
+      const hasPom = existsSync11(join17(projectDir, "pom.xml"));
       if (hasPom && await runner.available("mvn")) {
         await requireTool(runner, "mvn", `run cyclonedx-maven against ${projectDir}`);
         const out = scratchPath(options.workDir, input.jarPath, "cyclonedx");
@@ -250237,7 +250578,7 @@ __export(which_chant_exports, {
   rootChantBin: () => rootChantBin
 });
 import { spawn } from "node:child_process";
-import { existsSync as existsSync11, readFileSync as readFileSync12, realpathSync as realpathSync4 } from "node:fs";
+import { existsSync as existsSync12, readFileSync as readFileSync12, realpathSync as realpathSync4 } from "node:fs";
 import { join as join18, relative as relative5, resolve as resolve11 } from "node:path";
 function locateWorkspace(cwd, at) {
   const top = gitTop(cwd);
@@ -250284,7 +250625,7 @@ function rootChantBin(rootOnDisk, version2) {
   if (typeof rel !== "string")
     return void 0;
   const bin = join18(dir, rel);
-  return existsSync11(bin) ? bin : void 0;
+  return existsSync12(bin) ? bin : void 0;
 }
 function declaredChantPin(located) {
   const file2 = DECLARATION_FILES.find((f) => located.tree.stat(f) === "file");
@@ -250359,7 +250700,7 @@ function outputsPart(member, planDigest, unknown2) {
 function memberOutputsCapability(options = {}) {
   const sources = options.sources ?? [];
   const lookup = options.lookup ?? workspaceMemberLookup;
-  async function resolve15(input) {
+  async function resolve16(input) {
     requireMember(input);
     const ref = await lookup(input.cwd ?? process.cwd(), input.member);
     const source = sources.find((s) => s.kinds.includes(ref.kind));
@@ -250373,7 +250714,7 @@ function memberOutputsCapability(options = {}) {
     rollbackPolicy: "none-by-design",
     targets: { refuse: "it reads another member's outputs; narrow that member's own plan instead" },
     async plan(ctx, input) {
-      const { ref, source } = await resolve15(input);
+      const { ref, source } = await resolve16(input);
       const planned = await source.planned(ctx, ref);
       const unknown2 = [...new Set(planned.unknown)].sort();
       const known = Object.fromEntries(Object.entries(planned.known).filter(([name]) => !unknown2.includes(name)));
@@ -250382,11 +250723,11 @@ function memberOutputsCapability(options = {}) {
       return { member, planDigest, changeSet: outputsPart(ref.member, planDigest, unknown2), outputs: { known, unknown: unknown2 } };
     },
     async outputs(ctx, input) {
-      const { ref, source } = await resolve15(input);
+      const { ref, source } = await resolve16(input);
       return source.applied(ctx, ref);
     },
     async run(ctx, input) {
-      const { ref, source } = await resolve15(input);
+      const { ref, source } = await resolve16(input);
       const now = await source.planned(ctx, ref);
       if (now.changes)
         throw new MemberOutputsPendingError(ref.member);
@@ -251390,10 +251731,10 @@ var init_okf = __esm({
 });
 
 // node_modules/@intentius/chant/dist/codegen/okf-lexicon.js
-var ts43;
+var ts44;
 var init_okf_lexicon = __esm({
   "node_modules/@intentius/chant/dist/codegen/okf-lexicon.js"() {
-    ts43 = __toESM(require_typescript(), 1);
+    ts44 = __toESM(require_typescript(), 1);
     init_okf();
   }
 });
@@ -254239,7 +254580,7 @@ var init_conflict_check = __esm({
 
 // node_modules/@intentius/chant/dist/project-codegen.js
 import { createHash as createHash7 } from "node:crypto";
-import { existsSync as existsSync12, mkdirSync as mkdirSync2, readFileSync as readFileSync14, readdirSync as readdirSync4, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
+import { existsSync as existsSync13, mkdirSync as mkdirSync2, readFileSync as readFileSync14, readdirSync as readdirSync4, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname18, isAbsolute as isAbsolute5, join as join20, relative as relative6, resolve as resolve12, sep as sep5 } from "node:path";
 function resolveCodegenRoot(projectRoot, config2) {
   const codegen = config2.codegen;
@@ -254254,7 +254595,7 @@ function digestInputs(inputs) {
 }
 function readStamp(outDir) {
   const path = join20(outDir, STAMP_FILE);
-  if (!existsSync12(path))
+  if (!existsSync13(path))
     return void 0;
   try {
     const parsed = JSON.parse(readFileSync14(path, "utf8"));
@@ -254287,7 +254628,7 @@ async function checkProjectCodegen(plugin, projectRoot, config2) {
       message: `chant.config declares ${plugin.name} sources to generate, but ${where} has no generated code. Run \`chant generate\` and commit the result.`
     };
   }
-  const absent = stamp.files.filter((f) => !existsSync12(safeJoin(ctx.outDir, f)));
+  const absent = stamp.files.filter((f) => !existsSync13(safeJoin(ctx.outDir, f)));
   if (absent.length > 0) {
     return {
       status: "missing",
@@ -254347,8 +254688,8 @@ __export(plugins_exports, {
 });
 import { createRequire as createRequire8 } from "node:module";
 import { dirname as dirname19, join as join21, resolve as resolve13 } from "node:path";
-import { fileURLToPath as fileURLToPath6 } from "node:url";
-import { existsSync as existsSync13, readdirSync as readdirSync5, readFileSync as readFileSync15 } from "node:fs";
+import { fileURLToPath as fileURLToPath7 } from "node:url";
+import { existsSync as existsSync14, readdirSync as readdirSync5, readFileSync as readFileSync15 } from "node:fs";
 function recordProjectLexicons(dir) {
   const read = readLexiconDeclarationsStatically(dir);
   if (read.status === "read")
@@ -254394,7 +254735,7 @@ async function loadPlugin(lexiconName) {
 }
 function listInstalledLexicons(projectDir = process.cwd()) {
   const names = /* @__PURE__ */ new Set();
-  const starts = [dirname19(fileURLToPath6(import.meta.url)), resolve13(projectDir)];
+  const starts = [dirname19(fileURLToPath7(import.meta.url)), resolve13(projectDir)];
   for (const start of starts) {
     let dir = start;
     for (; ; ) {
@@ -254440,7 +254781,7 @@ function resolveLexiconVersions(lexiconNames2) {
       let dir = dirname19(entry);
       for (let depth = 0; depth < 10; depth++) {
         const candidate = join21(dir, "package.json");
-        if (existsSync13(candidate)) {
+        if (existsSync14(candidate)) {
           const pkg = JSON.parse(readFileSync15(candidate, "utf-8"));
           if (pkg.name === packageName && pkg.version) {
             versions[name] = pkg.version;
@@ -254601,7 +254942,7 @@ function isYaml(name) {
   return name.endsWith(".yml") || name.endsWith(".yaml");
 }
 function isDockerfileName(name) {
-  return name === "Dockerfile" || name.startsWith("Dockerfile.") || name.endsWith(".Dockerfile") || name.endsWith(".dockerfile");
+  return DOCKERFILE_NAME.test(name);
 }
 function isTerraformFileName(name) {
   return /\.(tf|tofu)(\.json)?$/i.test(name) || name === "terragrunt.hcl" || name === "root.hcl";
@@ -254901,7 +255242,7 @@ function walkCandidates(root, opts = {}) {
   }
   return { files, maxFiles: state.max, truncated: state.truncated };
 }
-var AUDIT_LEXICONS, TERRAFORM_WORK_DIR, DEFAULT_MAX_WALK_FILES, MAX_FILE_BYTES, CONTENT_DETECTORS, LOCAL_MODULE_SOURCE;
+var AUDIT_LEXICONS, TERRAFORM_WORK_DIR, DEFAULT_MAX_WALK_FILES, MAX_FILE_BYTES, DOCKERFILE_NAME, CONTENT_DETECTORS, LOCAL_MODULE_SOURCE;
 var init_discover3 = __esm({
   "node_modules/@intentius/chant/dist/audit/discover.js"() {
     init_yaml();
@@ -254913,6 +255254,7 @@ var init_discover3 = __esm({
     TERRAFORM_WORK_DIR = ".terraform";
     DEFAULT_MAX_WALK_FILES = 1e3;
     MAX_FILE_BYTES = 2 * 1024 * 1024;
+    DOCKERFILE_NAME = /^(dockerfile|containerfile)([._-].+)?$|\.(dockerfile|containerfile)$/i;
     CONTENT_DETECTORS = [
       {
         // GCP Config Connector — must win over k8s for cnrm.cloud.google.com docs.
@@ -255391,7 +255733,8 @@ var init_suppressions = __esm({
 });
 
 // node_modules/@intentius/chant/dist/audit/core.js
-import { basename as basename4 } from "path";
+import { statSync as statSync7 } from "fs";
+import { basename as basename4, dirname as dirname20, resolve as resolve15 } from "path";
 function dedupeById(checks) {
   const byId = /* @__PURE__ */ new Map();
   for (const check2 of checks) {
@@ -255454,6 +255797,18 @@ async function defaultEntitiesProvider(lexicon) {
   entitiesParserCache.set(lexicon, parser);
   return parser;
 }
+function parserPackageOf(err) {
+  const pkg = err?.parserPackage;
+  return typeof pkg === "string" ? pkg : void 0;
+}
+function auditRootDir(target) {
+  const abs = resolve15(target);
+  try {
+    return statSync7(abs).isFile() ? dirname20(abs) : abs;
+  } catch {
+    return abs;
+  }
+}
 async function auditFiles(inputs, opts = {}) {
   const provider = opts.checksProvider ?? defaultChecksProvider;
   const entitiesProvider = opts.entitiesProvider ?? defaultEntitiesProvider;
@@ -255469,7 +255824,7 @@ async function auditFiles(inputs, opts = {}) {
     if (checks.length === 0)
       continue;
     const parseEntities = await entitiesProvider(lexicon);
-    findings.push(...await auditLexicon(lexicon, files, checks, parseEntities, opts.suppressionStats));
+    findings.push(...await auditLexicon(lexicon, files, checks, parseEntities, opts.suppressionStats, opts.skips, { ...opts.root !== void 0 ? { root: auditRootDir(opts.root) } : {} }));
   }
   return findings;
 }
@@ -255480,9 +255835,9 @@ function toOutput(file2) {
     return file2.content;
   return { primary: file2.content, files: { [basename4(file2.path)]: file2.content } };
 }
-function runChecks(checks, outputs, entities = /* @__PURE__ */ new Map()) {
+function runChecks(checks, outputs, entities = /* @__PURE__ */ new Map(), audit) {
   const buildResult = { outputs, entities, warnings: [], errors: [], sourceFileCount: outputs.size };
-  const ctx = { outputs, entities: buildResult.entities, buildResult };
+  const ctx = { outputs, entities: buildResult.entities, buildResult, ...audit ? { audit } : {} };
   const diags = [];
   for (const check2 of checks) {
     try {
@@ -255493,7 +255848,7 @@ function runChecks(checks, outputs, entities = /* @__PURE__ */ new Map()) {
   return applyInlineSuppressions(diags, entities);
 }
 function diagKey(d) {
-  return `${d.checkId}\0${d.entity ?? ""}\0${d.message}`;
+  return `${d.checkId}\0${d.entity ?? ""}\0${d.locator ?? ""}\0${d.message}`;
 }
 function mergeEntities(maps) {
   const merged = /* @__PURE__ */ new Map();
@@ -255507,7 +255862,8 @@ function mergeEntities(maps) {
   }
   return merged;
 }
-async function auditLexicon(lexicon, files, checks, parseEntities, suppressionStats) {
+async function auditLexicon(lexicon, files, checks, parseEntities, suppressionStats, skips, audit) {
+  const unread = /* @__PURE__ */ new Map();
   const entitiesFor = async (file2) => {
     if (!parseEntities)
       return /* @__PURE__ */ new Map();
@@ -255517,33 +255873,39 @@ async function auditLexicon(lexicon, files, checks, parseEntities, suppressionSt
         ...file2.dir !== void 0 ? { dir: file2.dir } : {},
         ...file2.baseDir !== void 0 ? { baseDir: file2.baseDir } : {}
       });
-    } catch {
+    } catch (err) {
+      const pkg = parserPackageOf(err);
+      if (pkg !== void 0)
+        unread.set(pkg, [...unread.get(pkg) ?? [], file2.path]);
       return /* @__PURE__ */ new Map();
     }
   };
   const perEntities = new Map(await Promise.all(files.map(async (f) => [f.path, await entitiesFor(f)])));
+  for (const [pkg, paths] of unread) {
+    skips?.push({ lexicon, reason: "parser-not-installed", package: pkg, install: `npm install -D ${pkg}`, paths: paths.sort() });
+  }
   const perFindings = [];
   const perKeys = /* @__PURE__ */ new Set();
   const metaFindings = [];
   for (const file2 of files) {
-    const { diagnostics: diags, suppressed, meta: meta4 } = runChecks(checks, /* @__PURE__ */ new Map([[file2.path, toOutput(file2)]]), perEntities.get(file2.path));
+    const { diagnostics: diags, suppressed, meta: meta4 } = runChecks(checks, /* @__PURE__ */ new Map([[file2.path, toOutput(file2)]]), perEntities.get(file2.path), audit);
     if (suppressionStats)
       suppressionStats.count += suppressed.length;
     for (const m of meta4) {
       metaFindings.push({ checkId: m.checkId, severity: m.severity, message: m.message, file: m.file, lexicon, line: m.line });
     }
     for (const d of diags) {
-      perFindings.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: file2.path, lexicon: d.lexicon ?? lexicon, entity: d.entity, missing: d.missing });
+      perFindings.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: file2.path, lexicon: d.lexicon ?? lexicon, entity: d.entity, missing: d.missing, ...d.locator !== void 0 ? { locator: d.locator } : {} });
       perKeys.add(diagKey(d));
     }
   }
   const allOutputs = new Map(files.map((f) => [f.path, toOutput(f)]));
-  const { diagnostics: allDiags } = runChecks(checks, allOutputs, mergeEntities([...perEntities.values()]));
+  const { diagnostics: allDiags } = runChecks(checks, allOutputs, mergeEntities([...perEntities.values()]), audit);
   const allKeys = new Set(allDiags.map(diagKey));
   const out = perFindings.filter((f) => allKeys.has(diagKey(f)));
   for (const d of allDiags) {
     if (!perKeys.has(diagKey(d))) {
-      out.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: CROSS_FILE, lexicon: d.lexicon ?? lexicon, entity: d.entity, missing: d.missing });
+      out.push({ checkId: d.checkId, severity: d.severity, message: d.message, file: CROSS_FILE, lexicon: d.lexicon ?? lexicon, entity: d.entity, missing: d.missing, ...d.locator !== void 0 ? { locator: d.locator } : {} });
     }
   }
   return [...out, ...metaFindings];
@@ -255558,6 +255920,44 @@ var init_core4 = __esm({
     MissingLexiconError = class extends Error {
     };
     CROSS_FILE = "(cross-file)";
+  }
+});
+
+// node_modules/@intentius/chant/dist/audit/secrets.js
+function fingerprintSecret(value) {
+  let h1 = 2166136261;
+  let h2 = 2654435769;
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 16777619);
+    h2 ^= c;
+    h2 = Math.imul(h2, 2246822507);
+    h2 = h2 << 13 | h2 >>> 19;
+  }
+  return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
+}
+var init_secrets = __esm({
+  "node_modules/@intentius/chant/dist/audit/secrets.js"() {
+  }
+});
+
+// node_modules/@intentius/chant/dist/audit/identity.js
+function baseKey(f) {
+  return [f.checkId, f.file, f.entity ?? "", f.missing ? `${f.missing.kind}@${f.missing.scope}` : "", f.locator ?? "", f.fingerprint ?? ""].join("\0");
+}
+function findingIdentities(findings) {
+  const seen = /* @__PURE__ */ new Map();
+  return findings.map((f) => {
+    const key = baseKey(f);
+    const n = seen.get(key) ?? 0;
+    seen.set(key, n + 1);
+    return fingerprintSecret(`${key}\0${n}`) + fingerprintSecret(`${n}\0${key}`);
+  });
+}
+var init_identity3 = __esm({
+  "node_modules/@intentius/chant/dist/audit/identity.js"() {
+    init_secrets();
   }
 });
 
@@ -255889,7 +256289,8 @@ function buildClusters(findings) {
 }
 function buildReportModel(findings, opts = {}) {
   const catalog = opts.catalog ?? RULE_CATALOG;
-  const enriched = findings.map((f) => ({ ...f, meta: metaFor(f.checkId, catalog) }));
+  const identities = findingIdentities(findings);
+  const enriched = findings.map((f, i) => ({ ...f, identity: f.identity ?? identities[i], meta: metaFor(f.checkId, catalog) }));
   const contents = new Map((opts.files ?? []).map((f) => [f.path, f.content]));
   const mergeWorthy = enriched.filter((f) => f.meta.tier === "merge-worthy");
   const quickWinFindings = enriched.filter((f) => f.meta.fixKind === "deterministic");
@@ -255931,6 +256332,7 @@ var SEVERITY_WEIGHT, SUPERSEDED_BY;
 var init_report_model = __esm({
   "node_modules/@intentius/chant/dist/audit/report-model.js"() {
     init_catalog();
+    init_identity3();
     init_proof();
     SEVERITY_WEIGHT = { error: 0, warning: 1, info: 2 };
     SUPERSEDED_BY = {
@@ -256598,6 +257000,9 @@ var init_action_pins = __esm({
       downloadArtifact8: pin("actions/download-artifact", "v8", "9000827ccba6bdab643e8b6fd33ac0654aef8333", "v8.0.2"),
       setupGo7: pin("actions/setup-go", "v7", "b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", "v7.0.0"),
       setupPython7: pin("actions/setup-python", "v7", "6d4fd22b20465ccc0f7354476588e8df7c9ca0e0", "v7.1.0"),
+      // #5152: the release workflow's Java and Rust toolchains.
+      setupJava6: pin("actions/setup-java", "v6", "d1374f8ac74474200d16ef8ecee22c7ae7a51880", "v6.3.0"),
+      setupRustToolchain2: pin("actions-rust-lang/setup-rust-toolchain", "v2", "a188e68d0fd2bd36ad51dccb2b07ba6e75105f30", "v2.0.1"),
       setupBun2: pin("oven-sh/setup-bun", "v2", "0c5077e51419868618aeaa5fe8019c62421857d6", "v2.2.0"),
       golangciLint9: pin("golangci/golangci-lint-action", "v9", "ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a", "v9.3.0"),
       dockerLogin4: pin("docker/login-action", "v4", "81c6f93d4bc991e510b342a00b419b3bb4efc5c6", "v4.7.0"),
@@ -259228,8 +259633,8 @@ var init_engine = __esm({
 });
 
 // src/cli.ts
-import { existsSync as existsSync14, readFileSync as readFileSync17, writeFileSync as writeFileSync5 } from "node:fs";
-import { pathToFileURL as pathToFileURL4 } from "node:url";
+import { existsSync as existsSync15, readFileSync as readFileSync17, writeFileSync as writeFileSync5 } from "node:fs";
+import { pathToFileURL as pathToFileURL5 } from "node:url";
 
 // package.json
 var package_default = {
@@ -259287,8 +259692,8 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.124.97",
-    "@intentius/chant-lexicon-github": "^0.124.97",
+    "@intentius/chant": "^0.124.101",
+    "@intentius/chant-lexicon-github": "^0.124.101",
     "@intentius/tsad-reference": "^2.3.0"
   },
   devDependencies: {
@@ -259298,6 +259703,7 @@ var package_default = {
     esbuild: "^0.28.0",
     "libsodium-wrappers": "^0.8.4",
     sentences: "^0.1.1",
+    tsx: "^4.23.15",
     typescript: "^5.9.3",
     vitest: "^4.1.9",
     yaml: "^2.9.1"
@@ -262289,14 +262695,14 @@ var WorkspaceReadError = class extends Error {
     this.name = "WorkspaceReadError";
   }
 };
-var defaultRunner = (cmd, args, cwd) => new Promise((resolve15, reject2) => {
+var defaultRunner = (cmd, args, cwd) => new Promise((resolve16, reject2) => {
   execFile(cmd, args, { cwd, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
     if (err && err.code === "ENOENT") {
       reject2(err);
       return;
     }
     const code2 = err ? err.code : 0;
-    resolve15({ stdout, stderr, code: typeof code2 === "number" ? code2 : 1 });
+    resolve16({ stdout, stderr, code: typeof code2 === "number" ? code2 : 1 });
   });
 });
 function parseGenerated(raw) {
@@ -263475,7 +263881,7 @@ async function runCodeowners(argv) {
     process.exit(0);
   }
   if (args.check) {
-    const current = existsSync14(args.out) ? readFileSync17(args.out, "utf8") : null;
+    const current = existsSync15(args.out) ? readFileSync17(args.out, "utf8") : null;
     if (current !== text2) {
       process.stderr.write(`github-warden: ${args.out} is out of date; run codeowners --out ${args.out}
 `);
@@ -263731,7 +264137,7 @@ function printAuditUsage() {
 async function run3(argv) {
   await main(argv);
 }
-var invokedPath = process.argv[1] ? pathToFileURL4(process.argv[1]).href : "";
+var invokedPath = process.argv[1] ? pathToFileURL5(process.argv[1]).href : "";
 if (import.meta.url === invokedPath && false) {
   main().catch((err) => {
     process.stderr.write(`github-warden: fatal: ${errMsg2(err)}
