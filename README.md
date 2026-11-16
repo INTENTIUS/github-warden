@@ -414,14 +414,16 @@ SHA; [the CI guide](CI.md) covers it in detail.
 
 Releases go through `chant release`, set up in `chant.config.ts`.
 `just release` (or `gh workflow run publish.yml -f label=auto`) starts
-`.github/workflows/publish.yml`, which takes the newest commit on `main` whose
-checks passed, labels it from the conventional commits since the previous
-`vX.Y.Z` tag, cuts it, pushes the tag and publishes the package with npm
-provenance. The label goes into `package.json` at release time, so a release
-needs no version commit. `just release-next` prints the next label and
-`just release-plan` prints what a cut would do, without writing anything.
-The workflow is generated: change `chant.config.ts` and run
-`npx chant release workflow` rather than editing it.
+`.github/workflows/publish.yml`. The workflow picks the newest commit on `main`
+whose checks passed and labels it from the conventional commits since the
+previous `vX.Y.Z` tag. It cuts that commit and pushes the tag, then publishes
+the package with npm provenance. The label is written into `package.json` at
+release time, so a release needs no version commit.
+
+`just release-next` prints the next label, and `just release-plan` prints what
+a cut would do without writing anything. chant generates `publish.yml`, so
+change `chant.config.ts` and run `npx chant release workflow` rather than
+editing the file.
 
 The package is published as **`@intentius/github-warden`** (scoped, under the
 `intentius` npm org) via **GitHub OIDC trusted publishing**, with no npm token
