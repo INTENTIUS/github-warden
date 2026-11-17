@@ -33,7 +33,7 @@ check: tsc test build-action
 
 # Dogfood: audit our own config with chant (CI's `dogfood-audit` job)
 audit:
-    node scripts/audit-gate.mjs
+    npx chant audit . --fail-on merge-worthy
 
 # Install dependencies (clean, lockfile-faithful)
 install:

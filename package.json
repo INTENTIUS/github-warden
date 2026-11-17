@@ -53,7 +53,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@intentius/chant": "^0.124.101",
+    "@intentius/chant": "^0.124.102",
     "@intentius/chant-lexicon-github": "^0.124.101",
     "@intentius/tsad-reference": "^2.3.0"
   },

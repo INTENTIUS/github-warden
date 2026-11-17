@@ -8,10 +8,7 @@ on:
         required: true
         type: string
 permissions:
-  contents: write
-  id-token: write
-  checks: read
-  statuses: read
+  contents: read
 concurrency:
   group: chant-release
   cancel-in-progress: false
@@ -20,6 +17,8 @@ env:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       commit: ${{ steps.green.outputs.commit }}
       label: ${{ steps.green.outputs.label }}
@@ -42,6 +41,10 @@ jobs:
   cut:
     needs: gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      checks: read
+      statuses: read
     env:
       CHANT_RELEASE_COMMIT: ${{ needs.gate.outputs.commit }}
       CHANT_RELEASE_LABEL: ${{ needs.gate.outputs.label }}
@@ -69,6 +72,11 @@ jobs:
   publish:
     needs: [gate, cut]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      checks: read
+      statuses: read
     env:
       CHANT_RELEASE_LABEL: ${{ needs.gate.outputs.label }}
     steps:

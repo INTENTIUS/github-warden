@@ -71,4 +71,4 @@ jobs:
           cache: npm
       - run: npm ci
       - name: audit our own config with chant
-        run: node scripts/audit-gate.mjs
+        run: npx chant audit . --fail-on merge-worthy
