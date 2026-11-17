@@ -234946,17 +234946,29 @@ function chantPackageSourceTarget(specifier, parentPath) {
     dir = parent;
   }
 }
-function ensureTypeScriptLoader() {
+function ensureTypeScriptLoader(projectDir) {
   const state = compiledState();
   if (!state)
     return false;
   if (state.tsx)
     return true;
-  const load4 = (specifier) => requireOptionalPeer("tsx", specifier, "run TypeScript", import.meta.url);
+  const from = tsxResolvedFrom(projectDir) ?? import.meta.url;
+  const load4 = (specifier) => requireOptionalPeer("tsx", specifier, "run TypeScript", from);
   load4("tsx/cjs/api").register();
   load4("tsx/esm/api").register();
   state.tsx = true;
   return true;
+}
+function tsxResolvedFrom(projectDir) {
+  const bases = [import.meta.url, ...[projectDir, process.cwd()].filter((d) => d !== void 0).map((d) => join6(d, "package.json"))];
+  for (const base of bases) {
+    try {
+      nodeModule.createRequire(base).resolve("tsx/cjs/api");
+      return base;
+    } catch {
+    }
+  }
+  return void 0;
 }
 function ensureTypeScriptLoaderFor(pathOrUrl) {
   if (!isJavaScriptModule(pathOrUrl))
@@ -234985,11 +234997,30 @@ var init_ts_loader = __esm({
 });
 
 // node_modules/@intentius/chant/dist/config-import.js
+import { dirname as dirname8, join as join7 } from "node:path";
 import { pathToFileURL as pathToFileURL4 } from "node:url";
 async function importConfigModule(configPath2, fresh = false) {
-  ensureTypeScriptLoader();
+  let noTsx = null;
+  try {
+    ensureTypeScriptLoader(dirname8(configPath2));
+  } catch (err) {
+    if (!(err instanceof Error) || !err.message.startsWith("chant needs tsx") || !nativeTypeScript())
+      throw err;
+    noTsx = err;
+  }
   const specifier = fresh ? `${pathToFileURL4(configPath2).href}?fresh=${++freshLoads}` : configPath2;
-  return await import(specifier);
+  try {
+    return await import(specifier);
+  } catch (err) {
+    if (noTsx === null)
+      throw err;
+    const why = String(err instanceof Error ? err.message : err).split("\n")[0];
+    throw Object.assign(new Error(`${noTsx.message} (node's own type stripping could not read ${configPath2} either: ${why})`), { cause: err });
+  }
+}
+function nativeTypeScript() {
+  const ts45 = process.features.typescript;
+  return ts45 === "strip" || ts45 === "transform";
 }
 var freshLoads;
 var init_config_import = __esm({
@@ -237526,7 +237557,7 @@ error: ${text}`);
 import { existsSync as existsSync6, mkdtempSync, readFileSync as readFileSync4, realpathSync as realpathSync2, rmSync, statSync as statSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { createRequire as createRequire4 } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname as dirname8, join as join7, resolve as resolvePath } from "node:path";
+import { dirname as dirname9, join as join8, resolve as resolvePath } from "node:path";
 function getExternalPackagePathCache() {
   const g = globalThis;
   return g.__chantExternalPackagePathCache ?? (g.__chantExternalPackagePathCache = /* @__PURE__ */ new Map());
@@ -237534,9 +237565,9 @@ function getExternalPackagePathCache() {
 function fastResolvePackage(specifier, fromDir) {
   let dir = fromDir;
   for (; ; ) {
-    const packageDir = join7(dir, "node_modules", specifier);
+    const packageDir = join8(dir, "node_modules", specifier);
     if (existsSync6(packageDir)) {
-      const pkgJsonPath = join7(packageDir, "package.json");
+      const pkgJsonPath = join8(packageDir, "package.json");
       if (!existsSync6(pkgJsonPath))
         return void 0;
       let pkg;
@@ -237559,7 +237590,7 @@ function fastResolvePackage(specifier, fromDir) {
         return void 0;
       }
     }
-    const parent = dirname8(dir);
+    const parent = dirname9(dir);
     if (parent === dir)
       return void 0;
     dir = parent;
@@ -237579,7 +237610,7 @@ function externalTrustedPackagesPlugin() {
       if (path === void 0)
         continue;
       resolved.set(name, path);
-      readPaths.push(dirname8(path));
+      readPaths.push(dirname9(path));
     } catch {
       pathCache.set(name, void 0);
     }
@@ -237609,10 +237640,10 @@ function chantCoreSourcePlugin() {
   };
 }
 async function bundleDriver(driverSource) {
-  const bundleDir = realpathSync2(mkdtempSync(join7(tmpdir(), "chant-sandbox-")));
-  const entryPath = join7(bundleDir, "driver.mts");
+  const bundleDir = realpathSync2(mkdtempSync(join8(tmpdir(), "chant-sandbox-")));
+  const entryPath = join8(bundleDir, "driver.mts");
   writeFileSync2(entryPath, driverSource, "utf-8");
-  const outfile = join7(bundleDir, "child.mjs");
+  const outfile = join8(bundleDir, "child.mjs");
   const { plugin, readPaths } = externalTrustedPackagesPlugin();
   let esbuildModule;
   try {
@@ -237665,7 +237696,7 @@ var init_params = __esm({
 });
 
 // node_modules/@intentius/chant/dist/discovery/sandbox/driver.js
-import { dirname as dirname9, join as join8 } from "node:path";
+import { dirname as dirname10, join as join9 } from "node:path";
 function lit(value) {
   return JSON.stringify(value);
 }
@@ -237745,17 +237776,17 @@ var init_driver = __esm({
     init_params();
     init_ts_loader();
     HERE2 = chantSourceDir(import.meta.url);
-    DISCOVERY_DIR = join8(HERE2, "..");
-    COLLECT_MODULE = chantModule(join8(DISCOVERY_DIR, "collect.ts"));
-    RESOLVE_MODULE = chantModule(join8(DISCOVERY_DIR, "resolve.ts"));
-    ENTITY_WIRE_CODEC_MODULE = chantModule(join8(DISCOVERY_DIR, "entity-wire-codec.ts"));
-    CHILD_ERRORS_MODULE = chantModule(join8(HERE2, "child-errors.ts"));
-    PROVENANCE_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "provenance.ts"));
-    CONFIG_WIRE_MODULE = chantModule(join8(HERE2, "config-wire.ts"));
-    POLICY_WIRE_MODULE = chantModule(join8(HERE2, "policy-wire.ts"));
-    POST_SYNTH_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "lint", "post-synth.ts"));
-    PARAMS_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "params.ts"));
-    INTEROP_MODULE = chantModule(join8(dirname9(DISCOVERY_DIR), "module-interop.ts"));
+    DISCOVERY_DIR = join9(HERE2, "..");
+    COLLECT_MODULE = chantModule(join9(DISCOVERY_DIR, "collect.ts"));
+    RESOLVE_MODULE = chantModule(join9(DISCOVERY_DIR, "resolve.ts"));
+    ENTITY_WIRE_CODEC_MODULE = chantModule(join9(DISCOVERY_DIR, "entity-wire-codec.ts"));
+    CHILD_ERRORS_MODULE = chantModule(join9(HERE2, "child-errors.ts"));
+    PROVENANCE_MODULE = chantModule(join9(dirname10(DISCOVERY_DIR), "provenance.ts"));
+    CONFIG_WIRE_MODULE = chantModule(join9(HERE2, "config-wire.ts"));
+    POLICY_WIRE_MODULE = chantModule(join9(HERE2, "policy-wire.ts"));
+    POST_SYNTH_MODULE = chantModule(join9(dirname10(DISCOVERY_DIR), "lint", "post-synth.ts"));
+    PARAMS_MODULE = chantModule(join9(dirname10(DISCOVERY_DIR), "params.ts"));
+    INTEROP_MODULE = chantModule(join9(dirname10(DISCOVERY_DIR), "module-interop.ts"));
   }
 });
 
@@ -237976,12 +238007,12 @@ var init_config_run = __esm({
 });
 
 // node_modules/@intentius/chant/dist/config-sandbox.js
-import { dirname as dirname10 } from "node:path";
+import { dirname as dirname11 } from "node:path";
 function selectConfigExport(namespace) {
   const ns = esModuleNamespace(namespace);
   return ns.default ?? ns.config ?? ns;
 }
-async function evaluateProjectConfig(configPath2, projectRoot = dirname10(configPath2), fresh = false) {
+async function evaluateProjectConfig(configPath2, projectRoot = dirname11(configPath2), fresh = false) {
   if (!armed) {
     return selectConfigExport(await importConfigModule(configPath2, fresh));
   }
@@ -238004,7 +238035,7 @@ var init_config_sandbox = __esm({
 
 // node_modules/@intentius/chant/dist/lexicon-module.js
 import { createRequire as createRequire5 } from "node:module";
-import { dirname as dirname11, isAbsolute, join as join9, relative as relative2, resolve as resolve6, sep as sep3 } from "node:path";
+import { dirname as dirname12, isAbsolute, join as join10, relative as relative2, resolve as resolve6, sep as sep3 } from "node:path";
 import { pathToFileURL as pathToFileURL5 } from "node:url";
 function lexiconDeclarationName(entry) {
   return typeof entry === "string" ? entry : entry.name;
@@ -238019,7 +238050,7 @@ function isWithin(path, dir) {
 function pathLexiconRoot(entry, baseDir, sourceDir = ".") {
   const modulePath = isAbsolute(entry.module) ? entry.module : resolve6(baseDir, entry.module);
   const declared = entry.root !== void 0;
-  const candidate = declared ? isAbsolute(entry.root) ? resolve6(entry.root) : resolve6(baseDir, entry.root) : dirname11(modulePath);
+  const candidate = declared ? isAbsolute(entry.root) ? resolve6(entry.root) : resolve6(baseDir, entry.root) : dirname12(modulePath);
   const project2 = resolve6(baseDir);
   const source = resolve6(baseDir, sourceDir);
   let problem;
@@ -238096,7 +238127,7 @@ function isPackageNotFound(err, pkg) {
 }
 function resolveFromProject(spec, fromDir = process.cwd()) {
   try {
-    return createRequire5(join9(fromDir, "package.json")).resolve(spec);
+    return createRequire5(join10(fromDir, "package.json")).resolve(spec);
   } catch {
     return void 0;
   }
@@ -238217,8 +238248,7 @@ var init_publish_declaration = __esm({
       stage: external_exports.boolean().optional(),
       /**
        * A variable holding an npm token to retry with when a package's publish
-       * fails to authenticate (#4040), as chant's own publish-packages.sh does:
-       * a package whose trusted-publisher record is broken publishes with the
+       * fails to authenticate (#4040): a package whose trusted-publisher record is broken publishes with the
        * token rather than failing the release. Unset or empty, there is no retry.
        */
       tokenEnv: envName.optional(),
@@ -238244,8 +238274,15 @@ var init_publish_declaration = __esm({
       image: external_exports.string().min(1),
       /** `<registry host>/<name>`, such as `ghcr.io/acme/api` or `docker.io/acme/api`. */
       repository: external_exports.string().min(1),
-      /** Tags to point at the pushed digest. `{label}` is the release's label. Default: `["{label}"]`, or none for a release with no label. */
+      /** Tags to point at the pushed digest. `{label}` is the release's label and `{version}` the label from its first digit (#5269). Default: `["{label}"]`, or none for a release with no label. */
       tags: external_exports.array(external_exports.string().min(1)).optional(),
+      /**
+       * Tags for each platform's image in an index (#5269), such as `["{label}-{arch}"]`: `{arch}` is the
+       * platform's architecture with its variant (`amd64`, `arm64`, `armv7`), `{os}` its OS and `{label}` the
+       * release's label (`{version}`, the label from its first digit). Each names `{label}` or `{version}`, so it
+       * belongs to the release and no status change moves it.
+       */
+      platformTags: external_exports.array(external_exports.string().min(1).refine((t) => (t.includes("{label}") || t.includes("{version}")) && t.includes("{arch}"), { message: "a platform tag names {arch} and {label} or {version}, such as {label}-{arch}" })).min(1).optional(),
       /** The variable holding the registry user name. Default `OCI_USERNAME`. */
       usernameEnv: envName.optional(),
       /** The variable holding the registry password or token. Default `OCI_PASSWORD`. */
@@ -238288,11 +238325,15 @@ var init_publish_declaration = __esm({
         generate: external_exports.enum(["forge", "commits"]).optional(),
         /** With `generate: "commits"`: the commit types listed. Default `feat`, `fix` and `perf`. A breaking change is listed whatever its type; `*` lists every commit. */
         types: external_exports.array(external_exports.string().min(1)).min(1).optional(),
+        /** With `generate: "commits"`, instead of `types` (#5270): the commit types left out, such as `docs`, `test` and `chore`; every other commit is listed, conventional or not. */
+        exclude: external_exports.array(external_exports.string().regex(/^\w+$/, "a commit type, such as docs")).min(1).optional(),
+        /** With `generate: "commits"` (#5270): list the commits whose subject is not conventional. Default `true` with `exclude` or `types: ["*"]`, `false` with a list of types. */
+        nonConventional: external_exports.boolean().optional(),
         /** A paragraph before the notes, with the same placeholders. */
         before: external_exports.string().min(1).optional(),
         /** A paragraph after the notes, with the same placeholders. */
         after: external_exports.string().min(1).optional()
-      }).strict().refine((n) => n.file === void 0 === (n.heading === void 0), { message: "notes.file and notes.heading go together", path: ["heading"] }).refine((n) => n.file !== void 0 || n.generate !== void 0, { message: "notes need a file section, generate, or both", path: ["generate"] }).refine((n) => n.types === void 0 || n.generate === "commits", { message: 'notes.types applies to generate: "commits"', path: ["types"] }).optional(),
+      }).strict().refine((n) => n.file === void 0 === (n.heading === void 0), { message: "notes.file and notes.heading go together", path: ["heading"] }).refine((n) => n.file !== void 0 || n.generate !== void 0, { message: "notes need a file section, generate, or both", path: ["generate"] }).refine((n) => n.types === void 0 || n.generate === "commits", { message: 'notes.types applies to generate: "commits"', path: ["types"] }).refine((n) => n.exclude === void 0 || n.generate === "commits", { message: 'notes.exclude applies to generate: "commits"', path: ["exclude"] }).refine((n) => n.nonConventional === void 0 || n.generate === "commits", { message: 'notes.nonConventional applies to generate: "commits"', path: ["nonConventional"] }).refine((n) => n.exclude === void 0 || n.types === void 0, { message: "notes.types lists types and notes.exclude leaves them out: name one", path: ["exclude"] }).optional(),
       /** The forge release's tag. Default: the tag the cut made, from `release.tag` (#5150; `release/<label>` or `release/<member>/<label>` when unset). */
       tag: external_exports.string().min(1).optional(),
       /** The variable holding the token. Default `GITHUB_TOKEN`, `GITLAB_TOKEN` (then `CI_JOB_TOKEN`), or `FORGEJO_TOKEN`. */
@@ -238652,14 +238693,14 @@ var init_ci_system = __esm({
 
 // node_modules/@intentius/chant/dist/config.js
 import { existsSync as existsSync7, readFileSync as readFileSync5 } from "fs";
-import { dirname as dirname12, join as join10, resolve as resolve7 } from "path";
+import { dirname as dirname13, join as join11, resolve as resolve7 } from "path";
 async function loadChantConfig(dir, opts = {}) {
-  const tsPath = join10(dir, "chant.config.ts");
+  const tsPath = join11(dir, "chant.config.ts");
   if (existsSync7(tsPath)) {
     const config2 = await evaluateProjectConfig(tsPath, dir, opts.fresh);
     return { config: normalizeConfig(config2, tsPath), configPath: tsPath };
   }
-  const jsonPath = join10(dir, "chant.config.json");
+  const jsonPath = join11(dir, "chant.config.json");
   if (existsSync7(jsonPath)) {
     const { readFileSync: readFileSync18 } = await import("fs");
     const content = readFileSync18(jsonPath, "utf-8");
@@ -238677,7 +238718,7 @@ async function loadChantConfigUpward(startDir) {
 function findProjectConfigPastFragments(startDir) {
   let { dir, configPath: configPath2 } = findProjectConfig(startDir);
   while (configPath2 && isLintOnlyFragment(configPath2)) {
-    const parent = dirname12(dir);
+    const parent = dirname13(dir);
     if (parent === dir)
       break;
     ({ dir, configPath: configPath2 } = findProjectConfig(parent));
@@ -238743,7 +238784,7 @@ function normalizeConfig(raw, source) {
     throw new InvalidChantConfigError(`Invalid chant config${loc2}: ${path ? `${path}: ` : ""}${issue2.message}`, issue2.path.length > 0 ? String(issue2.path[0]) : void 0);
   }
   const lexicons = raw.lexicons;
-  const baseDir = source !== void 0 ? dirname12(source) : process.cwd();
+  const baseDir = source !== void 0 ? dirname13(source) : process.cwd();
   const sourceDir = raw.sourceDir;
   for (const [i, entry] of (lexicons ?? []).entries()) {
     if (typeof entry === "string" || entry.root === void 0)
@@ -238864,7 +238905,9 @@ var init_config = __esm({
             archive: external_exports.string().min(1).optional(),
             prepare: external_exports.string().min(1).optional(),
             // #4908: build arguments beside the two chant passes.
-            args: external_exports.record(external_exports.string(), external_exports.string()).optional()
+            args: external_exports.record(external_exports.string(), external_exports.string()).optional(),
+            // #5269: OCI labels on the image.
+            labels: external_exports.record(external_exports.string(), external_exports.string()).optional()
           }).strict()
         ])).optional(),
         // #5151: files the cut builds once and records, handed to the publish job.
@@ -238910,6 +238953,8 @@ var init_config = __esm({
         lane: external_exports.string().regex(/^[a-z0-9][a-z0-9-]*$/, "a ci.green lane name: lowercase letters, digits and dashes").optional(),
         // #5149: what says a commit may be released.
         green: external_exports.enum(["chant", "forge-checks", "none"]).optional(),
+        // #5261: shell lines a single release's cut runs once the label is stamped and before anything is recorded or tagged.
+        check: external_exports.array(external_exports.string().min(1)).optional(),
         // #5157: commands a publish runs after every target has staged and before any reveals.
         verify: external_exports.array(external_exports.union([external_exports.string().min(1), external_exports.object({ name: external_exports.string().min(1).optional(), run: external_exports.string().min(1) }).strict()])).optional(),
         // #5165: workspace members a train publish reveals before this one, beside what the targets' names say.
@@ -239051,7 +239096,7 @@ var init_retention_policy = __esm({
 });
 
 // node_modules/@intentius/chant/dist/pr-report-url.js
-import { dirname as dirname13, isAbsolute as isAbsolute2, join as join11 } from "node:path";
+import { dirname as dirname14, isAbsolute as isAbsolute2, join as join12 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function parseReportUrl(raw, name = "--report-url") {
   const url2 = raw.trim();
@@ -241399,7 +241444,7 @@ __export(tree_exports, {
 });
 import { execFileSync } from "node:child_process";
 import { readdirSync as readdirSync2, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
-import { join as join12 } from "node:path";
+import { join as join13 } from "node:path";
 function joinPath(...parts) {
   return parts.filter((p) => p !== "" && p !== ".").join("/");
 }
@@ -241408,7 +241453,7 @@ function workingTree(root) {
     label: "",
     stat(path) {
       try {
-        const s = statSync3(join12(root, path));
+        const s = statSync3(join13(root, path));
         return s.isDirectory() ? "dir" : s.isFile() ? "file" : void 0;
       } catch {
         return void 0;
@@ -241417,7 +241462,7 @@ function workingTree(root) {
     list(path) {
       let dirents;
       try {
-        dirents = readdirSync2(join12(root, path), { withFileTypes: true });
+        dirents = readdirSync2(join13(root, path), { withFileTypes: true });
       } catch {
         return void 0;
       }
@@ -241426,7 +241471,7 @@ function workingTree(root) {
         let type2 = d.isDirectory() ? "dir" : d.isFile() ? "file" : void 0;
         if (!type2 && d.isSymbolicLink()) {
           try {
-            const s = statSync3(join12(root, path, d.name));
+            const s = statSync3(join13(root, path, d.name));
             type2 = s.isDirectory() ? "dir" : s.isFile() ? "file" : void 0;
           } catch {
           }
@@ -241437,10 +241482,10 @@ function workingTree(root) {
       return out;
     },
     read(path) {
-      return readFileSync6(join12(root, path), "utf-8");
+      return readFileSync6(join13(root, path), "utf-8");
     },
     bytes(path) {
-      return readFileSync6(join12(root, path));
+      return readFileSync6(join13(root, path));
     }
   };
 }
@@ -242017,17 +242062,17 @@ var init_identity_gate_rule = __esm({
 
 // node_modules/@intentius/chant/dist/workspace/class-data.js
 import { existsSync as existsSync8, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
-import { dirname as dirname14, join as join13, posix as posix2, resolve as resolve8 } from "node:path";
+import { dirname as dirname15, join as join14, posix as posix2, resolve as resolve8 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 function findInstalledPackage(name, fromDir) {
-  for (let dir = resolve8(fromDir); ; dir = dirname14(dir)) {
-    const candidate = join13(dir, "node_modules", ...name.split("/"));
+  for (let dir = resolve8(fromDir); ; dir = dirname15(dir)) {
+    const candidate = join14(dir, "node_modules", ...name.split("/"));
     try {
-      if (statSync4(candidate).isDirectory() && existsSync8(join13(candidate, "package.json")))
+      if (statSync4(candidate).isDirectory() && existsSync8(join14(candidate, "package.json")))
         return candidate;
     } catch {
     }
-    if (dirname14(dir) === dir)
+    if (dirname15(dir) === dir)
       return void 0;
   }
 }
@@ -242035,7 +242080,7 @@ var CHANT_INSTALL, CORE_ROLES;
 var init_class_data = __esm({
   "node_modules/@intentius/chant/dist/workspace/class-data.js"() {
     init_identity_gate_rule();
-    CHANT_INSTALL = dirname14(fileURLToPath4(import.meta.url));
+    CHANT_INSTALL = dirname15(fileURLToPath4(import.meta.url));
     CORE_ROLES = new Set(CORE_CLASSES.map((c) => c.role).filter((r) => r !== null));
   }
 });
@@ -246849,7 +246894,7 @@ var init_declaration = __esm({
 // node_modules/@intentius/chant/dist/discovery/walk.js
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { closeSync, existsSync as existsSync9, openSync, readdirSync as readdirSync3, readSync, statSync as statSync5 } from "node:fs";
-import { isAbsolute as isAbsolute3, join as join14, relative as relative3, resolve as resolve9, sep as sep4 } from "node:path";
+import { isAbsolute as isAbsolute3, join as join15, relative as relative3, resolve as resolve9, sep as sep4 } from "node:path";
 function partsBelow(home, full) {
   const rel = relative3(home, resolve9(full));
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep4}`) || isAbsolute3(rel))
@@ -246902,14 +246947,14 @@ function gitIgnoredBelow(root) {
     const rel = entry.endsWith("/") ? entry.slice(0, -1) : entry;
     if (rel === "." || rel === "")
       return /* @__PURE__ */ new Set();
-    ignored.add(join14(abs, rel));
+    ignored.add(join15(abs, rel));
   }
   return ignored;
 }
 function isProjectBoundary(dir) {
-  if (existsSync9(join14(dir, "chant.config.ts")))
+  if (existsSync9(join15(dir, "chant.config.ts")))
     return true;
-  const json3 = join14(dir, "chant.config.json");
+  const json3 = join15(dir, "chant.config.json");
   return existsSync9(json3) && !isLintOnlyFragment(json3);
 }
 function childProjectsAreBoundaries(walker, root) {
@@ -246972,7 +247017,7 @@ function walkDiscovery(opts) {
       return "file";
     if (opts.followSymlinks && e.isSymbolicLink()) {
       try {
-        const s = statSync5(join14(dir, e.name));
+        const s = statSync5(join15(dir, e.name));
         return s.isDirectory() ? "dir" : s.isFile() ? "file" : void 0;
       } catch {
         return void 0;
@@ -246992,7 +247037,7 @@ function walkDiscovery(opts) {
     for (const e of entries) {
       if (limit?.truncated)
         return false;
-      const full = join14(dir, e.name);
+      const full = join15(dir, e.name);
       const type2 = kind(dir, e);
       if (type2 === "dir") {
         if (NEVER_ENTER.has(e.name) || excludeDirs.has(resolve9(full)))
@@ -249260,10 +249305,10 @@ var init_format = __esm({
 });
 
 // node_modules/@intentius/chant/dist/runtime-adapter.js
-import { dirname as dirname15 } from "path";
+import { dirname as dirname16 } from "path";
 import { fileURLToPath as fileURLToPath6 } from "url";
 function moduleDir(importMetaUrl) {
-  return dirname15(fileURLToPath6(importMetaUrl));
+  return dirname16(fileURLToPath6(importMetaUrl));
 }
 var init_runtime_adapter = __esm({
   "node_modules/@intentius/chant/dist/runtime-adapter.js"() {
@@ -249592,7 +249637,7 @@ var init_strict = __esm({
 });
 
 // node_modules/@intentius/chant/dist/lint/config.js
-import { join as join15, dirname as dirname16, resolve as resolve10 } from "path";
+import { join as join16, dirname as dirname17, resolve as resolve10 } from "path";
 var BUILTIN_PRESETS, SeveritySchema, RuleConfigSchema, LintConfigSchema, DEFAULT_CONFIG;
 var init_config2 = __esm({
   "node_modules/@intentius/chant/dist/lint/config.js"() {
@@ -249710,7 +249755,7 @@ var init_build_archive = __esm({
 import { exec } from "node:child_process";
 import { createConnection } from "node:net";
 import { promisify } from "node:util";
-import { isAbsolute as isAbsolute4, join as join16 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join17 } from "node:path";
 function run(command) {
   return execFileAsync(command, { maxBuffer: 64 * 1024 * 1024 });
 }
@@ -249750,7 +249795,7 @@ var init_cloud_executor = __esm({
       async build(args) {
         const parts = [`docker build`, `-t ${q(args.tag)}`];
         if (args.dockerfile) {
-          const dockerfilePath = isAbsolute4(args.dockerfile) ? args.dockerfile : join16(args.context, args.dockerfile);
+          const dockerfilePath = isAbsolute4(args.dockerfile) ? args.dockerfile : join17(args.context, args.dockerfile);
           parts.push(`-f ${q(dockerfilePath)}`);
         }
         if (args.target)
@@ -250109,7 +250154,7 @@ var init_sbom = __esm({
 });
 
 // node_modules/@intentius/chant/dist/components/verbs/tool-sbom-generator.js
-import { basename as basename2, dirname as dirname17, join as join17 } from "node:path";
+import { basename as basename2, dirname as dirname18, join as join18 } from "node:path";
 import { existsSync as existsSync11 } from "node:fs";
 function countPackages(format, bytes) {
   try {
@@ -250125,7 +250170,7 @@ function countPackages(format, bytes) {
 function scratchPath(workDir, subject, format) {
   const dir = workDir ?? "/tmp/chant-sbom";
   const safeName = basename2(subject).replace(/[^a-zA-Z0-9_.-]/g, "_");
-  return join17(dir, `${safeName}.${Date.now()}.${format}.json`);
+  return join18(dir, `${safeName}.${Date.now()}.${format}.json`);
 }
 function createToolSbomGenerator(options = {}) {
   const runner = options.runner ?? defaultProcessRunner();
@@ -250139,12 +250184,12 @@ function createToolSbomGenerator(options = {}) {
   return {
     async forImage(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
-      const buildContext = dirname17(input.imagePath);
-      const hasDockerfile = existsSync11(join17(buildContext, "Dockerfile"));
+      const buildContext = dirname18(input.imagePath);
+      const hasDockerfile = existsSync11(join18(buildContext, "Dockerfile"));
       if (hasDockerfile && await runner.available("docker")) {
         const out = scratchPath(options.workDir, input.imagePath, format);
         await runner.run(`docker buildx build --sbom=true --output type=local,dest=${q2(out)} ${q2(buildContext)}`);
-        const { stdout } = await runner.run(`cat ${q2(join17(out, "sbom.spdx.json"))}`);
+        const { stdout } = await runner.run(`cat ${q2(join18(out, "sbom.spdx.json"))}`);
         return {
           format,
           mediaType: SBOM_MEDIA_TYPES[format],
@@ -250158,12 +250203,12 @@ function createToolSbomGenerator(options = {}) {
     },
     async forJar(input) {
       const format = input.format ?? DEFAULT_SBOM_FORMAT;
-      const projectDir = dirname17(input.jarPath);
-      const hasPom = existsSync11(join17(projectDir, "pom.xml"));
+      const projectDir = dirname18(input.jarPath);
+      const hasPom = existsSync11(join18(projectDir, "pom.xml"));
       if (hasPom && await runner.available("mvn")) {
         await requireTool(runner, "mvn", `run cyclonedx-maven against ${projectDir}`);
         const out = scratchPath(options.workDir, input.jarPath, "cyclonedx");
-        await runner.run(`mvn -f ${q2(join17(projectDir, "pom.xml"))} org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json -DoutputName=${q2(basename2(out, ".json"))}`, { cwd: projectDir });
+        await runner.run(`mvn -f ${q2(join18(projectDir, "pom.xml"))} org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom -DoutputFormat=json -DoutputName=${q2(basename2(out, ".json"))}`, { cwd: projectDir });
         const { stdout } = await runner.run(`cat ${q2(out)}`);
         return {
           format: "cyclonedx",
@@ -250704,7 +250749,7 @@ __export(which_chant_exports, {
 });
 import { spawn } from "node:child_process";
 import { existsSync as existsSync12, readFileSync as readFileSync12, realpathSync as realpathSync4 } from "node:fs";
-import { join as join18, relative as relative5, resolve as resolve11 } from "node:path";
+import { join as join19, relative as relative5, resolve as resolve11 } from "node:path";
 function locateWorkspace(cwd, at) {
   const top = gitTop(cwd);
   if (at !== void 0) {
@@ -250722,7 +250767,7 @@ function locateWorkspace(cwd, at) {
     return {
       tree: found2 === "" ? whole : gitTree(top, commit, found2),
       root: found2 === "" ? "." : found2,
-      rootOnDisk: join18(top, ...found2.split("/")),
+      rootOnDisk: join19(top, ...found2.split("/")),
       at: commit,
       top
     };
@@ -250740,7 +250785,7 @@ function rootChantBin(rootOnDisk, version2) {
     return void 0;
   let pkg;
   try {
-    pkg = JSON.parse(readFileSync12(join18(dir, "package.json"), "utf-8"));
+    pkg = JSON.parse(readFileSync12(join19(dir, "package.json"), "utf-8"));
   } catch {
     return void 0;
   }
@@ -250749,7 +250794,7 @@ function rootChantBin(rootOnDisk, version2) {
   const rel = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.chant;
   if (typeof rel !== "string")
     return void 0;
-  const bin = join18(dir, rel);
+  const bin = join19(dir, rel);
   return existsSync12(bin) ? bin : void 0;
 }
 function declaredChantPin(located) {
@@ -250888,7 +250933,7 @@ var init_member_outputs = __esm({
     workspaceMemberLookup = async (cwd, member) => {
       const { locateWorkspace: locateWorkspace2 } = await Promise.resolve().then(() => (init_which_chant(), which_chant_exports));
       const { readDeclaration: readDeclaration2 } = await Promise.resolve().then(() => (init_declaration(), declaration_exports));
-      const { join: join23 } = await import("node:path");
+      const { join: join24 } = await import("node:path");
       const located = locateWorkspace2(cwd);
       const declaration = readDeclaration2(located.tree);
       const found = declaration.members.find((m) => m.name === member);
@@ -250899,7 +250944,7 @@ var init_member_outputs = __esm({
       return {
         member: found.name,
         kind: found.kind,
-        dir: found.dir === "." ? located.rootOnDisk : join23(located.rootOnDisk, ...found.dir.split("/")),
+        dir: found.dir === "." ? located.rootOnDisk : join24(located.rootOnDisk, ...found.dir.split("/")),
         workspaceRoot: located.rootOnDisk
       };
     };
@@ -250916,7 +250961,7 @@ var init_release_image = __esm({
 // node_modules/@intentius/chant/dist/components/verbs/vuln-scan.js
 import { readFileSync as readFileSync13, writeFileSync as writeFileSync3 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join19 } from "node:path";
+import { join as join20 } from "node:path";
 import { createHash as createHash6 } from "node:crypto";
 function normalizeSeverity(raw) {
   const s = (raw ?? "").toLowerCase();
@@ -250973,7 +251018,7 @@ function createToolVulnScanner(tool = "grype", processRunner = defaultProcessRun
       await requireTool(processRunner, tool, `scan the SBOM for known vulnerabilities`);
       const hash2 = createHash6("sha256").update(input.sbom.bytes).digest("hex").slice(0, 16);
       const ext = input.sbom.format === "cyclonedx" ? "cdx.json" : "spdx.json";
-      const path = join19(tmpdir2(), `chant-scan-${hash2}.${ext}`);
+      const path = join20(tmpdir2(), `chant-scan-${hash2}.${ext}`);
       writeFileSync3(path, input.sbom.bytes);
       if (tool === "trivy") {
         const { stdout: stdout2 } = await processRunner.run(`trivy sbom --quiet --format json ${q2(path)}`);
@@ -254003,20 +254048,20 @@ var init_conflict_check = __esm({
 // node_modules/@intentius/chant/dist/project-codegen.js
 import { createHash as createHash7 } from "node:crypto";
 import { existsSync as existsSync13, mkdirSync as mkdirSync2, readFileSync as readFileSync14, readdirSync as readdirSync4, rmdirSync, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname18, isAbsolute as isAbsolute5, join as join20, relative as relative6, resolve as resolve12, sep as sep5 } from "node:path";
+import { dirname as dirname19, isAbsolute as isAbsolute5, join as join21, relative as relative6, resolve as resolve12, sep as sep5 } from "node:path";
 function resolveCodegenRoot(projectRoot, config2) {
   const codegen = config2.codegen;
   const outDir = typeof codegen?.outDir === "string" && codegen.outDir.length > 0 ? codegen.outDir : DEFAULT_CODEGEN_OUT_DIR;
   return resolve12(projectRoot, outDir);
 }
 function projectCodegenContext(lexicon, projectRoot, config2) {
-  return { projectRoot, config: config2, outDir: join20(resolveCodegenRoot(projectRoot, config2), lexicon) };
+  return { projectRoot, config: config2, outDir: join21(resolveCodegenRoot(projectRoot, config2), lexicon) };
 }
 function digestInputs(inputs) {
   return `sha256:${createHash7("sha256").update(canonicalJson(inputs)).digest("hex")}`;
 }
 function readStamp(outDir) {
-  const path = join20(outDir, STAMP_FILE);
+  const path = join21(outDir, STAMP_FILE);
   if (!existsSync13(path))
     return void 0;
   try {
@@ -254109,13 +254154,13 @@ __export(plugins_exports, {
   unknownPathLexiconsNotice: () => unknownPathLexiconsNotice
 });
 import { createRequire as createRequire9 } from "node:module";
-import { dirname as dirname19, join as join21, resolve as resolve13 } from "node:path";
+import { dirname as dirname20, join as join22, resolve as resolve13 } from "node:path";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 import { existsSync as existsSync14, readdirSync as readdirSync5, readFileSync as readFileSync15 } from "node:fs";
 function recordProjectLexicons(dir) {
   const read = readLexiconDeclarationsStatically(dir);
   if (read.status === "read")
-    registerLexiconDeclarations(read.entries, dirname19(read.configPath));
+    registerLexiconDeclarations(read.entries, dirname20(read.configPath));
   return read;
 }
 async function loadPlugin(lexiconName) {
@@ -254157,11 +254202,11 @@ async function loadPlugin(lexiconName) {
 }
 function listInstalledLexicons(projectDir = process.cwd()) {
   const names = /* @__PURE__ */ new Set();
-  const starts = [dirname19(fileURLToPath7(import.meta.url)), resolve13(projectDir)];
+  const starts = [dirname20(fileURLToPath7(import.meta.url)), resolve13(projectDir)];
   for (const start of starts) {
     let dir = start;
     for (; ; ) {
-      const scope = join21(dir, "node_modules", "@intentius");
+      const scope = join22(dir, "node_modules", "@intentius");
       let entries = [];
       try {
         entries = readdirSync5(scope, { withFileTypes: true });
@@ -254176,7 +254221,7 @@ function listInstalledLexicons(projectDir = process.cwd()) {
         if (name !== "")
           names.add(name);
       }
-      const parent = dirname19(dir);
+      const parent = dirname20(dir);
       if (parent === dir)
         break;
       dir = parent;
@@ -254200,9 +254245,9 @@ function resolveLexiconVersions(lexiconNames2) {
         if (entry === void 0)
           throw err;
       }
-      let dir = dirname19(entry);
+      let dir = dirname20(entry);
       for (let depth = 0; depth < 10; depth++) {
-        const candidate = join21(dir, "package.json");
+        const candidate = join22(dir, "package.json");
         if (existsSync14(candidate)) {
           const pkg = JSON.parse(readFileSync15(candidate, "utf-8"));
           if (pkg.name === packageName && pkg.version) {
@@ -254210,7 +254255,7 @@ function resolveLexiconVersions(lexiconNames2) {
             break;
           }
         }
-        const parent = dirname19(dir);
+        const parent = dirname20(dir);
         if (parent === dir)
           break;
         dir = parent;
@@ -254311,7 +254356,7 @@ __export(discover_exports, {
   walkCandidates: () => walkCandidates
 });
 import { readFileSync as readFileSync16, statSync as statSync6 } from "fs";
-import { basename as basename3, join as join22, relative as relative7, resolve as resolve14 } from "path";
+import { basename as basename3, join as join23, relative as relative7, resolve as resolve14 } from "path";
 async function loadAuditPlugins(names = AUDIT_LEXICONS) {
   const { loadPlugin: loadPlugin2 } = await Promise.resolve().then(() => (init_plugins(), plugins_exports));
   const plugins = [];
@@ -254634,11 +254679,11 @@ function collectCandidates(root) {
 function walkCandidates(root, opts = {}) {
   const state = { max: opts.maxFiles ?? DEFAULT_MAX_WALK_FILES, truncated: false };
   const all = walkFiles(root, state, opts.excludeDirs);
-  const gitignore = readSafe(join22(root, ".gitignore")) ?? "";
+  const gitignore = readSafe(join23(root, ".gitignore")) ?? "";
   const nestedBodies = /* @__PURE__ */ new Map();
   const nestedGitignoreAt = (dir) => {
     if (!nestedBodies.has(dir))
-      nestedBodies.set(dir, readSafe(join22(root, dir, ".gitignore")));
+      nestedBodies.set(dir, readSafe(join23(root, dir, ".gitignore")));
     return nestedBodies.get(dir);
   };
   const files = [];
@@ -255156,7 +255201,7 @@ var init_suppressions = __esm({
 
 // node_modules/@intentius/chant/dist/audit/core.js
 import { statSync as statSync7 } from "fs";
-import { basename as basename4, dirname as dirname20, resolve as resolve15 } from "path";
+import { basename as basename4, dirname as dirname21, resolve as resolve15 } from "path";
 function dedupeById(checks) {
   const byId = /* @__PURE__ */ new Map();
   for (const check2 of checks) {
@@ -255226,7 +255271,7 @@ function parserPackageOf(err) {
 function auditRootDir(target) {
   const abs = resolve15(target);
   try {
-    return statSync7(abs).isFile() ? dirname20(abs) : abs;
+    return statSync7(abs).isFile() ? dirname21(abs) : abs;
   } catch {
     return abs;
   }
@@ -259114,11 +259159,11 @@ var package_default = {
     prepublishOnly: "npm run build"
   },
   dependencies: {
-    "@intentius/chant": "^0.124.102",
     "@intentius/chant-lexicon-github": "^0.124.101",
     "@intentius/tsad-reference": "^2.3.0"
   },
   devDependencies: {
+    "@intentius/chant": "^0.124.104",
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^22.0.0",
     ajv: "^8.20.0",
