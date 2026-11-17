@@ -39,27 +39,17 @@ audit:
 install:
     npm ci
 
-# Bump version, tag, and push to trigger the npm publish workflow (e.g. just release patch)
-release bump="patch":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    current=$(node -e "process.stdout.write(require('./package.json').version)")
-    IFS='.' read -r major minor patch <<< "$current"
-    case "{{bump}}" in
-      major) major=$((major + 1)); minor=0; patch=0 ;;
-      minor) minor=$((minor + 1)); patch=0 ;;
-      patch) patch=$((patch + 1)) ;;
-      *) echo "Usage: just release [major|minor|patch]"; exit 1 ;;
-    esac
-    next="$major.$minor.$patch"
-    echo "Bumping $current → $next"
-    npm version "$next" --no-git-tag-version
-    npm run build:action   # the action bundle embeds package.json; keep it in step with the bump
-    git add package.json package-lock.json action/index.mjs
-    git commit -m "v$next"
-    git tag "v$next"
-    git push origin main "v$next"
-    echo "Released v$next — publish workflow triggered (tag pattern v*)"
+# Print the next release's label, from the conventional commits since the last release
+release-next:
+    npx chant release next
+
+# Print what a release of HEAD would record, tag and publish (a dry run; nothing is written)
+release-plan label="auto":
+    npx chant release cut {{label}} --build 'npm run build'
+
+# Start a release: the publish workflow cuts the newest green commit and publishes it to npm
+release label="auto":
+    gh workflow run publish.yml --repo intentius/github-warden -f label={{label}}
 
 # Start the hermetic mock-GitHub stack for the compose smoke test.
 # No docker? The mock is plain node: `node e2e/mock-github/server.mjs &`
