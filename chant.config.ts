@@ -5,7 +5,7 @@ export default {
     legacyTags: ["v"],
     green: "forge-checks",
     version: { packages: ["."] },
-    publish: [{ type: "npm", packages: ["."] }],
+    publish: [{ type: "npm", packages: ["."], stage: false }],
     workflow: { trigger: "dispatch", file: ".github/workflows/publish.yml" },
   },
 };

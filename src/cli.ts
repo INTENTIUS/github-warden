@@ -57,7 +57,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import pkg from "../package.json" with { type: "json" };
+import { wardenVersion } from "./version.js";
 import { GovernanceConfigError } from "./config/load.js";
 import { parseConfigFile } from "./config/parse.js";
 import { CONFIG_MODES, loadGovernancePolicy, type ConfigMode } from "./config/policy.js";
@@ -768,8 +768,8 @@ async function main(argv: string[] = process.argv.slice(2)) {
   }
 
   if (subcommand === "--version" || subcommand === "-v") {
-    // Inlined from package.json at build time — always matches the published version.
-    process.stdout.write(`${pkg.version}\n`);
+    // The package.json version, or the action ref when run as the action (src/version.ts).
+    process.stdout.write(`${wardenVersion()}\n`);
     process.exit(0);
   }
 

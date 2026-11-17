@@ -35,7 +35,7 @@ import {
 import type { CycleError, DeferredWork } from "@intentius/chant/reconcile";
 import type { GovernanceConfig } from "../config/types.js";
 import type { ChangeSet, ChangeSetEntry } from "../reconcile/diff.js";
-import pkg from "../../package.json" with { type: "json" };
+import { wardenVersion } from "../version.js";
 
 /** The engine a warden's records name. */
 export const DRIFT_ENGINE = "warden" as const;
@@ -44,7 +44,7 @@ export const DRIFT_READ = "live-read" as const;
 
 /** What every record and the start line say produced them. */
 export function driftEvidence(): DriftEvidence {
-  return { tool: "github-warden", version: pkg.version, command: "reconcile --mode dry-run" };
+  return { tool: "github-warden", version: wardenVersion(), command: "reconcile --mode dry-run" };
 }
 
 /** The first segment of a child entry's key, which names its parent (`core/alice` is team `core`'s, `api/main` repo `api`'s). */
