@@ -259132,6 +259132,15 @@ var package_default = {
   }
 };
 
+// src/version.ts
+var VERSION_TAG = /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/;
+function versionFromRef(ref) {
+  return ref ? VERSION_TAG.exec(ref.trim())?.[1] : void 0;
+}
+function wardenVersion(ref = process.env["GITHUB_ACTION_REF"], isAction = true) {
+  return (isAction ? versionFromRef(ref) : void 0) ?? package_default.version;
+}
+
 // src/config/load.ts
 var GovernanceConfigError = class extends Error {
   field;
@@ -259963,7 +259972,7 @@ function driftStart(input) {
 var DRIFT_ENGINE = "warden";
 var DRIFT_READ = "live-read";
 function driftEvidence() {
-  return { tool: "github-warden", version: package_default.version, command: "reconcile --mode dry-run" };
+  return { tool: "github-warden", version: wardenVersion(), command: "reconcile --mode dry-run" };
 }
 var parentOf = (key) => key.split("/")[0];
 function driftAddress(org, entry) {
@@ -262859,7 +262868,7 @@ async function main(argv = process.argv.slice(2)) {
     process.exit(0);
   }
   if (subcommand === "--version" || subcommand === "-v") {
-    process.stdout.write(`${package_default.version}
+    process.stdout.write(`${wardenVersion()}
 `);
     process.exit(0);
   }
