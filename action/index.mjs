@@ -238963,6 +238963,8 @@ var init_config = __esm({
         legacyTags: external_exports.array(external_exports.string().min(1)).optional(),
         // #5191: what a breaking change does to a 0.x version when the label comes from commits.
         breakingOnZero: external_exports.enum(["minor", "major"]).optional(),
+        // #5271: paths outside a train member, relative to it, whose changes release it too.
+        sources: external_exports.array(external_exports.string().min(1)).min(1).optional(),
         // #5150: the tag a cut makes, as a template, and the floating tag a publish moves.
         tag: external_exports.union([external_exports.string().min(1), external_exports.object({ name: external_exports.string().min(1), floating: external_exports.string().min(1).optional() }).strict()]).optional(),
         // #5164: Sigstore signatures and SLSA provenance at publish; on under the supply-chain group unless false.
@@ -259163,7 +259165,7 @@ var package_default = {
     "@intentius/tsad-reference": "^2.3.0"
   },
   devDependencies: {
-    "@intentius/chant": "^0.124.104",
+    "@intentius/chant": "^0.124.105",
     "@types/libsodium-wrappers": "^0.7.14",
     "@types/node": "^22.0.0",
     ajv: "^8.20.0",
